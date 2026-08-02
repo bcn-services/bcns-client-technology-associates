@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Hosted Web App Template",
-  description: "A hosted client-app starter for the bcns studio.",
+  title: "Technology Associates",
+  description: "Technology Associates client app.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

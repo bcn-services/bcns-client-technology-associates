@@ -1,28 +1,20 @@
 ---
 type: workflow-app
 delivery: hosted-web
-name: "@nseluga/hosted-web-template"
-status: template
+name: "@nseluga/bcns-client-technology-associates"
+status: active
 ---
 
-# hosted-web template
+# technology-associates — hosted client app
 
-A runnable **Next.js 14 (App Router, TypeScript strict)** starter for the
-standard hosted client app, matching the platform stack in
-`hosting-reference.md` (**DigitalOcean droplet + Supabase per-client project +
-Cloudflare**). It depends on the shared packages `@nseluga/ui`,
-`@nseluga/config`, and `@nseluga/app-core` as **versioned dependencies from
-GitHub Packages**, and ships the wiring points a real client build needs —
-env-driven config, a `/api/health` DB probe, webhook hygiene seams, a storage
-adapter interface, an RLS test scaffold, and an opt-in AI module — as safe,
-keyless stubs.
-
-> This is a **GitHub Template Repository**. Preferred: create a client repo
-> with the **`/new-client-repo`** Claude Code skill, which applies every
-> customization point listed in [`TEMPLATE.md`](TEMPLATE.md) and verifies the
-> build. Manual fallback: **"Use this template"** (name it
-> `bcns-client-<slug>`, keep it Private), then work through `TEMPLATE.md` by
-> hand.
+A runnable **Next.js 14 (App Router, TypeScript strict)** app for Technology
+Associates, matching the platform stack in `hosting-reference.md`
+(**DigitalOcean droplet + Supabase per-client project + Cloudflare**). It
+depends on the shared packages `@nseluga/ui`, `@nseluga/config`, and
+`@nseluga/app-core` as **versioned dependencies from GitHub Packages**, and
+ships the wiring points a real client build needs — env-driven config, a
+`/api/health` DB probe, webhook hygiene seams, a storage adapter interface,
+an RLS test scaffold, and an opt-in AI module — as safe, keyless stubs.
 
 ## Quick start
 
