@@ -106,12 +106,12 @@ Twenty tables, in dependency order. `scripts/migrate/out/` is gitignored — the
    Compares source row counts and numeric-column sums against the database, and reports identity maxima, orphan rows per `NOT VALID` FK, denormalized-column drift, and the max length of every `ntext`-derived text column. Prints a Markdown table and writes it to `scripts/migrate/out/verify-<timestamp>.md`. **Exit 0 = counts and sums match.** Orphans and drift are informational and never fail the run.
 6. **Seed logins:**
    ```sh
-   node scripts/migrate/seed-logins.mjs scripts/migrate/in/logins.json
+   node_modules/.bin/tsx scripts/migrate/seed-logins.mjs scripts/migrate/in/logins.json
    ```
-   Creates the first Supabase auth users and their `profiles` rows from an array of `{ email, role, personid }` (see `scripts/migrate/logins.example.json`). No passwords are set — users come in through the app's invite/reset flow. Idempotent on email. Put the real file at `scripts/migrate/in/logins.json`; that directory is gitignored.
+   Creates the first Supabase auth users and their `profiles` rows from an array of `{ email, role: "admin" | "staff", personid }` (see `scripts/migrate/logins.example.json`). No passwords are set — users come in through the app's invite/reset flow. Idempotent on email. Put the real file at `scripts/migrate/in/logins.json`; that directory is gitignored. Run it under `tsx`, not `node`: it imports `createServerClient()` from `lib/db/client.ts`, so it also needs `NEXT_PUBLIC_SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` in the environment.
 7. **Hand over.** Tell Kris the new app is live and Access stays frozen.
 
-All three scripts read the target database from the `MIGRATE_DB_URL` environment variable and take no other flags:
+All three scripts read the target database from the `MIGRATE_DB_URL` environment variable and take no other flags (step 6 additionally needs the two Supabase variables above):
 
 ```sh
 export MIGRATE_DB_URL="postgresql://…"   # the Supabase project's connection string
