@@ -121,9 +121,13 @@ Twenty tables, in dependency order. `scripts/migrate/out/` is gitignored — the
    node scripts/migrate/verify.mjs scripts/migrate/out/export.sql \
      --source-counts=scripts/migrate/out/source-counts.txt
    ```
-   Compares SQL Server's own row counts and numeric-column sums against the database, and reports identity maxima, orphan rows per `NOT VALID` FK, denormalized-column drift, and the max length of every `ntext`-derived text column. Prints a Markdown table and writes it to `scripts/migrate/out/verify-<timestamp>.md`.
+   Compares SQL Server's own row counts, every numeric-column sum, and **every cell of every row** against the database, and reports identity maxima, orphan rows per `NOT VALID` FK, denormalized-column drift, and the max length of every `ntext`-derived text column. Prints a Markdown table and writes it to `scripts/migrate/out/verify-<timestamp>.md`.
 
-   **Exit 0 means four things hold:** every table holds exactly as many rows as SQL Server reported in step 1.2, every numeric column's sum matches the export, every identity sequence's next value clears its table's max id (so the app's first insert cannot collide), and no legacy table is unexpectedly absent from the export. Orphans and drift are informational and never fail the run.
+   **Exit 0 means five things hold:** every table holds exactly as many rows as SQL Server reported in step 1.2, every numeric column's sum matches the export, **every row in the export appears in the database cell for cell and no other row does**, every identity sequence's next value clears its table's max id (so the app's first insert cannot collide), and no legacy table is unexpectedly absent from the export. Orphans and drift are informational and never fail the run.
+
+   **The row-level comparison is the check that catches a changed value.** Counts and sums are blind to a truncated note, a swapped name, a date shifted by a day, a flipped flag, a case repointed at a valid but wrong client, or a cent moved from one row to another — every one of those leaves the count and the total exactly right. The comparison rebuilds each table's rows from the export, casts each literal to that column's own Postgres type, and takes the difference both ways (`except all`), which keeps duplicate rows and treats null as equal to null. A table reported **ROWS DIFFER** shows how many rows are on one side only; the same number on both sides usually means values changed rather than rows going missing. It deliberately does not reuse `load.mjs`'s value translation: a bug in there would corrupt both sides the same way and the check would pass.
+
+   The line under that table says whether any export column was excluded. A column the export carries that the Postgres schema has no counterpart for is never loaded, so the comparison cannot speak for it — the report names those columns instead of quietly narrowing what it checked.
 
    A table reported **TRUNCATED EXPORT** holds fewer rows than SQL Server does: the scripter run dropped rows. Regenerate the export (step 1.5) and reload — never acknowledge it away.
 

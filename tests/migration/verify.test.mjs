@@ -66,6 +66,7 @@ const count = (t) => Number(one(`select count(*) from ${t};`));
 /** The exact stdout row for a table in the counts table. */
 const countRow = (out, t) => out.split("\n").find((l) => l.startsWith(`| ${t} |`));
 const sumRow = (out, k) => out.split("\n").find((l) => l.startsWith(`| ${k} |`));
+const rowRow = (out, t) => out.split("## Row-level comparison")[1].split("\n").find((l) => l.startsWith(`| ${t} |`));
 
 before(() => { resetDb(); reload(); });
 
@@ -74,7 +75,10 @@ test("a faithful load verifies clean: 20 equal counts, the planted orphan, plant
   const r = verify();
   assert.equal(r.code, 0, r.stdout + r.stderr);
   for (const t of LEGACY_20) assert.match(countRow(r.stdout, t), /\| 3 \| 3 \|.*\| ok \|$/, `${t} count row: ${countRow(r.stdout, t)}`);
-  assert.match(r.stdout, /^\*\*RESULT: counts, sums, sequence positions and table coverage all check out\.\*\*$/m);
+  assert.match(r.stdout, /^\*\*RESULT: every row matches cell for cell; counts, sums, sequence positions and table coverage all check out\.\*\*$/m);
+  // Every table compares clean cell for cell, and nothing is silently left out of that comparison.
+  for (const t of LEGACY_20) assert.match(rowRow(r.stdout, t), /\| 0 \| 0 \| ok \|$/, `${t} row-level row: ${rowRow(r.stdout, t)}`);
+  assert.match(r.stdout, /^Every column the export carries exists in the Postgres schema/m);
   // The five identity-less lookup tables report n/a, not a null and not a mismatch.
   for (const t of NO_IDENTITY) assert.match(countRow(r.stdout, t), /\| — \| ok \|$/, `${t} identity cell`);
   // The orphan the fixture plants, counted under its own NOT VALID constraint.
@@ -308,5 +312,48 @@ test("a sequence parked with is_called false is BEHIND: last_value alone would h
     const r = verify();
     assert.equal(r.code, 1, "a sequence whose next value equals max(id) verified clean");
     assert.match(r.stdout, /^\| tblcase \| 5010 \| 5010 \| \*\*BEHIND — next insert collides\*\* \|$/m);
+  } finally { reload(); }
+});
+
+// --- row-level comparison ---------------------------------------------------
+// These two are the attacks counts and sums cannot see. Both leave every row count and every
+// numeric sum exactly as the export has them, so only a whole-row comparison catches them.
+
+test("two rows' values swapped exits 1, with counts and sums all still ok", () => {
+  assert.equal(one(`select clientlastname from tblclient where clientid = 51;`), "Reyes", "precondition: fixture is loaded");
+  sql(`begin; set session_replication_role = replica;
+       update tblclient set clientlastname = 'Cole' where clientid = 51;
+       update tblclient set clientlastname = 'Reyes' where clientid = 52; commit;`);
+  try {
+    const r = verify();
+    assert.equal(r.code, 1, "a swap between two rows did not fail the run");
+    assert.match(rowRow(r.stdout, "tblclient"), /\| 2 \| 2 \| \*\*ROWS DIFFER\*\* \|$/);
+    // The checks that came before it saw nothing: same three rows, no numeric column touched.
+    assert.match(countRow(r.stdout, "tblclient"), /\| 3 \| 3 \|.*\| ok \|$/);
+    assert.match(r.stdout, /^\*\*RESULT: FAILED — do not hand over\.\*\*$/m);
+  } finally { reload(); }
+});
+
+test("a cent moved between two rows exits 1 even though the column's sum is unchanged", () => {
+  assert.equal(one(`select expamount::text from tblexpenses where expid = 91;`), "87.40", "precondition: fixture is loaded");
+  sql(`begin; set session_replication_role = replica;
+       update tblexpenses set expamount = expamount - 0.01 where expid = 91;
+       update tblexpenses set expamount = expamount + 0.01 where expid = 92; commit;`);
+  try {
+    const r = verify();
+    assert.equal(r.code, 1, "a cent moved between rows did not fail the run");
+    assert.match(rowRow(r.stdout, "tblexpenses"), /\| 2 \| 2 \| \*\*ROWS DIFFER\*\* \|$/);
+    // The sum check is why this test exists: it reports ok, because the total really is unchanged.
+    assert.match(sumRow(r.stdout, "tblexpenses.expamount"), new RegExp(`\\| ${FIXTURE_EXPAMOUNT_SUM} \\| ${FIXTURE_EXPAMOUNT_SUM} \\| ok \\|$`));
+  } finally { reload(); }
+});
+
+test("a truncated text cell exits 1 and names only its own table", () => {
+  sql(`begin; set session_replication_role = replica; update tblclient set clientnotes = 'prefers' where clientid = 51; commit;`);
+  try {
+    const r = verify();
+    assert.equal(r.code, 1, "a truncated cell did not fail the run");
+    assert.match(rowRow(r.stdout, "tblclient"), /\| 1 \| 1 \| \*\*ROWS DIFFER\*\* \|$/);
+    for (const t of LEGACY_20.filter((x) => x !== "tblclient")) assert.match(rowRow(r.stdout, t), /\| 0 \| 0 \| ok \|$/, `${t} was dragged in`);
   } finally { reload(); }
 });

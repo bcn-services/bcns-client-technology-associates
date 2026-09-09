@@ -127,6 +127,12 @@ select 'num', table_name, column_name from information_schema.columns
   where table_schema = 'public' and data_type = 'numeric' and table_name in (${TABLES.map(quote).join(",")});
 select 'seqname', table_name, pg_get_serial_sequence(table_name, column_name) from information_schema.columns
   where table_schema = 'public' and is_identity = 'YES' and table_name in (${TABLES.map(quote).join(",")});
+select 'coltype', c.relname, a.attname, format_type(a.atttypid, a.atttypmod)
+  from pg_attribute a
+  join pg_class c on c.oid = a.attrelid
+  join pg_namespace n on n.oid = c.relnamespace
+  where n.nspname = 'public' and a.attnum > 0 and not a.attisdropped
+    and c.relname in (${TABLES.map(quote).join(",")});
 select 'fk', c.conname, tr.relname, a.attname, rr.relname, ra.attname
   from pg_constraint c
   join pg_class tr on tr.oid = c.conrelid
@@ -137,6 +143,7 @@ select 'fk', c.conname, tr.relname, a.attname, rr.relname, ra.attname
   order by 2;
 `);
 const identCol = new Map(meta.filter((r) => r[0] === "ident").map((r) => [r[1], r[2]]));
+const colType = new Map(meta.filter((r) => r[0] === "coltype").map((r) => [`${r[1]}.${r[2]}`, r[3]]));
 const seqName = new Map(meta.filter((r) => r[0] === "seqname" && r[2]).map((r) => [r[1], r[2]]));
 const numCols = meta.filter((r) => r[0] === "num").map((r) => `${r[1]}.${r[2]}`);
 const fks = meta.filter((r) => r[0] === "fk").map(([, conname, tbl, col, rtbl, rcol]) => ({ conname, tbl, col, rtbl, rcol }));
@@ -177,6 +184,68 @@ const dbQuery = [
 const rows = q(dbQuery);
 const pick = (tag) => new Map(rows.filter((r) => r[0] === tag).map((r) => [r[1], r.slice(2)]));
 const dbCount = pick("cnt"), dbSum = pick("sum"), dbMax = pick("max"), dbLen = pick("len"), orphans = pick("orphan"), drift = pick("drift"), dbSeq = pick("seq");
+
+// --- row-level comparison ---------------------------------------------------
+// Counts and sums are many-to-one collapses. A note truncated mid-sentence, a NULL that became
+// '', a date shifted by a day, two clients' names swapped, a case repointed at a different but
+// still-existing client, or a cent moved from one expense to another all leave every count and
+// every sum exactly as they were. This compares every cell of every row instead.
+//
+// The expected side casts the export's own literal straight to the column's type and lets
+// Postgres decide equality. It deliberately does NOT reuse load.mjs's emit(): a bug inside
+// emit() would then corrupt both sides identically and the comparison would pass on wrong data.
+//
+// EXCEPT ALL is an exact multiset comparison — it keeps duplicates and treats NULL as equal to
+// NULL — so the two counts are "rows in the database that the export does not account for" and
+// "rows in the export that are not in the database". A changed cell shows up as one of each.
+function expected(val, type) {
+  if (val.k === "null") return `cast(null as ${type})`;
+  const lit = quote(val.v);
+  // Access stores a time-only field as a full datetime on an epoch date it never shows the user.
+  // Postgres will not cast that text straight to `time`, so go through timestamp — a different
+  // route to the same value than load.mjs takes, which is exactly the point.
+  if (type === "time without time zone" && /^\d{4}-\d\d-\d\dT/.test(val.v)) return `cast(cast(${lit} as timestamp) as time)`;
+  // The export's datetime2 literals are naive wall-clock times. The load resolves them against
+  // `America/New_York` (see the `set time zone` line in load.mjs and the Timezone note in the
+  // README), while this report's own session is pinned to UTC, so say the zone explicitly here.
+  // The value is repeated rather than shared because load.mjs is a CLI, not an importable module
+  // — and it fails safe: if the two ever disagree, every dated row is reported as differing.
+  if (type === "timestamp with time zone") return `(cast(${lit} as timestamp) at time zone 'America/New_York')`;
+  return `cast(${lit} as ${type})`;
+}
+
+// mssql-scripter emits one INSERT per row, so gather each table's rows back together first.
+const exportRows = new Map(); // table -> { cols, rows, colSets }
+for (const s of stmts) {
+  if (!known.has(s.table)) continue;
+  const e = exportRows.get(s.table) ?? { cols: s.cols, rows: [], colSets: new Set() };
+  e.colSets.add(s.cols.join(","));
+  for (const row of s.rows) e.rows.push(row);
+  exportRows.set(s.table, e);
+}
+
+let failedRowChk = false;
+const rowChk = [];      // { t, missingInDb, extraInDb, note }
+const droppedCols = []; // export columns with no counterpart in the Postgres schema
+for (const t of TABLES) {
+  const e = exportRows.get(t);
+  if (!e || e.rows.length === 0) { rowChk.push({ t, note: "no rows in export" }); continue; }
+  if (e.colSets.size > 1) { rowChk.push({ t, note: "**NOT COMPARED — the export uses more than one column list for this table**" }); failedRowChk = true; continue; }
+  const keep = e.cols.map((c, i) => [c, i]).filter(([c]) => {
+    if (colType.has(`${t}.${c}`)) return true;
+    droppedCols.push(`${t}.${c}`);
+    return false;
+  });
+  const colList = keep.map(([c]) => `"${c}"`).join(", ");
+  const values = e.rows.map((row) => `(${keep.map(([c, i]) => expected(row[i], colType.get(`${t}.${c}`))).join(",")})`).join(",\n");
+  const [, , extraInDb, missingInDb] = q(
+    `with e(${colList}) as (values\n${values}\n)
+     select 'rowchk', ${quote(t)},
+       (select count(*) from (select ${colList} from ${t} except all table e) a)::text,
+       (select count(*) from (table e except all select ${colList} from ${t}) b)::text;`,
+  )[0];
+  rowChk.push({ t, extraInDb: Number(extraInDb), missingInDb: Number(missingInDb), cols: keep.length });
+}
 
 // --- report -----------------------------------------------------------------
 const md = [];
@@ -241,6 +310,23 @@ for (const k of numCols) {
   md.push(`| ${k} | ${fmt(src)} | ${fmt(db)} | ${ok ? "ok" : "**MISMATCH**"} |`);
 }
 
+md.push("", "## Row-level comparison (every cell of every row)", "",
+  "Counts and sums cannot see a changed cell. This compares the export and the database as exact",
+  "multisets of whole rows, so a truncated note, a swapped name, a shifted date, a flipped flag or",
+  "a case repointed at the wrong client shows up as one row missing on each side.", "",
+  "| table | columns compared | rows in export, not in db | rows in db, not in export | status |",
+  "| --- | ---: | ---: | ---: | --- |");
+for (const r of rowChk) {
+  if (r.note) { md.push(`| ${r.t} | — | — | — | ${r.note} |`); continue; }
+  const ok = r.missingInDb === 0 && r.extraInDb === 0;
+  if (!ok) failed = true;
+  md.push(`| ${r.t} | ${r.cols} | ${r.missingInDb} | ${r.extraInDb} | ${ok ? "ok" : "**ROWS DIFFER**"} |`);
+}
+if (failedRowChk) failed = true;
+md.push("", droppedCols.length
+  ? `**${droppedCols.length} export column(s) have no counterpart in the Postgres schema and were never loaded: ${droppedCols.join(", ")}.** They are excluded from the comparison above, so it cannot speak for them.`
+  : "Every column the export carries exists in the Postgres schema, so no column is excluded from the comparison above.");
+
 md.push("", `## Orphans under NOT VALID foreign keys (informational)`, "",
   `${fks.length} NOT VALID FK constraints found — expected ${EXPECTED_NOT_VALID_FKS}${fks.length === EXPECTED_NOT_VALID_FKS ? "" : " — **the schema has changed**"}.`,
   "", "| constraint | orphan rows |", "| --- | ---: |");
@@ -256,7 +342,7 @@ for (const k of NTEXT_COLS) md.push(`| ${k} | ${dbLen.get(k)[0] || "—"} |`);
 
 md.push("", failed
   ? "**RESULT: FAILED — do not hand over.**"
-  : "**RESULT: counts, sums, sequence positions and table coverage all check out.**", "");
+  : "**RESULT: every row matches cell for cell; counts, sums, sequence positions and table coverage all check out.**", "");
 
 const out = join(new URL(".", import.meta.url).pathname, "out");
 mkdirSync(out, { recursive: true });
