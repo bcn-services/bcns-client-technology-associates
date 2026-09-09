@@ -103,7 +103,7 @@ Twenty tables, in dependency order. `scripts/migrate/out/` is gitignored — the
    ```sh
    node scripts/migrate/verify.mjs scripts/migrate/out/export.sql
    ```
-   Compares source row counts and numeric-column sums against the database, and reports identity maxima, orphan rows per `NOT VALID` FK, and denormalized-column drift. Prints a Markdown table and writes it to `scripts/migrate/out/verify-<timestamp>.md`. **Exit 0 = counts and sums match.** Orphans and drift are informational and never fail the run.
+   Compares source row counts and numeric-column sums against the database, and reports identity maxima, orphan rows per `NOT VALID` FK, denormalized-column drift, and the max length of every `ntext`-derived text column. Prints a Markdown table and writes it to `scripts/migrate/out/verify-<timestamp>.md`. **Exit 0 = counts and sums match.** Orphans and drift are informational and never fail the run.
 6. **Seed logins:**
    ```sh
    node scripts/migrate/seed-logins.mjs scripts/migrate/in/logins.json

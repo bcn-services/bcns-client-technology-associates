@@ -59,10 +59,10 @@ INSERT [dbo].[tblinquiry] ([id], [inqdate], [inqtime], [inqattyid], [inqdescript
 SET IDENTITY_INSERT [dbo].[tblinquiry] OFF
 GO
 SET IDENTITY_INSERT [dbo].[tblcase] ON
-INSERT [dbo].[tblcase] ([caseid], [caseatty], [casetitle], [caseclient], [tabranch], [status], [casestartdate], [casenotes], [casestatlastupdated], [billingalert]) VALUES (5001, 41, N'Rowe v. Diaz', 51, N'Newark', N'Open', CAST(N'2019-02-01' AS Date), N'Line one; semicolon kept
-it''s line two', CAST(N'2021-07-04T08:15:30.1234567' AS DateTime2), 1)
-INSERT [dbo].[tblcase] ([caseid], [caseatty], [casetitle], [caseclient], [tabranch], [status], [casestartdate], [casenotes], [casestatlastupdated], [billingalert]) VALUES (5002, 42, N'Hale v. Torres', 52, N'Trenton', N'Closed', CAST(N'2019-05-20' AS Date), NULL, NULL, 0)
-INSERT [dbo].[tblcase] ([caseid], [caseatty], [casetitle], [caseclient], [tabranch], [status], [casestartdate], [casenotes], [casestatlastupdated], [billingalert]) VALUES (5010, 43, N'Iyer v. Novak', 53, N'Camden', N'Pending', CAST(N'2020-08-11' AS Date), N'short note', NULL, 0)
+INSERT [dbo].[tblcase] ([caseid], [caseatty], [casetitle], [caseclient], [tabranch], [status], [casestartdate], [casenotes], [casestatlastupdated], [billingalert], [numunpaidbills], [numunapprovedsa]) VALUES (5001, 41, N'Rowe v. Diaz', 51, N'Newark', N'Open', CAST(N'2019-02-01' AS Date), N'Line one; semicolon kept
+it''s line two', CAST(N'2021-07-04T08:15:30.1234567' AS DateTime2), 1, 7, 0)
+INSERT [dbo].[tblcase] ([caseid], [caseatty], [casetitle], [caseclient], [tabranch], [status], [casestartdate], [casenotes], [casestatlastupdated], [billingalert], [numunpaidbills], [numunapprovedsa]) VALUES (5002, 42, N'Hale v. Torres', 52, N'Trenton', N'Closed', CAST(N'2019-05-20' AS Date), NULL, NULL, 0, 1, 1)
+INSERT [dbo].[tblcase] ([caseid], [caseatty], [casetitle], [caseclient], [tabranch], [status], [casestartdate], [casenotes], [casestatlastupdated], [billingalert], [numunpaidbills], [numunapprovedsa]) VALUES (5010, 43, N'Iyer v. Novak', 53, N'Camden', N'Pending', CAST(N'2020-08-11' AS Date), N'short note', NULL, 0, NULL, 4)
 SET IDENTITY_INSERT [dbo].[tblcase] OFF
 GO
 SET IDENTITY_INSERT [dbo].[tblbills] ON
