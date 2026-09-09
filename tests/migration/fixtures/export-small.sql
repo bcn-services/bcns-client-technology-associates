@@ -55,7 +55,7 @@ GO
 SET IDENTITY_INSERT [dbo].[tblinquiry] ON
 INSERT [dbo].[tblinquiry] ([id], [inqdate], [inqtime], [inqattyid], [inqdescription], [sentfee]) VALUES (61, CAST(N'2018-11-02' AS Date), CAST(N'23:30:00.0000000' AS Time), 41, N'first call', 1)
 INSERT [dbo].[tblinquiry] ([id], [inqdate], [inqtime], [inqattyid], [inqdescription], [sentfee]) VALUES (62, CAST(N'2019-01-15' AS Date), NULL, 42, NULL, 0)
-INSERT [dbo].[tblinquiry] ([id], [inqdate], [inqtime], [inqattyid], [inqdescription], [sentfee]) VALUES (63, CAST(N'2019-06-30' AS Date), CAST(N'08:05:00.0000000' AS Time), 43, N'referral', 0)
+INSERT [dbo].[tblinquiry] ([id], [inqdate], [inqtime], [inqattyid], [inqdescription], [sentfee]) VALUES (63, CAST(N'2019-06-30' AS Date), CAST(N'1899-12-30T08:05:00.0000000' AS DateTime2), 43, N'referral', 0)
 SET IDENTITY_INSERT [dbo].[tblinquiry] OFF
 GO
 SET IDENTITY_INSERT [dbo].[tblcase] ON

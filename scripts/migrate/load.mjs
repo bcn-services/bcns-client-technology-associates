@@ -30,6 +30,14 @@ const stmts = parse(decode(readFileSync(file), file), file);
 /** The only value translations. No trimming, no defaulting, no clamping. */
 function emit(val, dataType) {
   if (val.k === "null") return "NULL";
+  // Access stores a time-only field as a full datetime pinned to an epoch date it never shows
+  // the user (1899-12-30; SQL Server writes 1900-01-01 for the same thing). Postgres will not
+  // cast that into a `time` column, and the date part carries nothing, so drop it. Confirmed
+  // against the client's database 2026-09-09: tblinquiry.inqtime holds only those two dates.
+  if (val.k === "s" && dataType === "time without time zone") {
+    const m = /^(?:1899-12-30|1900-01-01)T(\d\d:\d\d:\d\d(?:\.\d+)?)$/.exec(val.v);
+    if (m) return quote(m[1]);
+  }
   if (val.k === "s") return quote(val.v);
   if (dataType === "boolean") { if (val.v === "1") return "true"; if (val.v === "0") return "false"; }
   return val.v;

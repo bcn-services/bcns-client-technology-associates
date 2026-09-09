@@ -73,6 +73,11 @@ test("values translate without coercion: ntext bytes, booleans, dates, NULL", ()
   assert.equal(readTz(`select billdate::text from tblbills where billid = 71;`, "UTC"), "2019-03-05");
   assert.equal(readTz(`select billdate::text from tblbills where billid = 71;`, "America/New_York"), "2019-03-05");
   assert.equal(one(`select inqtime::text from tblinquiry where id = 61;`), "23:30:00");
+  // Access writes a time-only field as a full datetime on an epoch date it never shows the user.
+  // Postgres will not cast that into a `time` column, so the load drops the date part. Row 63
+  // carries the shape the client's real export uses; row 61 keeps the plain Time literal.
+  assert.equal(one(`select inqtime::text from tblinquiry where id = 63;`), "08:05:00",
+    "an Access epoch-dated time did not load into the time column");
   // A 7-digit-fraction DateTime2 keeps microsecond precision, and the source value is Eastern
   // wall-clock: 08:15:30 in the export is 08:15:30 in Eastern, on every operator's machine.
   const dt2 = `select to_char(casestatlastupdated at time zone 'America/New_York','YYYY-MM-DD HH24:MI:SS.US') from tblcase where caseid = 5001;`;
