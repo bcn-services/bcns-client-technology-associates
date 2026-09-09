@@ -7,3 +7,9 @@ node_modules
 .env*.local
 test-results
 playwright-report
+
+# Real client data from a migration run — never committed. Also gitignored inside
+# scripts/migrate/ on the migration lane; repeated here so the rule survives on any
+# branch that has scripts/migrate/out/ on disk but not that lane, gitignore included.
+scripts/migrate/out/
+scripts/migrate/in/
