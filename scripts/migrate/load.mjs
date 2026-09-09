@@ -83,7 +83,10 @@ const script = [
   "set session_replication_role = replica;", // NOT VALID FKs and the audit triggers stay quiet, this session only
   // Pin the session timezone so a naive SQL Server datetime landing in a timestamptz column
   // resolves to the same instant on every machine and on go-live day. See README "Timezone".
-  "set time zone 'UTC';",
+  // Eastern, not UTC: Access wrote these as Eastern wall-clock times, and Kris reads them back
+  // as the times he typed. Confirmed by Nate 2026-09-09. Changing this after go-live moves
+  // every stored instant, so the go-live run must use the same value as every trial run.
+  "set time zone 'America/New_York';",
   // Clear the 20 by name only. TRUNCATE is not usable here: profiles.personid and
   // bank_transactions.expid/fndsid reference three of them, so Postgres demands those
   // tables be named too (or CASCADE) — both forbidden. Under replica mode DELETE skips

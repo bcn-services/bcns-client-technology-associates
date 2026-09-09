@@ -73,13 +73,17 @@ test("values translate without coercion: ntext bytes, booleans, dates, NULL", ()
   assert.equal(readTz(`select billdate::text from tblbills where billid = 71;`, "UTC"), "2019-03-05");
   assert.equal(readTz(`select billdate::text from tblbills where billid = 71;`, "America/New_York"), "2019-03-05");
   assert.equal(one(`select inqtime::text from tblinquiry where id = 61;`), "23:30:00");
-  // A 7-digit-fraction DateTime2 keeps microsecond precision, and the stored instant does not
-  // move with the operator's timezone — the load pins the session to UTC.
-  const dt2 = `select to_char(casestatlastupdated at time zone 'UTC','YYYY-MM-DD HH24:MI:SS.US') from tblcase where caseid = 5001;`;
+  // A 7-digit-fraction DateTime2 keeps microsecond precision, and the source value is Eastern
+  // wall-clock: 08:15:30 in the export is 08:15:30 in Eastern, on every operator's machine.
+  const dt2 = `select to_char(casestatlastupdated at time zone 'America/New_York','YYYY-MM-DD HH24:MI:SS.US') from tblcase where caseid = 5001;`;
   assert.equal(readTz(dt2, "UTC"), "2021-07-04 08:15:30.123457");
   const shifted = runLoad(SMALL, { tz: "America/New_York" });
   assert.equal(shifted.ok, true, shifted.stderr);
   assert.equal(readTz(dt2, "America/New_York"), "2021-07-04 08:15:30.123457", "the stored instant moved with the loading session's timezone");
+  // And it is Eastern, not UTC: July is EDT, so the same instant reads 12:15:30 in UTC.
+  assert.equal(
+    readTz(`select to_char(casestatlastupdated at time zone 'UTC','HH24:MI:SS') from tblcase where caseid = 5001;`, "UTC"),
+    "12:15:30", "the load read the source value as UTC instead of Eastern");
   assert.equal(one(`select expamount::text from tblexpenses where expid = 91;`), "87.40");
   assert.equal(one(`select expcaseid::text from tblexpenses where expid = 93;`), "999999", "orphan expcaseid was altered");
   // A NULL stays NULL and never becomes ''.
