@@ -163,7 +163,7 @@ export type Database = {
           attymiddlename: string | null
           attylastname: string
           attysuffix: string | null
-          attyesq: boolean | null
+          attyesq: boolean
           attyphone: string | null
           attyemail: string | null
           attycellphone: string | null
@@ -176,7 +176,7 @@ export type Database = {
           attymiddlename?: string | null
           attylastname: string
           attysuffix?: string | null
-          attyesq?: boolean | null
+          attyesq?: boolean
           attyphone?: string | null
           attyemail?: string | null
           attycellphone?: string | null
@@ -189,7 +189,7 @@ export type Database = {
           attymiddlename?: string | null
           attylastname?: string
           attysuffix?: string | null
-          attyesq?: boolean | null
+          attyesq?: boolean
           attyphone?: string | null
           attyemail?: string | null
           attycellphone?: string | null
@@ -225,7 +225,7 @@ export type Database = {
           billfilename: string | null
           billnotice: string
           billpaiddate: string | null
-          billestimate: boolean | null
+          billestimate: boolean
           billpriority: number | null
           billcomments: string | null
           billsecondnoticedate: string | null
@@ -243,7 +243,7 @@ export type Database = {
           billfilename?: string | null
           billnotice: string
           billpaiddate?: string | null
-          billestimate?: boolean | null
+          billestimate?: boolean
           billpriority?: number | null
           billcomments?: string | null
           billsecondnoticedate?: string | null
@@ -261,7 +261,7 @@ export type Database = {
           billfilename?: string | null
           billnotice?: string
           billpaiddate?: string | null
-          billestimate?: boolean | null
+          billestimate?: boolean
           billpriority?: number | null
           billcomments?: string | null
           billsecondnoticedate?: string | null
@@ -313,7 +313,8 @@ export type Database = {
           numscannedfeeschedule: number | null
           billingalert: boolean
           billingcc: string | null
-          casestatharddeadline: boolean | null
+          casestatharddeadline: boolean
+          casestatusharddeadline: boolean
         }
         Insert: {
           caseid?: number
@@ -344,7 +345,8 @@ export type Database = {
           numscannedfeeschedule?: number | null
           billingalert?: boolean
           billingcc?: string | null
-          casestatharddeadline?: boolean | null
+          casestatharddeadline?: boolean
+          casestatusharddeadline?: boolean
         }
         Update: {
           caseid?: number
@@ -375,7 +377,8 @@ export type Database = {
           numscannedfeeschedule?: number | null
           billingalert?: boolean
           billingcc?: string | null
-          casestatharddeadline?: boolean | null
+          casestatharddeadline?: boolean
+          casestatusharddeadline?: boolean
         }
         Relationships: []
       }
@@ -479,7 +482,7 @@ export type Database = {
           expamount: number
           expreason: string | null
           expinit: number | null
-          expclearedbank: boolean | null
+          expclearedbank: boolean
           expdatecleared: string | null
           expbankaccount: string | null
           expclearingnotes: string | null
@@ -498,7 +501,7 @@ export type Database = {
           expamount: number
           expreason?: string | null
           expinit?: number | null
-          expclearedbank?: boolean | null
+          expclearedbank?: boolean
           expdatecleared?: string | null
           expbankaccount?: string | null
           expclearingnotes?: string | null
@@ -517,7 +520,7 @@ export type Database = {
           expamount?: number
           expreason?: string | null
           expinit?: number | null
-          expclearedbank?: boolean | null
+          expclearedbank?: boolean
           expdatecleared?: string | null
           expbankaccount?: string | null
           expclearingnotes?: string | null
@@ -530,17 +533,17 @@ export type Database = {
         Row: {
           exptypeid: number
           exptype: string
-          active: boolean | null
+          active: boolean
         }
         Insert: {
           exptypeid?: number
           exptype: string
-          active?: boolean | null
+          active?: boolean
         }
         Update: {
           exptypeid?: number
           exptype?: string
-          active?: boolean | null
+          active?: boolean
         }
         Relationships: []
       }
@@ -606,7 +609,7 @@ export type Database = {
           fndsbillfilename: string | null
           fndscomment: string | null
           fndstype: string | null
-          fndsclearedbank: boolean | null
+          fndsclearedbank: boolean
           fndsdatecleared: string | null
           fndsbankaccount: string | null
           fndsclearingnotes: string | null
@@ -624,7 +627,7 @@ export type Database = {
           fndsbillfilename?: string | null
           fndscomment?: string | null
           fndstype?: string | null
-          fndsclearedbank?: boolean | null
+          fndsclearedbank?: boolean
           fndsdatecleared?: string | null
           fndsbankaccount?: string | null
           fndsclearingnotes?: string | null
@@ -642,7 +645,7 @@ export type Database = {
           fndsbillfilename?: string | null
           fndscomment?: string | null
           fndstype?: string | null
-          fndsclearedbank?: boolean | null
+          fndsclearedbank?: boolean
           fndsdatecleared?: string | null
           fndsbankaccount?: string | null
           fndsclearingnotes?: string | null
@@ -678,17 +681,17 @@ export type Database = {
           inqengineer: string | null
           inqcaption: string | null
           sentbranch: string | null
-          sentfee: boolean | null
-          sentchecklist: boolean | null
-          sentllb: boolean | null
-          sentkjs: boolean | null
-          sentiuo: boolean | null
-          sentiuobio: boolean | null
-          sentoren: boolean | null
-          sentlarry: boolean | null
-          sentcoppolino: boolean | null
-          sentother1: boolean | null
-          sentother2: boolean | null
+          sentfee: boolean
+          sentchecklist: boolean
+          sentllb: boolean
+          sentkjs: boolean
+          sentiuo: boolean
+          sentiuobio: boolean
+          sentoren: boolean
+          sentlarry: boolean
+          sentcoppolino: boolean
+          sentother1: boolean
+          sentother2: boolean
           sentother1name: string | null
           sentother2name: string | null
           sentinfo1: string | null
@@ -723,17 +726,17 @@ export type Database = {
           inqengineer?: string | null
           inqcaption?: string | null
           sentbranch?: string | null
-          sentfee?: boolean | null
-          sentchecklist?: boolean | null
-          sentllb?: boolean | null
-          sentkjs?: boolean | null
-          sentiuo?: boolean | null
-          sentiuobio?: boolean | null
-          sentoren?: boolean | null
-          sentlarry?: boolean | null
-          sentcoppolino?: boolean | null
-          sentother1?: boolean | null
-          sentother2?: boolean | null
+          sentfee?: boolean
+          sentchecklist?: boolean
+          sentllb?: boolean
+          sentkjs?: boolean
+          sentiuo?: boolean
+          sentiuobio?: boolean
+          sentoren?: boolean
+          sentlarry?: boolean
+          sentcoppolino?: boolean
+          sentother1?: boolean
+          sentother2?: boolean
           sentother1name?: string | null
           sentother2name?: string | null
           sentinfo1?: string | null
@@ -768,17 +771,17 @@ export type Database = {
           inqengineer?: string | null
           inqcaption?: string | null
           sentbranch?: string | null
-          sentfee?: boolean | null
-          sentchecklist?: boolean | null
-          sentllb?: boolean | null
-          sentkjs?: boolean | null
-          sentiuo?: boolean | null
-          sentiuobio?: boolean | null
-          sentoren?: boolean | null
-          sentlarry?: boolean | null
-          sentcoppolino?: boolean | null
-          sentother1?: boolean | null
-          sentother2?: boolean | null
+          sentfee?: boolean
+          sentchecklist?: boolean
+          sentllb?: boolean
+          sentkjs?: boolean
+          sentiuo?: boolean
+          sentiuobio?: boolean
+          sentoren?: boolean
+          sentlarry?: boolean
+          sentcoppolino?: boolean
+          sentother1?: boolean
+          sentother2?: boolean
           sentother1name?: string | null
           sentother2name?: string | null
           sentinfo1?: string | null

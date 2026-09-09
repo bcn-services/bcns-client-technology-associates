@@ -74,7 +74,7 @@ GO
 SET IDENTITY_INSERT [dbo].[tblactivity] ON
 INSERT [dbo].[tblactivity] ([actid], [actcaseid], [actdate], [actdescription], [acthrs], [actwho], [actbilled]) VALUES (81, 5001, CAST(N'2019-02-10' AS Date), N'review file', CAST(2.00 AS Decimal(8, 2)), 11, 1)
 INSERT [dbo].[tblactivity] ([actid], [actcaseid], [actdate], [actdescription], [acthrs], [actwho], [actbilled]) VALUES (82, 5002, CAST(N'2019-06-01' AS Date), N'site visit', CAST(4.25 AS Decimal(8, 2)), 12, 0)
-INSERT [dbo].[tblactivity] ([actid], [actcaseid], [actdate], [actdescription], [acthrs], [actwho], [actbilled]) VALUES (83, 5010, CAST(N'2020-09-09' AS Date), N'phone call', CAST(0.125 AS Real), NULL, 0)
+INSERT [dbo].[tblactivity] ([actid], [actcaseid], [actdate], [actdescription], [acthrs], [actwho], [actbilled]) VALUES (83, 5010, CAST(N'2020-09-09' AS Date), N'phone call', 0.125, NULL, 0)
 SET IDENTITY_INSERT [dbo].[tblactivity] OFF
 GO
 SET IDENTITY_INSERT [dbo].[tblexpenses] ON

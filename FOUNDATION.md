@@ -15,7 +15,7 @@ Lane done when:
 ## Config decisions (2026-09-08, Nate)
 
 - Identifiers: legacy table/column names, lowercased, unquoted (`tblcase.caseid`). Postgres folds case; quoting every identifier is not worth it.
-- Type map from the `.bak` (types decoded from `syscolpars`, LEGACY.md had names only): int/smallint as-is · nvarchar/ntext → `text` · `*Date` → `date`, `inqtime` → `time`, `casestatlastupdated` → `timestamptz` · money → `numeric(12,2)` · hours (real) → `numeric(9,3)` · `billingfactor` → `numeric(8,3)` · bit → `boolean default false` (nullable: SQL Server bits are nullable and legacy nulls are real data) · `SSMA_TimeStamp` dropped.
+- Type map from the `.bak` (types decoded from `syscolpars`, LEGACY.md had names only): int/smallint as-is · nvarchar/ntext → `text` · `*Date` → `date`, `inqtime` → `time`, `casestatlastupdated` → `timestamptz` · money → `numeric(12,2)` · hours (real) → `numeric(8,2)` · `billingfactor` → `numeric(8,3)` · bit → `boolean not null default false` · `SSMA_TimeStamp` dropped.
 - Keys: PK on every table's first column; identity `by default` so migration keeps legacy IDs (`caseid` included — case numbers are assigned by hand in Access). FKs by naming convention, all `NOT VALID`: new rows enforced, legacy orphans tolerated. No FK from `tblinquiry.inqresultingcase` (smallint vs int) or `inqclient` (text).
 - Roles: `admin` (Kris, Kalpna) manages logins + lookup lists; `staff` (Jon) everything else. Single tenant: RLS = any authenticated user reads/writes every table; `profiles` writes admin-only.
 - Rate card + rate math: **out**. Bills are priced in the client's other service; v1 records hours and balances. Adding rates later is one additive migration.
@@ -75,7 +75,6 @@ Lane done when:
     - `pnpm test:foundation` inserts one fixture row per table (FK-safe order) and passes; inserting a new tblexpenses row with an unknown expcaseid fails with a foreign-key violation
     - Inserting a tblcase row with explicit `caseid = 90001` succeeds and the next identity value does not collide (`setval` handled by the harness, documented for lane migration)
   status: done
-  amended-by: `0006_trial_load_fixes.sql` — 17 bit columns lose `not null`, the three hours columns become `numeric(9,3)`, and phantom `tblcase.casestatusharddeadline` is dropped. The shapes above describe 0001 as applied, not the current schema.
 
 - task: Migration `supabase/migrations/0002_billing_time_columns.sql` — `tblbills.billtype text null check (billtype in ('blank','timesheet','depoprep','depo','trial','retainer'))`, `tblbills.supersedesbillid integer null references tblbills(billid)`, `tblactivity.actbillid integer null references tblbills(billid)`, and `check (actbillid is null or actbilled)`; fixture rows in `rows.ts` for a typed bill, a revision, a billed activity
   guardrails:
