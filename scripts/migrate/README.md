@@ -94,7 +94,11 @@ Twenty tables, in dependency order. `scripts/migrate/out/` is gitignored — the
    ```sh
    node scripts/migrate/load.mjs scripts/migrate/out/export.sql
    ```
-   Truncates the 20 legacy tables and inserts the export in one transaction; any failure changes nothing. Prints rows inserted per table.
+   Clears the 20 legacy tables and inserts the export in one transaction; any failure changes nothing. Prints rows inserted per table.
+
+   Clearing is a row-level `DELETE`, not `TRUNCATE`: `profiles.personid` and `bank_transactions.expid`/`fndsid` reference three of the 20, so `TRUNCATE` would demand those tables be named too (or `CASCADE`). The load must never touch them, so it deletes instead — under `session_replication_role = replica`, which also keeps the `NOT VALID` FKs and the `audit` triggers quiet for that session only.
+
+   **Timezone.** The load pins its session to UTC, so a naive SQL Server `datetime2` landing in a `timestamptz` column (only `tblcase.casestatlastupdated`) resolves to the same instant no matter which machine or shell runs it. The source values are Eastern wall-clock times from Access; if they should be read as Eastern rather than UTC, change the one `set time zone` line in `load.mjs` before cutover — the decision has to be made once, and the go-live re-run must use the same setting as any earlier trial.
 5. **Verify:**
    ```sh
    node scripts/migrate/verify.mjs scripts/migrate/out/export.sql
