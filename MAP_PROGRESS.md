@@ -8,7 +8,7 @@ across rounds — never reset. Per-item detail lives in `progress/<lane>.md`.
 | Lane | Assignee | Branch | Status |
 |------|----------|--------|--------|
 | migration | nate | lane/migration | done — 4/4 items, merged 2026-09-09 (`a3add4b`) |
-| app-shell | nate | lane/app-shell | not started — preconditions unmet (Tailwind 3.4 not installed; `middleware.ts` + `app/not-found.tsx` not in its `owns:`; no Supabase project) |
+| app-shell | nate | lane/app-shell | not started — preconditions unmet (Tailwind 3.4 not installed; `middleware.ts` + `app/not-found.tsx` not in its `owns:`). Supabase project `technology-associates` (`hoxolnqsbfdmrzjfgtcm`, us-east-1) exists and is healthy; it is not linked locally and its applied-migration state has not been checked. |
 | cases | nate | — | not started — no LANE.md yet |
 | time | nate | — | not started — no LANE.md yet |
 | billing | nate | — | not started — no LANE.md yet |
