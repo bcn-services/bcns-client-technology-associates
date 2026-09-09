@@ -64,16 +64,17 @@ docker exec ta-mssql /opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P "$SA
       REPLACE"
 ```
 
-Sanity check — **record the source row count of all 20 tables now.** This is the only
-ground truth for how many rows *should* exist: the export cannot prove its own
-completeness, so `verify.mjs` compares the database against the export file, not against
-SQL Server. If the scripter run is silently truncated, both sides agree and both are wrong.
-Keep this output and compare it against the "source rows" column of the verify report.
+**Record the source row count of all 20 tables now.** This is the only ground truth for how
+many rows *should* exist — the export cannot prove its own completeness, and a silently
+truncated scripter run leaves the export and the database agreeing on a wrong number. Step 5
+reads this file and compares it per table, so it must be written **before** the export is
+generated, from the same restored database.
 
 ```sh
 mkdir -p scripts/migrate/out
 docker exec ta-mssql /opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P "$SA_PASSWORD" \
-  -d TechAssoc -h -1 -W -Q "
+  -d TechAssoc -h -1 -W -s"|" -Q "
+SET NOCOUNT ON;
 DECLARE @s nvarchar(max) = N'';
 SELECT @s = @s + N' UNION ALL SELECT ''' + name + N''' AS tbl, COUNT_BIG(*) AS n FROM dbo.' + QUOTENAME(name)
 FROM sys.tables WHERE name IN (
@@ -84,9 +85,8 @@ FROM sys.tables WHERE name IN (
 EXEC(STUFF(@s, 1, 11, N'') + N' ORDER BY tbl');" | tee scripts/migrate/out/source-counts.txt
 ```
 
-A table legitimately holding zero rows in SQL Server must be passed to `verify.mjs` as
-`--allow-empty=<table>` in step 5; otherwise verify treats "no rows anywhere" as a
-truncated export and fails. Decide that from this output, not from the export.
+One `table|count` line per table. A table legitimately holding zero rows needs no flag in
+step 5: this file says so, and verify reports it as `ok (empty in SQL Server)`.
 
 ### 1.5 Generate the data-only load script
 
@@ -118,17 +118,16 @@ Twenty tables, in dependency order. `scripts/migrate/out/` is gitignored — the
    **Timezone.** The load pins its session to UTC, so a naive SQL Server `datetime2` landing in a `timestamptz` column (only `tblcase.casestatlastupdated`) resolves to the same instant no matter which machine or shell runs it. The source values are Eastern wall-clock times from Access; if they should be read as Eastern rather than UTC, change the one `set time zone` line in `load.mjs` before cutover — the decision has to be made once, and the go-live re-run must use the same setting as any earlier trial.
 5. **Verify:**
    ```sh
-   node scripts/migrate/verify.mjs scripts/migrate/out/export.sql
+   node scripts/migrate/verify.mjs scripts/migrate/out/export.sql \
+     --source-counts=scripts/migrate/out/source-counts.txt
    ```
-   Compares source row counts and numeric-column sums against the database, and reports identity maxima, orphan rows per `NOT VALID` FK, denormalized-column drift, and the max length of every `ntext`-derived text column. Prints a Markdown table and writes it to `scripts/migrate/out/verify-<timestamp>.md`.
+   Compares SQL Server's own row counts and numeric-column sums against the database, and reports identity maxima, orphan rows per `NOT VALID` FK, denormalized-column drift, and the max length of every `ntext`-derived text column. Prints a Markdown table and writes it to `scripts/migrate/out/verify-<timestamp>.md`.
 
-   **Exit 0 means four things hold:** every table's row count matches the export, every numeric column's sum matches, every identity sequence sits at or past its table's max id (so the app's first insert cannot collide), and no legacy table is unexpectedly absent from the export. Orphans and drift are informational and never fail the run.
+   **Exit 0 means four things hold:** every table holds exactly as many rows as SQL Server reported in step 1.2, every numeric column's sum matches the export, every identity sequence's next value clears its table's max id (so the app's first insert cannot collide), and no legacy table is unexpectedly absent from the export. Orphans and drift are informational and never fail the run.
 
-   A table reported **EMPTY — no INSERTs in export** carried no rows in the export at all. Check it against `out/source-counts.txt` from step 1.2: if SQL Server really has zero rows there, re-run with `--allow-empty=<table>` (comma-separated for several); if it does not, the export is truncated — regenerate it, do not acknowledge it away.
+   A table reported **TRUNCATED EXPORT** holds fewer rows than SQL Server does: the scripter run dropped rows. Regenerate the export (step 1.5) and reload — never acknowledge it away.
 
-   ```sh
-   node scripts/migrate/verify.mjs scripts/migrate/out/export.sql --allow-empty=tblinquiry
-   ```
+   `--source-counts` is mandatory. The only way to run without it is `--no-source-counts`, which narrows the check to export-vs-database and cannot detect a truncated export; the report says so on its face, so an archived run is never ambiguous about what was checked. In that mode a table with no rows on either side is reported **EMPTY — no INSERTs in export** and fails until `--allow-empty=<table>` (comma-separated for several) acknowledges it — which the report also records. Use it for a dry run against a scratch database, never for cutover.
 6. **Seed logins:**
    ```sh
    node_modules/.bin/tsx scripts/migrate/seed-logins.mjs scripts/migrate/in/logins.json
@@ -136,7 +135,7 @@ Twenty tables, in dependency order. `scripts/migrate/out/` is gitignored — the
    Creates the first Supabase auth users and their `profiles` rows from an array of `{ email, role: "admin" | "staff", personid }` (see `scripts/migrate/logins.example.json`). No passwords are set — users come in through the app's invite/reset flow. Idempotent on email. Put the real file at `scripts/migrate/in/logins.json`; that directory is gitignored. Run it under `tsx`, not `node`: it imports `createServerClient()` from `lib/db/client.ts`, so it also needs `NEXT_PUBLIC_SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` in the environment.
 7. **Hand over.** Tell Kris the new app is live and Access stays frozen.
 
-All three scripts read the target database from the `MIGRATE_DB_URL` environment variable and take no other flags (step 6 additionally needs the two Supabase variables above):
+All three scripts read the target database from the `MIGRATE_DB_URL` environment variable; only `verify.mjs` takes flags, listed above (step 6 additionally needs the two Supabase variables above):
 
 ```sh
 export MIGRATE_DB_URL="postgresql://…"   # the Supabase project's connection string

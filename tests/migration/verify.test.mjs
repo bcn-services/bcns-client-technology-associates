@@ -27,13 +27,15 @@ const NO_IDENTITY = ["tblstates", "tblbranches", "tblcasestatus", "tblcasepriori
 const NOT_VALID_FKS = 26;
 const FIXTURE_EXPAMOUNT_SUM = "104.45";
 
-function run(script, file, { tz = "UTC" } = {}) {
-  const r = spawnSync("node", file === undefined ? [script] : [script, file], {
+function run(script, file, { tz = "UTC", flags = [] } = {}) {
+  const r = spawnSync("node", [script, ...(file === undefined ? [] : [file]), ...flags], {
     encoding: "utf8", env: { ...process.env, MIGRATE_DB_URL: DB_URL, TZ: tz, PGTZ: tz },
   });
   return { code: r.status, stdout: r.stdout, stderr: r.stderr };
 }
-const verify = (opts) => run(VERIFY, SMALL, opts);
+// The bulk of these tests exercise export-vs-db fidelity, which is what --no-source-counts scopes
+// verify to. The source-of-truth comparison has its own tests below and is never injected silently.
+const verify = (opts) => run(VERIFY, SMALL, { ...opts, flags: ["--no-source-counts"] });
 /** verify.mjs with extra CLI flags. */
 function verifyArgs(file, ...flags) {
   const r = spawnSync("node", [VERIFY, file, ...flags], {
@@ -48,6 +50,14 @@ function exportWithout(...tables) {
   writeFileSync(f, kept.join("\n"));
   return f;
 }
+/** A README-1.2-shaped source-counts file: `table|count` for all 20, overridden per `counts`. */
+function countsFile(counts = {}) {
+  const body = LEGACY_20.map((t) => `${t}|${counts[t] ?? 3}`).join("\n");
+  const f = join(mkdtempSync(join(tmpdir(), "mig-")), "source-counts.txt");
+  writeFileSync(f, `${body}\n\n(20 rows affected)\n`);
+  return f;
+}
+
 function reload() {
   const r = run(LOAD, SMALL);
   assert.equal(r.code, 0, r.stderr);
@@ -170,7 +180,7 @@ test("a table missing from the export is EMPTY, not ok: 0 rows on both sides sti
     const load = run(LOAD, trunc);
     assert.equal(load.code, 0, load.stderr);
     assert.equal(count("tblcaseresult"), 0, "precondition: the truncated export left the table empty");
-    const r = verifyArgs(trunc);
+    const r = verifyArgs(trunc, "--no-source-counts");
     assert.equal(r.code, 1, "a table absent from the export verified clean");
     assert.match(countRow(r.stdout, "tblcaseresult"), /\| 0 \| 0 \|.*\| \*\*EMPTY — no INSERTs in export\*\* \|$/);
     // Every other table is unaffected — this fires on coverage, not on a count mismatch.
@@ -183,9 +193,10 @@ test("--allow-empty acknowledges a genuinely empty table and lets the run pass",
   const trunc = exportWithout("tblcaseresult");
   try {
     assert.equal(run(LOAD, trunc).code, 0);
-    const r = verifyArgs(trunc, "--allow-empty=tblcaseresult");
+    const r = verifyArgs(trunc, "--no-source-counts", "--allow-empty=tblcaseresult");
     assert.equal(r.code, 0, r.stdout + r.stderr);
-    assert.match(countRow(r.stdout, "tblcaseresult"), /\| 0 \| 0 \|.*\| ok \|$/);
+    assert.match(countRow(r.stdout, "tblcaseresult"), /\| 0 \| 0 \|.*\| ok \(empty, acknowledged\) \|$/);
+    assert.match(r.stdout, /^Acknowledged empty \(`--allow-empty`\): `tblcaseresult`\.$/m, "the waiver is not disclosed in the archived report");
   } finally { reload(); }
 });
 
@@ -195,15 +206,15 @@ test("an identity sequence behind its table's max id exits 1", () => {
   try {
     const r = verify();
     assert.equal(r.code, 1, "a sequence behind max(id) verified clean — the app's next insert would collide");
-    assert.match(r.stdout, /^\| tblcase \| 5010 \| 1 \| \*\*BEHIND — next insert collides\*\* \|$/m);
+    assert.match(r.stdout, /^\| tblcase \| 5010 \| 2 \| \*\*BEHIND — next insert collides\*\* \|$/m);
     // The row counts are all still equal; only the sequence section fails.
     assert.match(countRow(r.stdout, "tblcase"), /\| 3 \| 3 \|.*\| ok \|$/);
   } finally { reload(); }
 });
 
 test("a bad --allow-empty table name or an unknown flag exits 2 rather than verifying", () => {
-  assert.equal(verifyArgs(SMALL, "--allow-empty=tblnope").code, 2, "an unknown table in --allow-empty was accepted");
-  assert.equal(verifyArgs(SMALL, "--allow-everything").code, 2, "an unknown flag was accepted");
+  assert.equal(verifyArgs(SMALL, "--no-source-counts", "--allow-empty=tblnope").code, 2, "an unknown table in --allow-empty was accepted");
+  assert.equal(verifyArgs(SMALL, "--no-source-counts", "--allow-everything").code, 2, "an unknown flag was accepted");
 });
 
 test("--allow-empty silences only the tables it names, never every empty table", () => {
@@ -213,9 +224,89 @@ test("--allow-empty silences only the tables it names, never every empty table",
     assert.equal(run(LOAD, trunc).code, 0);
     assert.equal(count("tblcaseresult"), 0, "precondition: both tables are empty in the db too");
     assert.equal(count("tblbills"), 0, "precondition: both tables are empty in the db too");
-    const r = verifyArgs(trunc, "--allow-empty=tblcaseresult");
+    const r = verifyArgs(trunc, "--no-source-counts", "--allow-empty=tblcaseresult");
     assert.equal(r.code, 1, "--allow-empty for one table silenced a different empty table");
-    assert.match(countRow(r.stdout, "tblcaseresult"), /\| 0 \| 0 \|.*\| ok \|$/, "the named table was not acknowledged");
+    assert.match(countRow(r.stdout, "tblcaseresult"), /\| 0 \| 0 \|.*\| ok \(empty, acknowledged\) \|$/, "the named table was not acknowledged");
     assert.match(countRow(r.stdout, "tblbills"), /\| 0 \| 0 \|.*\| \*\*EMPTY — no INSERTs in export\*\* \|$/, "the unnamed table was silenced");
+  } finally { reload(); }
+});
+
+test("a PARTIALLY truncated export verifies clean against the db but fails against SQL Server's counts", () => {
+  // The case the export can never catch by itself: one INSERT dropped, so export and db agree at 2
+  // and both are wrong. Only out/source-counts.txt knows the source really holds 3.
+  const src = readFileSync(SMALL, "utf8").split("\n");
+  const cut = src.findIndex((l) => l.startsWith("INSERT [dbo].[tblbills]"));
+  assert.ok(cut > 0, "precondition: the fixture has tblbills INSERTs");
+  const f = join(mkdtempSync(join(tmpdir(), "mig-")), "partial.sql");
+  writeFileSync(f, src.filter((_, i) => i !== cut).join("\n"));
+  try {
+    assert.equal(run(LOAD, f).code, 0);
+    assert.equal(count("tblbills"), 2, "precondition: the partial export loaded two rows");
+    // Export vs db alone: clean. This is the blind spot, asserted so it cannot be mistaken for a fix.
+    assert.equal(verifyArgs(f, "--no-source-counts").code, 0, "precondition: the export alone cannot see this");
+
+    const r = verifyArgs(f, `--source-counts=${countsFile()}`);
+    assert.equal(r.code, 1, "a partially truncated export verified clean against SQL Server's own counts");
+    assert.match(countRow(r.stdout, "tblbills"), /\| 3 \| 2 \| 2 \|.*\| \*\*TRUNCATED EXPORT — SQL Server has 3\*\* \|$/);
+    // Only the dropped table is implicated; the other nineteen still read ok.
+    assert.match(countRow(r.stdout, "tblexpenses"), /\| 3 \| 3 \| 3 \|.*\| ok \|$/);
+    assert.match(r.stdout, /^\*\*RESULT: FAILED — do not hand over\.\*\*$/m);
+  } finally { reload(); }
+});
+
+test("with source counts, a faithful load passes and the report names the counts file", () => {
+  const f = countsFile();
+  const r = verifyArgs(SMALL, `--source-counts=${f}`);
+  assert.equal(r.code, 0, r.stdout + r.stderr);
+  for (const t of LEGACY_20) assert.match(countRow(r.stdout, t), /\| 3 \| 3 \| 3 \|.*\| ok \|$/, `${t}: ${countRow(r.stdout, t)}`);
+  assert.match(r.stdout, new RegExp(`^SQL Server row counts: \`${f}\`$`, "m"));
+});
+
+test("a table SQL Server reports as 0 is acknowledged by the counts file itself, with no waiver flag", () => {
+  const trunc = exportWithout("tblcaseresult");
+  try {
+    assert.equal(run(LOAD, trunc).code, 0);
+    const r = verifyArgs(trunc, `--source-counts=${countsFile({ tblcaseresult: 0 })}`);
+    assert.equal(r.code, 0, r.stdout + r.stderr);
+    assert.match(countRow(r.stdout, "tblcaseresult"), /\| 0 \| 0 \| 0 \|.*\| ok \(empty in SQL Server\) \|$/);
+    // And a table the counts file says is NOT empty still fails when the export drops it entirely.
+    const r2 = verifyArgs(trunc, `--source-counts=${countsFile()}`);
+    assert.equal(r2.code, 1, "a table absent from the export passed while SQL Server reported 3 rows");
+    assert.match(countRow(r2.stdout, "tblcaseresult"), /\| 3 \| 0 \| 0 \|.*\| \*\*TRUNCATED EXPORT — SQL Server has 3\*\* \|$/);
+  } finally { reload(); }
+});
+
+test("running with neither --source-counts nor --no-source-counts exits 2: skipping the check must be said out loud", () => {
+  const r = run(VERIFY, SMALL);
+  assert.equal(r.code, 2, "verify ran without the source-of-truth counts and without an explicit opt-out");
+  assert.match(r.stderr, /refusing to run without SQL Server row counts/);
+  // And the report says which mode it ran in, so an archived --no-source-counts run is self-describing.
+  assert.match(verify().stdout, /^SQL Server row counts: \*\*not supplied\*\*/m);
+});
+
+test("a malformed invocation exits 2 rather than verifying something other than what was asked", () => {
+  const f = countsFile();
+  assert.equal(verifyArgs(SMALL, `--source-counts=${f}`, "--no-source-counts").code, 2, "contradictory flags were accepted");
+  // Two positionals: a shell glob or a forgotten flag would otherwise silently verify only the first.
+  const two = verifyArgs(SMALL, SMALL, "--no-source-counts");
+  assert.equal(two.code, 2, "a second export file was silently ignored");
+  assert.match(two.stderr, /more than one export file given/);
+  // A counts file missing a table cannot be treated as "that table has no expectation".
+  const short = join(mkdtempSync(join(tmpdir(), "mig-")), "short.txt");
+  writeFileSync(short, "tblstates|3\n");
+  const r = verifyArgs(SMALL, `--source-counts=${short}`);
+  assert.equal(r.code, 2, "an incomplete source-counts file was accepted");
+  assert.match(r.stderr, /no row count for .*tblcase/);
+});
+
+test("a sequence parked with is_called false is BEHIND: last_value alone would have called it ok", () => {
+  assert.equal(verify().code, 0, "precondition: the load left sequences ahead");
+  // setval(seq, 5010, false) hands out 5010 itself next — a direct collision with tblcase's max id,
+  // yet pg_sequence_last_value reports 5010, which a last_value >= max check accepts.
+  sql(`select setval(pg_get_serial_sequence('tblcase','caseid'), 5010, false);`);
+  try {
+    const r = verify();
+    assert.equal(r.code, 1, "a sequence whose next value equals max(id) verified clean");
+    assert.match(r.stdout, /^\| tblcase \| 5010 \| 5010 \| \*\*BEHIND — next insert collides\*\* \|$/m);
   } finally { reload(); }
 });

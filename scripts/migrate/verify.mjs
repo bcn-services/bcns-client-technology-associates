@@ -1,5 +1,6 @@
 // scripts/migrate/verify.mjs — fidelity report for a load. READ-ONLY: it issues no DML/DDL.
-// Usage: node scripts/migrate/verify.mjs <export.sql> [--allow-empty=tbl,tbl]   (target from MIGRATE_DB_URL)
+// Usage: node scripts/migrate/verify.mjs <export.sql> (--source-counts=<file> | --no-source-counts)
+//          [--allow-empty=tbl,tbl]                     (target from MIGRATE_DB_URL)
 // Exit 0 = source and database agree on row counts and numeric sums, no legacy table is
 // unexpectedly empty, and every identity sequence sits past its table's max id.
 // Orphans under NOT VALID FKs and denormalized-column drift are informational and never fail.
@@ -33,23 +34,54 @@ const NTEXT_COLS = [
 const EXPECTED_NOT_VALID_FKS = 26; // ground truth from the schema review; reported, never fatal.
 
 const args = process.argv.slice(2);
+const flagVals = (name) => args.filter((a) => a.startsWith(`--${name}=`)).map((a) => a.slice(name.length + 3));
 // A table the source genuinely has no rows for must be named here, so that "0 rows everywhere"
 // is always a deliberate statement about the source and never a silently truncated export.
-const allowEmpty = new Set(
-  args.filter((a) => a.startsWith("--allow-empty="))
-    .flatMap((a) => a.slice("--allow-empty=".length).split(","))
-    .map((s) => s.trim()).filter(Boolean),
-);
-const unknownFlag = args.find((a) => a.startsWith("--") && !a.startsWith("--allow-empty="));
-const file = args.find((a) => !a.startsWith("--"));
-if (!file || unknownFlag) {
-  process.stderr.write(`${unknownFlag ? `unknown option ${unknownFlag}\n` : ""}usage: node scripts/migrate/verify.mjs <export.sql> [--allow-empty=tbl,tbl]\n`);
+// With --source-counts this is rarely needed: a table SQL Server reports as 0 is acknowledged already.
+const allowEmpty = new Set(flagVals("allow-empty").flatMap((v) => v.split(",")).map((s) => s.trim()).filter(Boolean));
+const sourceCountsFile = flagVals("source-counts").at(-1);
+const noSourceCounts = args.includes("--no-source-counts");
+const KNOWN_FLAG = /^--(allow-empty=|source-counts=|no-source-counts$)/;
+const unknownFlag = args.find((a) => a.startsWith("--") && !KNOWN_FLAG.test(a));
+const positional = args.filter((a) => !a.startsWith("--"));
+const file = positional[0];
+
+// Comparing the database against the export alone cannot tell a faithful load from a truncated
+// scripter run — both sides agree and both are wrong. So the source-of-truth counts are required,
+// and skipping them has to be said out loud.
+const argError =
+  !file ? "no export file given"
+  : positional.length > 1 ? `more than one export file given: ${positional.join(", ")}`
+  : unknownFlag ? `unknown option ${unknownFlag}`
+  : sourceCountsFile && noSourceCounts ? "--source-counts and --no-source-counts are mutually exclusive"
+  : !sourceCountsFile && !noSourceCounts ? "refusing to run without SQL Server row counts: pass --source-counts=<file> (see README 1.2), or --no-source-counts to check the export only"
+  : null;
+if (argError) {
+  process.stderr.write(`${argError}\nusage: node scripts/migrate/verify.mjs <export.sql> (--source-counts=<file> | --no-source-counts) [--allow-empty=tbl,tbl]\n`);
   process.exit(2);
 }
 const unknownAllowed = [...allowEmpty].filter((t) => !TABLES.includes(t));
 if (unknownAllowed.length) {
   process.stderr.write(`--allow-empty names tables that are not legacy tables: ${unknownAllowed.join(", ")}\n`);
   process.exit(2);
+}
+
+// SQL Server's own counts, recorded in README 1.2 *before* the export was generated. Lines are
+// `table|count` (sqlcmd -h -1 -W -s"|"); anything else in the file is ignored.
+let srcTruth = null;
+if (sourceCountsFile) {
+  srcTruth = new Map();
+  for (const line of readFileSync(sourceCountsFile, "utf8").split("\n")) {
+    const [rawT, rawN] = line.split("|");
+    if (rawN === undefined) continue;
+    const tbl = rawT.trim(), n = rawN.trim();
+    if (TABLES.includes(tbl) && /^\d+$/.test(n)) srcTruth.set(tbl, Number(n));
+  }
+  const missing = TABLES.filter((x) => !srcTruth.has(x));
+  if (missing.length) {
+    process.stderr.write(`${sourceCountsFile}: no row count for ${missing.join(", ")}\n`);
+    process.exit(2);
+  }
 }
 
 // MIGRATE_DB_URL is this lane's only env read; the harness derives DB_URL from FOUNDATION_PG_URL.
@@ -93,6 +125,8 @@ select 'ident', table_name, column_name from information_schema.columns
   where table_schema = 'public' and is_identity = 'YES' and table_name in (${TABLES.map(quote).join(",")});
 select 'num', table_name, column_name from information_schema.columns
   where table_schema = 'public' and data_type = 'numeric' and table_name in (${TABLES.map(quote).join(",")});
+select 'seqname', table_name, pg_get_serial_sequence(table_name, column_name) from information_schema.columns
+  where table_schema = 'public' and is_identity = 'YES' and table_name in (${TABLES.map(quote).join(",")});
 select 'fk', c.conname, tr.relname, a.attname, rr.relname, ra.attname
   from pg_constraint c
   join pg_class tr on tr.oid = c.conrelid
@@ -103,6 +137,7 @@ select 'fk', c.conname, tr.relname, a.attname, rr.relname, ra.attname
   order by 2;
 `);
 const identCol = new Map(meta.filter((r) => r[0] === "ident").map((r) => [r[1], r[2]]));
+const seqName = new Map(meta.filter((r) => r[0] === "seqname" && r[2]).map((r) => [r[1], r[2]]));
 const numCols = meta.filter((r) => r[0] === "num").map((r) => `${r[1]}.${r[2]}`);
 const fks = meta.filter((r) => r[0] === "fk").map(([, conname, tbl, col, rtbl, rcol]) => ({ conname, tbl, col, rtbl, rcol }));
 for (const k of numCols) srcSum.set(k, 0n);
@@ -126,9 +161,9 @@ const dbQuery = [
     ? `select 'max', ${quote(t)}, coalesce(max(${identCol.get(t)})::text, '') from ${t};`
     : `select 'max', ${quote(t)}, '';`)),
   // Sequence position: setval(seq, max(id)) leaves last_value = max(id), so next insert is max+1.
-  ...TABLES.map((t) => (identCol.has(t)
-    ? `select 'seq', ${quote(t)}, coalesce(pg_sequence_last_value(pg_get_serial_sequence(${quote(t)}, ${quote(identCol.get(t))}))::text, '');`
-    : `select 'seq', ${quote(t)}, '';`)),
+  ...TABLES.map((t) => (seqName.has(t)
+    ? `select 'seq', ${quote(t)}, last_value::text, is_called::text from ${seqName.get(t)};`
+    : `select 'seq', ${quote(t)}, '', '';`)),
   ...NTEXT_COLS.map((k) => `select 'len', ${quote(k)}, coalesce(max(length(${k.split(".")[1]}))::text, '') from ${k.split(".")[0]};`),
   ...fks.map((f) => `select 'orphan', ${quote(f.conname)}, count(*)::text from ${f.tbl} t left join ${f.rtbl} r on t.${f.col} = r.${f.rcol} where t.${f.col} is not null and r.${f.rcol} is null;`),
   // A NULL counter is not evidence of drift — VBA simply never wrote one — so NULLs are skipped.
@@ -148,35 +183,54 @@ const md = [];
 let failed = false;
 const stamp = new Date().toISOString();
 md.push(`# Migration verify — ${stamp}`, "", `Source: \`${file}\``, "");
+// The header is the audit trail: an archived report has to show, on its face, what the run was
+// allowed to overlook. A waiver that only lives in someone's shell history is not a waiver.
+md.push(srcTruth
+  ? `SQL Server row counts: \`${sourceCountsFile}\``
+  : "SQL Server row counts: **not supplied** (`--no-source-counts`) — a partially truncated export cannot be detected from the export alone.");
+if (allowEmpty.size) md.push("", `Acknowledged empty (\`--allow-empty\`): ${[...allowEmpty].map((x) => `\`${x}\``).join(", ")}.`);
+md.push("");
 
-md.push("## Row counts and identity maxima", "", "| table | source rows | db rows | max identity | status |", "| --- | ---: | ---: | ---: | --- |");
+md.push("## Row counts and identity maxima", "",
+  `| table | ${srcTruth ? "sql server rows | " : ""}export rows | db rows | max identity | status |`,
+  `| --- | ---: | ---: | ---: |${srcTruth ? " ---: |" : ""} --- |`);
 for (const t of TABLES) {
   const src = srcCount.get(t), db = Number(dbCount.get(t)[0]);
-  const ok = src === db;
-  // src === db === 0 means the export carried no INSERT for this table at all. That is what a
-  // truncated or partial mssql-scripter run looks like, and it is indistinguishable from a
-  // genuinely empty table using the export alone — so it fails until someone says otherwise.
-  const empty = ok && src === 0 && !allowEmpty.has(t);
-  if (!ok || empty) failed = true;
+  const truth = srcTruth ? srcTruth.get(t) : null;
+  // Export vs db proves only that the load was faithful to the export. Whether the *export* was
+  // faithful to SQL Server is a separate question, and only the source counts can answer it —
+  // a truncated scripter run leaves both sides agreeing and both wrong.
+  let status;
+  if (truth !== null && truth !== src) status = `**TRUNCATED EXPORT — SQL Server has ${truth}**`;
+  else if (src !== db) status = "**MISMATCH**";
+  else if (src !== 0) status = "ok";
+  else if (truth === 0) status = "ok (empty in SQL Server)";
+  // No source counts: "0 rows everywhere" is indistinguishable from a truncated export using the
+  // export alone, so it fails until someone says otherwise on the command line.
+  else if (allowEmpty.has(t)) status = "ok (empty, acknowledged)";
+  else status = "**EMPTY — no INSERTs in export**";
+  if (status.startsWith("**")) failed = true;
   const max = identCol.has(t) ? (dbMax.get(t)[0] || "—") : "—";
-  const status = !ok ? "**MISMATCH**" : empty ? "**EMPTY — no INSERTs in export**" : "ok";
-  md.push(`| ${t} | ${src} | ${db} | ${max} | ${status} |`);
+  md.push(`| ${t} | ${truth !== null ? `${truth} | ` : ""}${src} | ${db} | ${max} | ${status} |`);
 }
 
-md.push("",
-  "An **EMPTY** table means the export contained no INSERT for it. Compare against the source counts from",
-  "README Part 1.5; if the table really is empty in SQL Server, re-run with `--allow-empty=<table>`.");
+md.push("", srcTruth
+  ? "A **TRUNCATED EXPORT** row means the export carries fewer rows than SQL Server holds: regenerate it (README 1.5), do not load it."
+  : "An **EMPTY** table means the export contained no INSERT for it. Compare against `out/source-counts.txt` from README 1.2; if the table really is empty in SQL Server, re-run with `--allow-empty=<table>` — or better, pass `--source-counts=` and let this report do the comparison.");
 
 md.push("", "## Identity sequence positions", "",
-  "Each sequence must sit at or past its table's max id, or the first row the app inserts collides.",
-  "", "| table | max identity | sequence last value | status |", "| --- | ---: | ---: | --- |");
+  "Each sequence's next value must clear its table's max id, or the first row the app inserts collides.",
+  "", "| table | max identity | next sequence value | status |", "| --- | ---: | ---: | --- |");
 for (const t of TABLES) {
   if (!identCol.has(t)) continue; // the five text-PK lookup tables have no sequence
-  const max = dbMax.get(t)[0], last = dbSeq.get(t)[0];
-  if (max === "") { md.push(`| ${t} | — | ${last || "—"} | n/a (no rows) |`); continue; }
-  const okSeq = last !== "" && BigInt(last) >= BigInt(max);
+  const max = dbMax.get(t)[0], [last, isCalled] = dbSeq.get(t);
+  // last_value alone is ambiguous: setval(seq, n, false) parks last_value at n and hands out n
+  // itself next, so is_called is what separates "n was consumed" from "n is next".
+  const next = last === "" ? "" : (isCalled === "true" ? BigInt(last) + 1n : BigInt(last)).toString();
+  if (max === "") { md.push(`| ${t} | — | ${next || "—"} | n/a (no rows) |`); continue; }
+  const okSeq = next !== "" && BigInt(next) > BigInt(max);
   if (!okSeq) failed = true;
-  md.push(`| ${t} | ${max} | ${last || "—"} | ${okSeq ? "ok" : "**BEHIND — next insert collides**"} |`);
+  md.push(`| ${t} | ${max} | ${next || "—"} | ${okSeq ? "ok" : "**BEHIND — next insert collides**"} |`);
 }
 
 md.push("", "## Numeric column sums", "", "| column | source sum | db sum | status |", "| --- | ---: | ---: | --- |");
