@@ -16,7 +16,7 @@ python3 -m venv ~/.venvs/mssql-scripter
 ~/.venvs/mssql-scripter/bin/pip install --pre mssql-scripter
 ```
 
-`mssql-scripter`'s only published releases are pre-releases, so `--pre` is required or pip finds no candidate. Invoke it by its venv path below.
+`mssql-scripter`'s only published releases are pre-releases, so `--pre` is required or pip finds no candidate. Do **not** use the `bin/mssql-scripter` wrapper — its last line calls `python`, which does not exist on macOS (only `python3`). Invoke the module through the venv's own interpreter, as step 1.5 does.
 
 ### 1.2 Start the SQL Server container
 
@@ -76,14 +76,22 @@ docker exec ta-mssql /opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P "$SA
   -d TechAssoc -h -1 -W -s"|" -Q "
 SET NOCOUNT ON;
 DECLARE @s nvarchar(max) = N'';
-SELECT @s = @s + N' UNION ALL SELECT ''' + name + N''' AS tbl, COUNT_BIG(*) AS n FROM dbo.' + QUOTENAME(name)
-FROM sys.tables WHERE name IN (
+SELECT @s = @s + N' UNION ALL SELECT ''' + LOWER(name) + N''' AS tbl, COUNT_BIG(*) AS n FROM dbo.' + QUOTENAME(name)
+FROM sys.tables WHERE LOWER(name) IN (
   'tblstates','tblbranches','tblcasestatus','tblcasepriority','tblcasewaitingfor',
   'tblbillingnames','tblexptype','tblfirm','tblattorney','tblclient',
   'tblinquiry','tblcase','tblbills','tblactivity','tblexpenses',
   'tblfundsrcvd','tblsrvauth','tblcaseresult','tbl_scannedbillandcheck','tblscanneddocument');
-EXEC(STUFF(@s, 1, 11, N'') + N' ORDER BY tbl');" | tee scripts/migrate/out/source-counts.txt
+SET @s = STUFF(@s, 1, 11, N'') + N' ORDER BY tbl';
+EXEC(@s);" | tee scripts/migrate/out/source-counts.txt
 ```
+
+`EXEC()` takes a variable, not an expression, so the concatenation happens in the `SET` first.
+`LOWER(name)` appears twice on purpose: in the `WHERE` because `sys.tables` matching is
+case-sensitive under some collations and a silent no-match writes an empty counts file that
+step 5 then trusts, and in the projection because the real `.bak` stores mixed-case names
+(`tblCase`, `TblScannedDocument`) that verify's lowercase table list will not match.
+**Check the file has 20 lines, all lowercase, before continuing.**
 
 One `table|count` line per table. A table legitimately holding zero rows needs no flag in
 step 5: this file says so, and verify reports it as `ok (empty in SQL Server)`.
@@ -92,7 +100,7 @@ step 5: this file says so, and verify reports it as `ok (empty in SQL Server)`.
 
 ```sh
 mkdir -p scripts/migrate/out
-~/.venvs/mssql-scripter/bin/mssql-scripter -S localhost -d TechAssoc -U sa -P "$SA_PASSWORD" \
+PYTHONIOENCODING=utf8 ~/.venvs/mssql-scripter/bin/python -m mssqlscripter -S localhost -d TechAssoc -U sa -P "$SA_PASSWORD" \
   --data-only --target-server-version vNext \
   --include-objects dbo.tblstates dbo.tblbranches dbo.tblcasestatus dbo.tblcasepriority dbo.tblcasewaitingfor dbo.tblbillingnames dbo.tblexptype dbo.tblfirm dbo.tblattorney dbo.tblclient dbo.tblinquiry dbo.tblcase dbo.tblbills dbo.tblactivity dbo.tblexpenses dbo.tblfundsrcvd dbo.tblsrvauth dbo.tblcaseresult dbo.tbl_scannedbillandcheck dbo.tblscanneddocument \
   -f scripts/migrate/out/export.sql

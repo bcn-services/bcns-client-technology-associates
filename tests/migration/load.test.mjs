@@ -69,6 +69,12 @@ test("values translate without coercion: ntext bytes, booleans, dates, NULL", ()
   );
   assert.equal(one(`select active::text from tblexptype where exptypeid = 21;`), "true");
   assert.equal(one(`select active::text from tblexptype where exptypeid = 22;`), "false");
+  // 0006: bit columns are nullable in SQL Server; a legacy NULL loads as NULL, not as false.
+  assert.equal(one(`select active is null from tblexptype where exptypeid = 23;`), "t",
+    "a NULL bit was coerced or rejected — 0006 dropped the not null for exactly this");
+  // 0006: hours are SQL Server `real`; numeric(8,2) rounded 0.125 away.
+  assert.equal(one(`select acthrs::text from tblactivity where actid = 83;`), "0.125",
+    "an hours value lost precision — 0006 widened these columns to numeric(9,3)");
   // DateTime at 23:30:00 landing in a `date` column: same calendar date under either TZ.
   assert.equal(readTz(`select billdate::text from tblbills where billid = 71;`, "UTC"), "2019-03-05");
   assert.equal(readTz(`select billdate::text from tblbills where billid = 71;`, "America/New_York"), "2019-03-05");

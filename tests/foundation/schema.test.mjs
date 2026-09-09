@@ -21,13 +21,31 @@ test("pinned column types and nullability hold on the columns lanes lean on", ()
   const col = (t, c) => one(`select data_type||':'||is_nullable from information_schema.columns where table_name='${t}' and column_name='${c}'`);
   assert.equal(col("tblexpenses", "expamount"), "numeric:NO");
   assert.equal(col("tblexpenses", "expdate"), "date:NO");
-  assert.equal(col("tblexpenses", "expclearedbank"), "boolean:NO");
+  assert.equal(col("tblexpenses", "expclearedbank"), "boolean:YES");
   assert.equal(col("tblbills", "billpaiddate"), "date:YES");
   assert.equal(col("tblbills", "billbalance"), "numeric:NO");
   assert.equal(col("tblactivity", "acthrs"), "numeric:NO");
   assert.equal(col("tblcase", "casestatlastupdated"), "timestamp with time zone:YES");
   assert.equal(col("tblinquiry", "inqtime"), "time without time zone:YES");
   assert.equal(one("select count(*) from information_schema.columns where table_schema='public' and column_name='ssma_timestamp'"), "0");
+});
+
+// 0006: shapes the real .bak load rejected.
+test("0006 amendments hold: nullable bits, wide hours, no phantom column", () => {
+  const nullable = (t, c) => one(`select is_nullable from information_schema.columns where table_name='${t}' and column_name='${c}'`);
+  const numtype = (t, c) => one(`select numeric_precision||','||numeric_scale from information_schema.columns where table_name='${t}' and column_name='${c}'`);
+  for (const [t, c] of [["tblattorney","attyesq"],["tblbills","billestimate"],["tblcase","casestatharddeadline"],["tblexpenses","expclearedbank"],["tblexptype","active"],["tblfundsrcvd","fndsclearedbank"],["tblinquiry","sentchecklist"],["tblinquiry","sentcoppolino"],["tblinquiry","sentfee"],["tblinquiry","sentiuo"],["tblinquiry","sentiuobio"],["tblinquiry","sentkjs"],["tblinquiry","sentlarry"],["tblinquiry","sentllb"],["tblinquiry","sentoren"],["tblinquiry","sentother1"],["tblinquiry","sentother2"]]) {
+    assert.equal(nullable(t, c), "YES", `${t}.${c} should be nullable`);
+  }
+  // Not in the 17: these are not null in SQL Server too.
+  assert.equal(nullable("tblcase", "billingalert"), "NO");
+  assert.equal(nullable("tblactivity", "actbilled"), "NO");
+  for (const [t, c] of [["tblsrvauth","srvauthhours"],["tblbills","billhours"],["tblactivity","acthrs"]]) {
+    assert.equal(numtype(t, c), "9,3", `${t}.${c} should be numeric(9,3)`);
+  }
+  assert.equal(one("select count(*) from information_schema.columns where table_name='tblcase' and column_name='casestatusharddeadline'"), "0");
+  // Defaults survive the drop of not null.
+  assert.equal(one("select column_default from information_schema.columns where table_name='tblcase' and column_name='casestatharddeadline'"), "false");
 });
 
 test("one fixture row per table inserts in FK-safe order", () => {
