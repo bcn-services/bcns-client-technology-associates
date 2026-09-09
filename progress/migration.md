@@ -1,4 +1,4 @@
-# Progress — lane: migration
+# Progress — lane: migration (archived to `integration` 2026-09-09)
 
 Tracks where we are in `LANE.md`. LANE.md is the contract; this tracks where we
 are in it — if they disagree, LANE.md wins for scope.

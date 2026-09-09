@@ -13,3 +13,6 @@ playwright-report
 # branch that has scripts/migrate/out/ on disk but not that lane, gitignore included.
 scripts/migrate/out/
 scripts/migrate/in/
+
+# dev-team scratch worktrees (full repo copies; MAP.md lists this unowned)
+.claude/worktrees/
