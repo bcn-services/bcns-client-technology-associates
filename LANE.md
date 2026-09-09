@@ -63,7 +63,7 @@ Foundation merged 2026-09-08. No Supabase project yet; every item runs and is te
     - `scripts/migrate/README.md` exists with the three parts above and names all 20 tables in the `mssql-scripter --include-objects` list
     - `scripts/migrate/.gitignore` ignores `in/` and `out/`; `git check-ignore scripts/migrate/in/x.sql` succeeds
     - Every `node scripts/migrate/*.mjs` invocation in the README matches a script file and flag set present on the branch
-  status: not started
+  status: done
 
 - task: `scripts/migrate/load.mjs <export.sql>` — load a data-only script (`mssql-scripter --data-only`, same INSERT/VALUES grammar SSMS "Generate Scripts" would emit) into Postgres. Read the file as UTF-8 with BOM stripped, falling back to UTF-16 LE with BOM if decoding fails. Parse the machine-generated grammar: `USE`/`GO`/`SET IDENTITY_INSERT ... ON|OFF`/`SET ANSI_NULLS` lines dropped; `INSERT [dbo].[Tbl] ([Col], ...) VALUES (...)` (also the `INSERT ... VALUES (...), (...)` multi-row form SSMS emits in batches of 100) → table + column list lowercased, brackets stripped. Value translation per column type read once from `information_schema.columns` for the 20 tables: `N'…'`/`'…'` string literals with `''` escaping and embedded newlines kept verbatim; `NULL` → NULL; `CAST(N'yyyy-mm-ddThh:mm:ss.fff' AS DateTime)`/`AS Date`/`AS Time`/`CAST(N'yyyy-mm-ddThh:mm:ss.fffffff' AS DateTime2)` (7-digit fraction — every date/time column in the real schema is `datetime2`, confirmed against the restored `.bak`) → the ISO literal, cast by Postgres to the pinned `date`/`time`/`timestamptz`; `CAST(x AS Decimal(…))`/`AS Money` → numeric literal; integer `0`/`1` targeting a `boolean` column → `false`/`true`; a value that Postgres rejects surfaces as `table.column: <pg error>` and aborts. Table in the file but not one of the 20 → skipped, listed on stderr. Execution: one `psql` session, `set session_replication_role = replica` (so `NOT VALID` FKs and the `audit` triggers stay quiet), `truncate <20 tables> cascade`-free — truncate only the 20 by name, inserts in file order, then the `syncSequences` SQL from the harness (import it), print rows inserted per table. Whole run in one transaction: any failure → nothing changed.
   guardrails:
@@ -75,7 +75,7 @@ Foundation merged 2026-09-08. No Supabase project yet; every item runs and is te
     - Loading the same fixture twice leaves identical counts, and `insert into tblcase (casetitle) values ('x')` afterwards receives an id greater than the fixture's max caseid
     - A fixture containing `INSERT [dbo].[tblActive] ...` and an out-of-range `smallint` value: the unknown table is listed on stderr and skipped; the bad value aborts with `tblbillingnames.personid` (or the relevant `table.column`) in the error and leaves every table empty
     - `audit_log` has zero rows after a load, and existing `pnpm test` stays green
-  status: not started
+  status: done
 
 - task: `scripts/migrate/verify.mjs <export.sql>` — fidelity report after a load. Re-parse the export with the parser from item 2 (export it from `load.mjs` or a shared `scripts/migrate/parse.mjs`) to get source row counts per table and per-table sums of every `numeric` column, then query the database for: row count per table, the same sums, max of the identity column, orphan count per `NOT VALID` FK (from `pg_constraint` where `convalidated = false`, counted with a `left join`), drift on the VBA-maintained denormalized columns (`tblcase.numunpaidbills` vs `count(tblbills where billpaiddate is null)` per case, `numunapprovedsa` vs `count(tblsrvauth where srvauthstatus <> 'Approved')` per case — report count of cases where they disagree), and max length of every `text` column that came from `ntext`. Print a Markdown table to stdout and write it to `scripts/migrate/out/verify-<timestamp>.md`. Exit 1 on any count or sum mismatch; orphans and drift are informational.
   guardrails:
@@ -85,7 +85,7 @@ Foundation merged 2026-09-08. No Supabase project yet; every item runs and is te
     - After loading `export-small.sql`, `verify.mjs` exits 0 and its report shows equal source/database counts for all 20 tables, the orphan `expcaseid` counted under its FK, and at least one line of denormalized drift the fixture deliberately plants
     - After deleting one `tblexpenses` row directly, `verify.mjs` exits 1 and the report marks the `tblexpenses` count and `expamount` sum as mismatched
     - The report file lands in `scripts/migrate/out/` and that path is ignored by git
-  status: not started
+  status: done
 
 - task: `scripts/migrate/seed-logins.mjs <logins.json>` — create the first Supabase auth users and their `profiles` rows. Input: array of `{ email, role: 'admin'|'staff', personid: number|null }`. For each: `supabase.auth.admin.createUser({ email, email_confirm: true })` via `createServerClient()` from `lib/db/client.ts` (service role); on "already registered" look the user up by email instead; then `upsert` into `profiles` on `id` with `email`, `role`, `personid`. `personid` must exist in `tblbillingnames` (query first; unknown → abort before any user is created). Print `email → role (created|existing)`. Ship `scripts/migrate/logins.example.json` with three invented entries; the real `in/logins.json` is gitignored by item 1. Because auth users need a real Supabase project, tests cover the pure parts: input validation, the personid check against the harness DB, and the upsert SQL shape via an injected fake admin client.
   guardrails:
@@ -96,6 +96,6 @@ Foundation merged 2026-09-08. No Supabase project yet; every item runs and is te
     - `logins.example.json` with three entries passes validation; a file with `role: 'owner'` or a `personid` absent from `tblbillingnames` aborts before any `createUser` call (fake client records zero calls)
     - With a fake admin client that reports the second email as already registered, the run ends with three `profiles` rows in the harness DB, two `created` and one `existing`, and a second run leaves the row count at three
     - `pnpm typecheck` passes with the script's imports from `lib/db/client.ts`
-  status: not started
+  status: done
 
 > **⚠️ AUTONOMOUS RUN — STOP HERE**

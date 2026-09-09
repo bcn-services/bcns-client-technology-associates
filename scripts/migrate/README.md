@@ -123,7 +123,7 @@ export MIGRATE_DB_URL="postgresql://…"   # the Supabase project's connection s
 
 - Keep Access frozen or tell Kris to resume it — decide before anything else; the legacy app is the system of record until we hand over.
 - Send `scripts/migrate/out/verify-<timestamp>.md` back with the mismatched tables.
-- Fix the cause in the repo, then restart from Part 2 step 3 with a fresh `.bak`. `load.mjs` truncates and reloads, so a re-run is safe and leaves no duplicates.
+- Fix the cause in the repo, then restart from Part 2 step 3 with a fresh `.bak`. `load.mjs` clears every legacy table (`delete from`, in reverse dependency order) and reloads inside one transaction, so a re-run is safe and leaves no duplicates. It does not `truncate`: `profiles` and `bank_transactions` reference three of these tables, and `truncate` would demand naming them or `cascade` — either one reaches beyond the legacy tables this lane owns.
 
 ---
 
