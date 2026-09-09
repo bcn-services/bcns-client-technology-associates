@@ -1,0 +1,5 @@
+[
+  { "email": "kris@example-firm.test", "role": "admin", "personid": 4101 },
+  { "email": "dana@example-firm.test", "role": "staff", "personid": 4102 },
+  { "email": "frontdesk@example-firm.test", "role": "staff", "personid": null }
+]
