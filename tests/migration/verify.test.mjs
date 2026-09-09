@@ -4,7 +4,8 @@
 import { test, before } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { readFileSync, writeFileSync, mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { DB_URL, sql, one, resetDb } from "../foundation/harness.mjs";
 
@@ -33,6 +34,20 @@ function run(script, file, { tz = "UTC" } = {}) {
   return { code: r.status, stdout: r.stdout, stderr: r.stderr };
 }
 const verify = (opts) => run(VERIFY, SMALL, opts);
+/** verify.mjs with extra CLI flags. */
+function verifyArgs(file, ...flags) {
+  const r = spawnSync("node", [VERIFY, file, ...flags], {
+    encoding: "utf8", env: { ...process.env, MIGRATE_DB_URL: DB_URL, TZ: "UTC", PGTZ: "UTC" },
+  });
+  return { code: r.status, stdout: r.stdout, stderr: r.stderr };
+}
+/** A copy of the fixture export with every INSERT for `tables` stripped — a truncated scripter run. */
+function exportWithout(...tables) {
+  const kept = readFileSync(SMALL, "utf8").split("\n").filter((l) => !tables.some((t) => l.includes(`[${t}]`)));
+  const f = join(mkdtempSync(join(tmpdir(), "mig-")), `without-${tables.join("-")}.sql`);
+  writeFileSync(f, kept.join("\n"));
+  return f;
+}
 function reload() {
   const r = run(LOAD, SMALL);
   assert.equal(r.code, 0, r.stderr);
@@ -49,7 +64,7 @@ test("a faithful load verifies clean: 20 equal counts, the planted orphan, plant
   const r = verify();
   assert.equal(r.code, 0, r.stdout + r.stderr);
   for (const t of LEGACY_20) assert.match(countRow(r.stdout, t), /\| 3 \| 3 \|.*\| ok \|$/, `${t} count row: ${countRow(r.stdout, t)}`);
-  assert.match(r.stdout, /^\*\*RESULT: counts and sums match\.\*\*$/m);
+  assert.match(r.stdout, /^\*\*RESULT: counts, sums, sequence positions and table coverage all check out\.\*\*$/m);
   // The five identity-less lookup tables report n/a, not a null and not a mismatch.
   for (const t of NO_IDENTITY) assert.match(countRow(r.stdout, t), /\| — \| ok \|$/, `${t} identity cell`);
   // The orphan the fixture plants, counted under its own NOT VALID constraint.
@@ -77,7 +92,7 @@ test("a deleted row exits 1 and marks both the tblexpenses count and the expamou
     assert.equal(r.code, 1, "a missing row did not fail the run");
     assert.match(countRow(r.stdout, "tblexpenses"), /\| 3 \| 2 \|.*\| \*\*MISMATCH\*\* \|$/);
     assert.match(sumRow(r.stdout, "tblexpenses.expamount"), /\| 104\.45 \| 92\.45 \| \*\*MISMATCH\*\* \|$/);
-    assert.match(r.stdout, /^\*\*RESULT: MISMATCH — do not hand over\.\*\*$/m);
+    assert.match(r.stdout, /^\*\*RESULT: FAILED — do not hand over\.\*\*$/m);
   } finally { reload(); }
 });
 
@@ -146,4 +161,61 @@ test("it refuses to run without a source file", () => {
   const r = run(VERIFY, undefined);
   assert.equal(r.code, 2);
   assert.match(r.stderr, /usage: node scripts\/migrate\/verify\.mjs/);
+});
+
+test("a table missing from the export is EMPTY, not ok: 0 rows on both sides still exits 1", () => {
+  // The whole point of criterion 1: a silently truncated mssql-scripter run must not verify clean.
+  const trunc = exportWithout("tblcaseresult");
+  try {
+    const load = run(LOAD, trunc);
+    assert.equal(load.code, 0, load.stderr);
+    assert.equal(count("tblcaseresult"), 0, "precondition: the truncated export left the table empty");
+    const r = verifyArgs(trunc);
+    assert.equal(r.code, 1, "a table absent from the export verified clean");
+    assert.match(countRow(r.stdout, "tblcaseresult"), /\| 0 \| 0 \|.*\| \*\*EMPTY — no INSERTs in export\*\* \|$/);
+    // Every other table is unaffected — this fires on coverage, not on a count mismatch.
+    assert.match(countRow(r.stdout, "tblexpenses"), /\| 3 \| 3 \|.*\| ok \|$/);
+    assert.match(r.stdout, /^\*\*RESULT: FAILED — do not hand over\.\*\*$/m);
+  } finally { reload(); }
+});
+
+test("--allow-empty acknowledges a genuinely empty table and lets the run pass", () => {
+  const trunc = exportWithout("tblcaseresult");
+  try {
+    assert.equal(run(LOAD, trunc).code, 0);
+    const r = verifyArgs(trunc, "--allow-empty=tblcaseresult");
+    assert.equal(r.code, 0, r.stdout + r.stderr);
+    assert.match(countRow(r.stdout, "tblcaseresult"), /\| 0 \| 0 \|.*\| ok \|$/);
+  } finally { reload(); }
+});
+
+test("an identity sequence behind its table's max id exits 1", () => {
+  assert.equal(verify().code, 0, "precondition: the load left sequences ahead");
+  sql(`select setval(pg_get_serial_sequence('tblcase','caseid'), 1, true);`);
+  try {
+    const r = verify();
+    assert.equal(r.code, 1, "a sequence behind max(id) verified clean — the app's next insert would collide");
+    assert.match(r.stdout, /^\| tblcase \| 5010 \| 1 \| \*\*BEHIND — next insert collides\*\* \|$/m);
+    // The row counts are all still equal; only the sequence section fails.
+    assert.match(countRow(r.stdout, "tblcase"), /\| 3 \| 3 \|.*\| ok \|$/);
+  } finally { reload(); }
+});
+
+test("a bad --allow-empty table name or an unknown flag exits 2 rather than verifying", () => {
+  assert.equal(verifyArgs(SMALL, "--allow-empty=tblnope").code, 2, "an unknown table in --allow-empty was accepted");
+  assert.equal(verifyArgs(SMALL, "--allow-everything").code, 2, "an unknown flag was accepted");
+});
+
+test("--allow-empty silences only the tables it names, never every empty table", () => {
+  // Both tables must be 0-on-both-sides, or this passes on a plain count mismatch and proves nothing.
+  const trunc = exportWithout("tblcaseresult", "tblbills");
+  try {
+    assert.equal(run(LOAD, trunc).code, 0);
+    assert.equal(count("tblcaseresult"), 0, "precondition: both tables are empty in the db too");
+    assert.equal(count("tblbills"), 0, "precondition: both tables are empty in the db too");
+    const r = verifyArgs(trunc, "--allow-empty=tblcaseresult");
+    assert.equal(r.code, 1, "--allow-empty for one table silenced a different empty table");
+    assert.match(countRow(r.stdout, "tblcaseresult"), /\| 0 \| 0 \|.*\| ok \|$/, "the named table was not acknowledged");
+    assert.match(countRow(r.stdout, "tblbills"), /\| 0 \| 0 \|.*\| \*\*EMPTY — no INSERTs in export\*\* \|$/, "the unnamed table was silenced");
+  } finally { reload(); }
 });

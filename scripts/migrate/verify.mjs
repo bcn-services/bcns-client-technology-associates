@@ -1,6 +1,7 @@
 // scripts/migrate/verify.mjs — fidelity report for a load. READ-ONLY: it issues no DML/DDL.
-// Usage: node scripts/migrate/verify.mjs <export.sql>   (target from MIGRATE_DB_URL)
-// Exit 0 = source and database agree on row counts and numeric sums.
+// Usage: node scripts/migrate/verify.mjs <export.sql> [--allow-empty=tbl,tbl]   (target from MIGRATE_DB_URL)
+// Exit 0 = source and database agree on row counts and numeric sums, no legacy table is
+// unexpectedly empty, and every identity sequence sits past its table's max id.
 // Orphans under NOT VALID FKs and denormalized-column drift are informational and never fail.
 import { execFileSync } from "node:child_process";
 import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
@@ -31,9 +32,23 @@ const NTEXT_COLS = [
 
 const EXPECTED_NOT_VALID_FKS = 26; // ground truth from the schema review; reported, never fatal.
 
-const file = process.argv[2];
-if (!file) {
-  process.stderr.write("usage: node scripts/migrate/verify.mjs <export.sql>\n");
+const args = process.argv.slice(2);
+// A table the source genuinely has no rows for must be named here, so that "0 rows everywhere"
+// is always a deliberate statement about the source and never a silently truncated export.
+const allowEmpty = new Set(
+  args.filter((a) => a.startsWith("--allow-empty="))
+    .flatMap((a) => a.slice("--allow-empty=".length).split(","))
+    .map((s) => s.trim()).filter(Boolean),
+);
+const unknownFlag = args.find((a) => a.startsWith("--") && !a.startsWith("--allow-empty="));
+const file = args.find((a) => !a.startsWith("--"));
+if (!file || unknownFlag) {
+  process.stderr.write(`${unknownFlag ? `unknown option ${unknownFlag}\n` : ""}usage: node scripts/migrate/verify.mjs <export.sql> [--allow-empty=tbl,tbl]\n`);
+  process.exit(2);
+}
+const unknownAllowed = [...allowEmpty].filter((t) => !TABLES.includes(t));
+if (unknownAllowed.length) {
+  process.stderr.write(`--allow-empty names tables that are not legacy tables: ${unknownAllowed.join(", ")}\n`);
   process.exit(2);
 }
 
@@ -110,6 +125,10 @@ const dbQuery = [
   ...TABLES.map((t) => (identCol.has(t)
     ? `select 'max', ${quote(t)}, coalesce(max(${identCol.get(t)})::text, '') from ${t};`
     : `select 'max', ${quote(t)}, '';`)),
+  // Sequence position: setval(seq, max(id)) leaves last_value = max(id), so next insert is max+1.
+  ...TABLES.map((t) => (identCol.has(t)
+    ? `select 'seq', ${quote(t)}, coalesce(pg_sequence_last_value(pg_get_serial_sequence(${quote(t)}, ${quote(identCol.get(t))}))::text, '');`
+    : `select 'seq', ${quote(t)}, '';`)),
   ...NTEXT_COLS.map((k) => `select 'len', ${quote(k)}, coalesce(max(length(${k.split(".")[1]}))::text, '') from ${k.split(".")[0]};`),
   ...fks.map((f) => `select 'orphan', ${quote(f.conname)}, count(*)::text from ${f.tbl} t left join ${f.rtbl} r on t.${f.col} = r.${f.rcol} where t.${f.col} is not null and r.${f.rcol} is null;`),
   // A NULL counter is not evidence of drift — VBA simply never wrote one — so NULLs are skipped.
@@ -122,7 +141,7 @@ const dbQuery = [
 ].join("\n");
 const rows = q(dbQuery);
 const pick = (tag) => new Map(rows.filter((r) => r[0] === tag).map((r) => [r[1], r.slice(2)]));
-const dbCount = pick("cnt"), dbSum = pick("sum"), dbMax = pick("max"), dbLen = pick("len"), orphans = pick("orphan"), drift = pick("drift");
+const dbCount = pick("cnt"), dbSum = pick("sum"), dbMax = pick("max"), dbLen = pick("len"), orphans = pick("orphan"), drift = pick("drift"), dbSeq = pick("seq");
 
 // --- report -----------------------------------------------------------------
 const md = [];
@@ -134,9 +153,30 @@ md.push("## Row counts and identity maxima", "", "| table | source rows | db row
 for (const t of TABLES) {
   const src = srcCount.get(t), db = Number(dbCount.get(t)[0]);
   const ok = src === db;
-  if (!ok) failed = true;
+  // src === db === 0 means the export carried no INSERT for this table at all. That is what a
+  // truncated or partial mssql-scripter run looks like, and it is indistinguishable from a
+  // genuinely empty table using the export alone — so it fails until someone says otherwise.
+  const empty = ok && src === 0 && !allowEmpty.has(t);
+  if (!ok || empty) failed = true;
   const max = identCol.has(t) ? (dbMax.get(t)[0] || "—") : "—";
-  md.push(`| ${t} | ${src} | ${db} | ${max} | ${ok ? "ok" : "**MISMATCH**"} |`);
+  const status = !ok ? "**MISMATCH**" : empty ? "**EMPTY — no INSERTs in export**" : "ok";
+  md.push(`| ${t} | ${src} | ${db} | ${max} | ${status} |`);
+}
+
+md.push("",
+  "An **EMPTY** table means the export contained no INSERT for it. Compare against the source counts from",
+  "README Part 1.5; if the table really is empty in SQL Server, re-run with `--allow-empty=<table>`.");
+
+md.push("", "## Identity sequence positions", "",
+  "Each sequence must sit at or past its table's max id, or the first row the app inserts collides.",
+  "", "| table | max identity | sequence last value | status |", "| --- | ---: | ---: | --- |");
+for (const t of TABLES) {
+  if (!identCol.has(t)) continue; // the five text-PK lookup tables have no sequence
+  const max = dbMax.get(t)[0], last = dbSeq.get(t)[0];
+  if (max === "") { md.push(`| ${t} | — | ${last || "—"} | n/a (no rows) |`); continue; }
+  const okSeq = last !== "" && BigInt(last) >= BigInt(max);
+  if (!okSeq) failed = true;
+  md.push(`| ${t} | ${max} | ${last || "—"} | ${okSeq ? "ok" : "**BEHIND — next insert collides**"} |`);
 }
 
 md.push("", "## Numeric column sums", "", "| column | source sum | db sum | status |", "| --- | ---: | ---: | --- |");
@@ -160,7 +200,9 @@ for (const [k, v] of drift) md.push(`| tblcase.${k} | ${v[0]} | ${v[1] || "—"}
 md.push("", "## Max length of ntext-derived text columns (informational)", "", "| column | max length |", "| --- | ---: |");
 for (const k of NTEXT_COLS) md.push(`| ${k} | ${dbLen.get(k)[0] || "—"} |`);
 
-md.push("", failed ? "**RESULT: MISMATCH — do not hand over.**" : "**RESULT: counts and sums match.**", "");
+md.push("", failed
+  ? "**RESULT: FAILED — do not hand over.**"
+  : "**RESULT: counts, sums, sequence positions and table coverage all check out.**", "");
 
 const out = join(new URL(".", import.meta.url).pathname, "out");
 mkdirSync(out, { recursive: true });

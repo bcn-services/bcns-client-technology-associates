@@ -64,12 +64,29 @@ docker exec ta-mssql /opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P "$SA
       REPLACE"
 ```
 
-Sanity check:
+Sanity check — **record the source row count of all 20 tables now.** This is the only
+ground truth for how many rows *should* exist: the export cannot prove its own
+completeness, so `verify.mjs` compares the database against the export file, not against
+SQL Server. If the scripter run is silently truncated, both sides agree and both are wrong.
+Keep this output and compare it against the "source rows" column of the verify report.
 
 ```sh
+mkdir -p scripts/migrate/out
 docker exec ta-mssql /opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P "$SA_PASSWORD" \
-  -d TechAssoc -Q "SELECT COUNT(*) FROM dbo.tblcase"
+  -d TechAssoc -h -1 -W -Q "
+DECLARE @s nvarchar(max) = N'';
+SELECT @s = @s + N' UNION ALL SELECT ''' + name + N''' AS tbl, COUNT_BIG(*) AS n FROM dbo.' + QUOTENAME(name)
+FROM sys.tables WHERE name IN (
+  'tblstates','tblbranches','tblcasestatus','tblcasepriority','tblcasewaitingfor',
+  'tblbillingnames','tblexptype','tblfirm','tblattorney','tblclient',
+  'tblinquiry','tblcase','tblbills','tblactivity','tblexpenses',
+  'tblfundsrcvd','tblsrvauth','tblcaseresult','tbl_scannedbillandcheck','tblscanneddocument');
+EXEC(STUFF(@s, 1, 11, N'') + N' ORDER BY tbl');" | tee scripts/migrate/out/source-counts.txt
 ```
+
+A table legitimately holding zero rows in SQL Server must be passed to `verify.mjs` as
+`--allow-empty=<table>` in step 5; otherwise verify treats "no rows anywhere" as a
+truncated export and fails. Decide that from this output, not from the export.
 
 ### 1.5 Generate the data-only load script
 
@@ -103,7 +120,15 @@ Twenty tables, in dependency order. `scripts/migrate/out/` is gitignored — the
    ```sh
    node scripts/migrate/verify.mjs scripts/migrate/out/export.sql
    ```
-   Compares source row counts and numeric-column sums against the database, and reports identity maxima, orphan rows per `NOT VALID` FK, denormalized-column drift, and the max length of every `ntext`-derived text column. Prints a Markdown table and writes it to `scripts/migrate/out/verify-<timestamp>.md`. **Exit 0 = counts and sums match.** Orphans and drift are informational and never fail the run.
+   Compares source row counts and numeric-column sums against the database, and reports identity maxima, orphan rows per `NOT VALID` FK, denormalized-column drift, and the max length of every `ntext`-derived text column. Prints a Markdown table and writes it to `scripts/migrate/out/verify-<timestamp>.md`.
+
+   **Exit 0 means four things hold:** every table's row count matches the export, every numeric column's sum matches, every identity sequence sits at or past its table's max id (so the app's first insert cannot collide), and no legacy table is unexpectedly absent from the export. Orphans and drift are informational and never fail the run.
+
+   A table reported **EMPTY — no INSERTs in export** carried no rows in the export at all. Check it against `out/source-counts.txt` from step 1.2: if SQL Server really has zero rows there, re-run with `--allow-empty=<table>` (comma-separated for several); if it does not, the export is truncated — regenerate it, do not acknowledge it away.
+
+   ```sh
+   node scripts/migrate/verify.mjs scripts/migrate/out/export.sql --allow-empty=tblinquiry
+   ```
 6. **Seed logins:**
    ```sh
    node_modules/.bin/tsx scripts/migrate/seed-logins.mjs scripts/migrate/in/logins.json
@@ -123,7 +148,7 @@ export MIGRATE_DB_URL="postgresql://…"   # the Supabase project's connection s
 
 - Keep Access frozen or tell Kris to resume it — decide before anything else; the legacy app is the system of record until we hand over.
 - Send `scripts/migrate/out/verify-<timestamp>.md` back with the mismatched tables.
-- Fix the cause in the repo, then restart from Part 2 step 3 with a fresh `.bak`. `load.mjs` clears every legacy table (`delete from`, in reverse dependency order) and reloads inside one transaction, so a re-run is safe and leaves no duplicates. It does not `truncate`: `profiles` and `bank_transactions` reference three of these tables, and `truncate` would demand naming them or `cascade` — either one reaches beyond the legacy tables this lane owns.
+- Fix the cause in the repo, then restart from Part 2 step 3 with a fresh `.bak`. **Re-run step 5 and confirm it exits 0 before going anywhere near step 6** — a second load with an unresolved mismatch must never reach hand-over. `load.mjs` clears every legacy table (`delete from`, in reverse dependency order) and reloads inside one transaction, so a re-run is safe and leaves no duplicates. It does not `truncate`: `profiles` and `bank_transactions` reference three of these tables, and `truncate` would demand naming them or `cascade` — either one reaches beyond the legacy tables this lane owns.
 
 ---
 
