@@ -45,7 +45,7 @@ journeys:
 
 - lane: app-shell
   area: auth, admin/staff roles, layout, nav, home page
-  owns: [ app/layout.tsx, app/page.tsx, app/globals.css, app/(auth)/**, lib/auth/**, tests/app-shell/** ]
+  owns: [ app/layout.tsx, app/page.tsx, app/globals.css, app/not-found.tsx, middleware.ts, app/(auth)/**, lib/auth/**, tests/app-shell/** ]
   assignee: nate
   depends on: —
 
