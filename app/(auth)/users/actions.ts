@@ -23,7 +23,7 @@ export type ManageState = ManageResult | null;
  * cookied, stored, or logged.
  */
 export async function createUserAction(_prev: CreateState, formData: FormData): Promise<CreateState> {
-  await requireSession("admin");
+  if (!(await requireSession("admin").catch(onlyForbidden))) return { ok: false, error: "Admins only." };
   return createStaffUser(createServerClient() as unknown as AdminClient, String(formData.get("email") ?? ""));
 }
 

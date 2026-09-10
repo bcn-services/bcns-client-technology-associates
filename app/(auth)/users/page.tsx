@@ -1,13 +1,21 @@
 import { requireSession } from "@/lib/auth/session";
 import { createServerClient } from "@/lib/db/client";
+import { onlyForbidden } from "@/lib/auth/users";
 import { CreateUserForm } from "./create-form";
 import { RowControls } from "./row-controls";
 
 export const dynamic = "force-dynamic";
 
 export default async function UsersPage() {
-  // Admin check before any profiles query — staff get a ForbiddenError, not the list.
-  await requireSession("admin");
+  // Admin check before any profiles query — staff get a plain refusal, not the list (or a 500).
+  if (!(await requireSession("admin").catch(onlyForbidden))) {
+    return (
+      <main className="mx-auto max-w-6xl space-y-2 px-4 py-6">
+        <h1 className="text-xl font-semibold">Users</h1>
+        <p role="alert" className="text-sm text-red-700">Admins only.</p>
+      </main>
+    );
+  }
 
   const db = createServerClient();
   const [{ data: profiles, error }, { data: billingRows, error: billingError }] = await Promise.all([
