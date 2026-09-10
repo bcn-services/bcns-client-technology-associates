@@ -166,7 +166,7 @@ Test against the fixture, not the producing lane. Do not wait for it to exist.
     - Signed in as admin, the same header additionally links to /users
     - Visiting /cases renders the not-found page inside the shell with the nav present and usable, not Next's default 404
     - Existing passing tests remain passing
-  status: not started
+  status: done — commit 73e9dea
 
 - task: `app/(auth)/users/page.tsx` — the admin user list and account creation,
     gated by `requireSession('admin')`. Lists every `profiles` row with email,
