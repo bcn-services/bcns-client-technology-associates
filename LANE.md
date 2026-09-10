@@ -221,4 +221,62 @@ Test against the fixture, not the producing lane. Do not wait for it to exist.
   status: done — commit 973d8e9
   parallel-group: b
 
+- task: Polish (after the hand test) — `middleware.ts` gate redirects. A denied
+    non-GET/HEAD request redirects to /login with 303, not 307, so an expired
+    session's form POST is not replayed at /login. Add `/signout` to
+    `PUBLIC_PATHS` so signing out from an expired tab clears cookies instead of
+    bouncing to a 405.
+  guardrails:
+    - Every other protected path still fails closed; PUBLIC_PATHS stays an exact-match set
+  done when:
+    - A denied POST returns 303 to /login; a denied GET or HEAD still returns 307
+    - A signed-out POST /signout reaches the route (no redirect to /login)
+    - Existing passing tests remain passing
+  status: done — commit 4cc3eb1
+
+- task: Polish — staff get a clean "Admins only." refusal on /users instead of a
+    500: the page catches ForbiddenError with `onlyForbidden` and renders the
+    message, and `createUserAction` returns `{ ok: false, error: "Admins only." }`
+    like the item-6 actions.
+  guardrails:
+    - The admin check still runs before any profiles query; no list, form, or other email reaches staff
+  done when:
+    - Staff GET /users returns 200 with "Admins only." and no list, create form, or other profile's email
+    - A staff replay of the create action returns 200 "Admins only." and creates nothing
+  status: done — commit 78a4c01
+
+- task: Polish — `app/(auth)/login/actions.ts`: after a successful password
+    sign-in, read the user's profiles row with the same role rule as
+    getSession(). No row (deactivated) → sign out and show "This account is
+    deactivated — ask an admin." instead of the gate silently bouncing back to
+    the form.
+  guardrails:
+    - A deactivated sign-in must leave no auth cookie behind
+    - Never echo the email or password in the redirect
+  done when:
+    - A deactivated account signing in lands on /login?error=deactivated with the message visible and no sb-*-auth-token cookie
+    - Existing passing tests remain passing
+  status: done — commit 277bd4b
+
+- task: Polish — reactivation from /users. In `createStaffUser`, when the auth
+    user already exists, look it up (listUsers) and re-insert its profiles row as
+    staff. A primary-key conflict means the account is active → "already
+    exists". The form shows "Reactivated … they sign in with their existing
+    password" and no temporary password.
+  guardrails:
+    - The existing auth user is never modified; its password stays untouched
+    - Only a 23505 conflict reads as "already exists"; any other insert error is a failure
+  done when:
+    - Creating a deactivated person's email restores their staff profiles row, shows no temporary password, and they sign in with their old password
+    - Creating an active person's email still shows "already exists" and changes nothing
+  status: done — commit 8ee8881
+
+- task: Polish — style /login with Tailwind (card, visible input borders, a real
+    button), replacing the inline styles.
+  guardrails:
+    - Label text "Email", "Password" and the "Sign in" button name stay exactly as tests/journeys/helpers.ts expects
+  done when:
+    - Existing login live tests pass against the restyled page
+  status: done — commit 277bd4b (same file as the deactivated message)
+
 > **⚠️ AUTONOMOUS RUN — STOP HERE**

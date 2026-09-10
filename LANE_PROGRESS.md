@@ -5,8 +5,8 @@ are in it — if they disagree, LANE.md wins for scope.
 
 **Current position**
 
-- **Status:** all 7 items done, none blocked — lane acceptance check passed on all four done-when criteria; full test suite green
-- **Next:** human review and merge of the lane PR into `integration`; at merge, add the app-shell tests to `pnpm test` so CI runs them, and decide how a deactivated person gets reactivated from the screen
+- **Status:** all 12 items done (7 planned + 5 polish from the hand test), none blocked — full test suite green
+- **Next:** merge the lane PR into `integration`, adding the app-shell tests to `pnpm test` so CI runs them
 - **Blockers:** none
 - **Last updated:** 2026-09-10
 
@@ -19,3 +19,8 @@ are in it — if they disagree, LANE.md wins for scope.
 | Admin users page — list + create | done — admins can see every account and create a new one, reading the one-time temporary password to the person; staff are refused. |
 | Admin users page — role change, deactivate, billing-person link | done — admins can switch someone between admin and staff, deactivate them (reversibly), and link them to a billing person; the app refuses to remove the last admin or let an admin deactivate themselves. Flagged for human review. |
 | Account page — change own password | done — anyone signed in can replace their own password (including an admin-issued temporary one) after re-entering the current one. |
+| Polish — sign-in redirects and sign-out from an expired tab | done — an expired session's form no longer re-sends itself to the sign-in page, and signing out always works, even from a stale tab. |
+| Polish — staff refusal on the users page | done — staff who open the users page now see "Admins only." instead of an error page. |
+| Polish — deactivated sign-in message | done — a deactivated person who signs in is told their account is deactivated instead of being silently sent back to the form. |
+| Polish — reactivate from the users page | done — an admin can bring back a deactivated person by creating them again; they keep their old password. |
+| Polish — sign-in page styling | done — the sign-in page now has visible fields and a real button. |
