@@ -71,3 +71,41 @@ test("a throwing client fails closed rather than falling through", async () => {
   });
   assert.equal(location(res), "/login?next=%2Fcases%2F90001");
 });
+
+test("a protocol-relative path gets no next parameter at all", async () => {
+  for (const path of ["//evil.com", "//evil.com/x", "/\\evil.com"]) {
+    const request = req(path);
+    assert.match(request.nextUrl.pathname, /^\/\//, `${path} did not produce a protocol-relative pathname`);
+    const res = await middleware(request);
+    assert.equal(location(res), "/login", path);
+  }
+});
+
+test("a denial preserves cookies the session lookup rotated", async () => {
+  const rotated = NextResponse.next();
+  rotated.cookies.set("sb-refresh-token", "rotated");
+  // Profile miss after a token rotation: the browser must still get the new token.
+  const res = await gate(req("/cases/90001"), fakeBound(USER, null, rotated));
+  assert.equal(location(res), "/login?next=%2Fcases%2F90001");
+  assert.equal(res.cookies.get("sb-refresh-token").value, "rotated");
+});
+
+test("a hung Supabase denies instead of stalling the request", async () => {
+  const hang = new Promise(() => {});
+  const res = await gate(req("/cases/90001"), () => ({
+    client: { auth: { getUser: () => hang }, from: () => ({}) },
+    response: () => NextResponse.next(),
+  }));
+  assert.equal(location(res), "/login?next=%2Fcases%2F90001");
+});
+
+test("a hung profiles query denies too", async () => {
+  const res = await gate(req("/cases/90001"), () => ({
+    client: {
+      auth: { getUser: async () => ({ data: { user: USER } }) },
+      from: () => ({ select: () => ({ eq: () => ({ maybeSingle: () => new Promise(() => {}) }) }) }),
+    },
+    response: () => NextResponse.next(),
+  }));
+  assert.equal(location(res), "/login?next=%2Fcases%2F90001");
+});

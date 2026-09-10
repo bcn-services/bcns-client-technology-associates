@@ -32,6 +32,21 @@ test("only Next internals and true static assets are excluded", () => {
   }
 });
 
+test("an excluded literal must not act as a pattern or an open prefix", () => {
+  // `.` unescaped, or a prefix with no terminator, silently exempts real routes.
+  for (const p of [
+    "/favicon.icon-set/logo",
+    "/favicon-ico",
+    "/faviconxico",
+    "/sitemap.xmlx/cases",
+    "/robots.txtual",
+    "/_next/staticky/cases",
+    "/_next/imagery/cases",
+  ]) {
+    assert.equal(seenByGate(p), true, `${p} bypasses the auth gate`);
+  }
+});
+
 test("a dynamic route segment ending in an asset extension must still reach the gate", () => {
   // /cases/[id] with id="90001.js" is a real page render, not a static file.
   for (const p of ["/cases/90001.js", "/cases/90001.css", "/cases/90001.map", "/cases/90001.png", "/cases/90001.woff2"]) {

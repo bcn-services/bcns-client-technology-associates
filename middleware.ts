@@ -5,6 +5,9 @@ import { getConfig } from "@/lib/env";
 /** Exact paths reachable without a session. Never a prefix match. */
 const PUBLIC_PATHS = new Set(["/login", "/api/health"]);
 
+/** Upper bound on the session lookup. A hung Supabase must deny, not stall the app. */
+const SESSION_TIMEOUT_MS = 2000;
+
 type MinimalClient = {
   auth: { getUser: () => Promise<{ data: { user: { id: string } | null } }> };
   from: (table: string) => any;
@@ -12,6 +15,20 @@ type MinimalClient = {
 
 /** A Supabase client plus the response its cookie writer keeps up to date. */
 type Bound = { client: MinimalClient; response: () => NextResponse };
+
+async function withTimeout<T>(work: Promise<T>): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      work,
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new Error("session lookup timed out")), SESSION_TIMEOUT_MS);
+      }),
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 /**
  * Route gate. `bind` is injectable so the gate is testable without network;
@@ -24,23 +41,33 @@ export async function gate(
   if (PUBLIC_PATHS.has(request.nextUrl.pathname)) return NextResponse.next();
 
   const login = new URL("/login", request.url);
-  login.searchParams.set("next", request.nextUrl.pathname + request.nextUrl.search);
-  const deny = () => NextResponse.redirect(login);
+  const { pathname, search } = request.nextUrl;
+  // A protocol-relative pathname ("//evil.com") would hand the login page an
+  // off-site redirect target. Such a path gets no `next` at all — never a rewrite.
+  if (/^\/(?!\/)/.test(pathname)) login.searchParams.set("next", pathname + search);
 
-  // Fail closed: unconfigured, unreachable, or profile-less all deny.
+  let bound: Bound | null = null;
+  const deny = () => {
+    const response = NextResponse.redirect(login);
+    // getUser() may have rotated the refresh token before we decided to deny.
+    // Dropping those cookies leaves the browser holding a consumed token.
+    if (bound) for (const cookie of bound.response().cookies.getAll()) response.cookies.set(cookie);
+    return response;
+  };
+
+  // Fail closed: unconfigured, unreachable, timed out, or profile-less all deny.
   try {
-    const bound = bind(request);
+    bound = bind(request);
     if (!bound) return deny();
 
-    const { data } = await bound.client.auth.getUser();
+    const { data } = await withTimeout(bound.client.auth.getUser());
     if (!data.user) return deny();
 
     // Mirrors lib/auth/session.ts: no profiles row with an admin/staff role ⇒ no session.
-    const { data: profile } = await bound.client
-      .from("profiles")
-      .select("role")
-      .eq("id", data.user.id)
-      .maybeSingle();
+    // Parity is pinned by tests/app-shell/role-parity.test.mjs.
+    const { data: profile } = await withTimeout<{ data: { role?: string | null } | null }>(
+      bound.client.from("profiles").select("role").eq("id", data.user.id).maybeSingle(),
+    );
     if (profile?.role !== "admin" && profile?.role !== "staff") return deny();
 
     return bound.response();
@@ -76,10 +103,10 @@ export function middleware(request: NextRequest): Promise<NextResponse> {
 
 export const config = {
   matcher: [
-    // Everything except Next internals. Excluded prefixes are fixed literals only:
-    // a general file-extension clause would match any path ending in that extension,
-    // letting a dynamic segment (/cases/90001.js) steer around the gate entirely.
+    // Every exclusion is a literal, dot-escaped and terminated. A pattern here
+    // (an unescaped dot, an unterminated prefix, a file-extension clause) lets a
+    // request steer around the app's only auth boundary.
     // /login and /api/health are matched, then allowlisted in PUBLIC_PATHS.
-    "/((?!_next/static|_next/image|favicon.ico|robots.txt|sitemap.xml).*)",
+    "/((?!_next/static/|_next/image$|favicon\\.ico$|robots\\.txt$|sitemap\\.xml$).*)",
   ],
 };
