@@ -3,7 +3,8 @@ import { NextResponse, type NextRequest } from "next/server";
 import { getConfig } from "@/lib/env";
 
 /** Exact paths reachable without a session. Never a prefix match. */
-const PUBLIC_PATHS = new Set(["/login", "/api/health"]);
+// /signout is public so an expired tab's sign-out still clears cookies instead of bouncing to a 405.
+const PUBLIC_PATHS = new Set(["/login", "/api/health", "/signout"]);
 
 /** Upper bound on the session lookup. A hung Supabase must deny, not stall the app. */
 const SESSION_TIMEOUT_MS = 2000;
@@ -48,7 +49,10 @@ export async function gate(
 
   let bound: Bound | null = null;
   const deny = () => {
-    const response = NextResponse.redirect(login);
+    // 303 for a POST (e.g. a server action on an expired session): the browser loads /login
+    // with a GET instead of replaying the form body at it. GET/HEAD keep the default 307.
+    const safe = request.method === "GET" || request.method === "HEAD";
+    const response = NextResponse.redirect(login, safe ? 307 : 303);
     // getUser() may have rotated the refresh token before we decided to deny.
     // Dropping those cookies leaves the browser holding a consumed token.
     if (bound) for (const cookie of bound.response().cookies.getAll()) response.cookies.set(cookie);

@@ -109,3 +109,18 @@ test("a hung profiles query denies too", async () => {
   }));
   assert.equal(location(res), "/login?next=%2Fcases%2F90001");
 });
+
+// Polish: a denied POST redirects with 303 so the browser GETs /login instead of replaying the body.
+test("denied POST → 303, denied GET/HEAD → 307", async () => {
+  const at = (method) => new NextRequest(new Request("http://localhost:3100/cases/90001", { method }));
+  const deny = fakeBound(null, null, NextResponse.next());
+  assert.equal((await gate(at("POST"), deny)).status, 303);
+  assert.equal((await gate(at("GET"), deny)).status, 307);
+  assert.equal((await gate(at("HEAD"), deny)).status, 307);
+  assert.equal((await middleware(at("POST"))).status, 303, "fail-closed path must use 303 too");
+});
+
+test("/signout is public: a signed-out POST reaches the route instead of bouncing to /login", async () => {
+  const res = await middleware(new NextRequest(new Request("http://localhost:3100/signout", { method: "POST" })));
+  assert.equal(res.headers.get("location"), null);
+});
