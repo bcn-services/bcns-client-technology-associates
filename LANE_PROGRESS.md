@@ -5,8 +5,8 @@ are in it — if they disagree, LANE.md wins for scope.
 
 **Current position**
 
-- **Status:** all 7 items done — shutdown in progress
-- **Next:** shutdown — full suite, lane acceptance check, PR into integration
+- **Status:** all 7 items done, none blocked — lane acceptance check passed on all four done-when criteria; full test suite green
+- **Next:** human review and merge of the lane PR into `integration`; at merge, add the app-shell tests to `pnpm test` so CI runs them, and decide how a deactivated person gets reactivated from the screen
 - **Blockers:** none
 - **Last updated:** 2026-09-10
 
