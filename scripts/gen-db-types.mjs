@@ -1,11 +1,12 @@
 // Generates lib/db/types.ts from a live Postgres (FOUNDATION_PG_URL). Replaces
 // `supabase gen types`, which needs Docker even with --db-url. Same Database shape
-// supabase-js expects. ponytail: no views/functions/enums — add when a migration creates one.
+// supabase-js expects. ponytail: no functions/enums — add when a migration creates one.
 import { execFileSync } from "node:child_process";
 
 const url = process.env.FOUNDATION_PG_URL ?? "postgresql://localhost/ta_foundation";
-const q = `select table_name, column_name, data_type, is_nullable, column_default, identity_generation
-  from information_schema.columns where table_schema='public' order by table_name, ordinal_position`;
+const q = `select c.table_name, c.column_name, c.data_type, c.is_nullable, c.column_default, c.identity_generation, t.table_type
+  from information_schema.columns c join information_schema.tables t using (table_schema, table_name)
+  where c.table_schema='public' order by c.table_name, c.ordinal_position`;
 const lines = execFileSync("psql", [url, "-At", "-F", "\t", "-c", q], { encoding: "utf8" }).trim().split("\n");
 
 const ts = (t) => {
@@ -16,10 +17,12 @@ const ts = (t) => {
 };
 
 const tables = new Map();
+const views = new Map();
 for (const l of lines) {
-  const [table, col, type, nullable, def, ident] = l.split("\t");
-  if (!tables.has(table)) tables.set(table, []);
-  tables.get(table).push({ col, ts: ts(type), nullable: nullable === "YES", hasDefault: !!def || !!ident, always: ident === "ALWAYS" });
+  const [table, col, type, nullable, def, ident, kind] = l.split("\t");
+  const m = kind === "VIEW" ? views : tables;
+  if (!m.has(table)) m.set(table, []);
+  m.get(table).push({ col, ts: ts(type), nullable: nullable === "YES", hasDefault: !!def || !!ident, always: ident === "ALWAYS" });
 }
 
 const row = (c) => `${c.col}: ${c.ts}${c.nullable ? " | null" : ""}`;
@@ -38,7 +41,12 @@ for (const [name, cols] of tables) {
   out += `      ${name}: {\n${block("Row", cols, row)}\n${block("Insert", cols, insert)}\n${block("Update", cols, update)}\n        Relationships: []\n      }\n`;
 }
 out += `    }
-    Views: { [_ in never]: never }
+    Views: {
+`;
+for (const [name, cols] of views) {
+  out += `      ${name}: {\n${block("Row", cols, row)}\n        Relationships: []\n      }\n`;
+}
+out += `    }
     Functions: { [_ in never]: never }
     Enums: { [_ in never]: never }
     CompositeTypes: { [_ in never]: never }
