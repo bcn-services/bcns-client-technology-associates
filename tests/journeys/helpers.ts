@@ -10,6 +10,8 @@ export async function login(page: Page, role: 'admin' | 'staff'): Promise<void> 
   await page.getByLabel(/email/i).fill(email);
   await page.getByLabel(/password/i).fill(password);
   await page.getByRole('button', { name: /sign in/i }).click();
+  // Await the post-sign-in redirect; a caller's next page.goto would otherwise abort the sign-in POST.
+  await page.waitForURL((url) => url.pathname !== '/login');
 
   void role; // role is currently determined by the seeded account, not selectable at login
 }
