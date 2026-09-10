@@ -95,7 +95,9 @@ test("staff GET /users is refused: no list, no create form, no other profiles' e
   const { ctx } = await signIn(STAFF_EMAIL, STAFF_PASSWORD);
   const res = await ctx.request.get(`${BASE}/users`);
   const html = await res.text();
-  assert.notEqual(res.status(), 200, "staff got a 200 for /users");
+  // Polish: a clean refusal page, not a 500.
+  assert.equal(res.status(), 200, "staff /users refusal should be a page, not an error");
+  assert.match(html, /Admins only\./, "no refusal message for staff");
   assert.ok(!html.includes(ADMIN_EMAIL), "another profile's email leaked to staff");
   assert.ok(!html.includes("New user email"), "create form rendered for staff");
   await ctx.close();
@@ -164,7 +166,10 @@ test("staff POSTing the create action is refused and creates nothing (control: a
 
   const { ctx } = await signIn(STAFF_EMAIL, STAFF_PASSWORD);
   const res = await replay(ctx, STAFF_REPLAY_EMAIL);
-  assert.ok(!(await res.text()).includes("temp-password"));
+  const body = await res.text();
+  assert.ok(!body.includes("temp-password"));
+  assert.equal(res.status(), 200, "staff create replay should be a clean refusal, not a 500");
+  assert.match(body, /Admins only\./, "staff create replay body");
   assert.equal(await authUserId(STAFF_REPLAY_EMAIL), null, "staff created an auth user");
   const { data } = await admin.from("profiles").select("id").eq("email", STAFF_REPLAY_EMAIL);
   assert.equal(data.length, 0, "staff created a profiles row");
@@ -322,4 +327,48 @@ test("item6: staff POSTing role/billing/deactivate actions changes nothing (cont
   assert.equal(await authUserId(C_EMAIL), cId, "deactivate deleted the auth user");
   await staff.ctx.close();
   await a.ctx.close();
+});
+
+// ---------------------------------------------------------------------------
+// Polish — a deactivated account is told why at sign-in, and an admin can reactivate it.
+// ---------------------------------------------------------------------------
+const D_EMAIL = `users-d-${tag}@example.test`;
+const D_PASSWORD = `pw-${randomUUID()}`;
+let dId;
+
+after(async () => {
+  if (!admin || !dId) return;
+  await admin.from("profiles").delete().eq("id", dId);
+  await admin.auth.admin.deleteUser(dId);
+});
+
+const isAuthCookie = (c) => /^sb-.*-auth-token(\.\d+)?$/.test(c.name) && c.value !== "";
+
+test("polish: deactivated account sees a message and keeps no session; admin re-create reactivates it with the old password", { skip }, async () => {
+  dId = (await seedE2eUser(admin, D_EMAIL, D_PASSWORD)).id;
+  await admin.from("profiles").delete().eq("id", dId); // deactivate, as deactivateUser does
+
+  const ctx = await browser.newContext();
+  const page = await ctx.newPage();
+  await page.goto(`${BASE}/login`);
+  await page.getByLabel(/email/i).fill(D_EMAIL);
+  await page.getByLabel(/password/i).fill(D_PASSWORD);
+  await Promise.all([page.waitForURL((u) => u.searchParams.has("error") || u.pathname !== "/login"), page.getByRole("button", { name: /sign in/i }).click()]);
+  assert.equal(new URL(page.url()).searchParams.get("error"), "deactivated");
+  assert.ok(await page.getByText(/deactivated — ask an admin/i).isVisible(), "no deactivated message");
+  assert.deepEqual((await ctx.cookies()).filter(isAuthCookie), [], "deactivated sign-in kept a session cookie");
+  await ctx.close();
+
+  const s = await usersPage(ADMIN_EMAIL, ADMIN_PASSWORD);
+  await s.page.getByLabel("New user email").fill(D_EMAIL);
+  await s.page.getByRole("button", { name: "Create user" }).click();
+  await s.page.getByText(/Reactivated/).waitFor();
+  assert.equal(await s.page.getByTestId("temp-password").count(), 0, "reactivation showed a new password");
+  assert.equal((await prof(dId))?.role, "staff", "profiles row not restored");
+  await s.ctx.close();
+
+  assert.equal((await passwordGrant(D_EMAIL, D_PASSWORD)).status, 200, "reactivation changed the password");
+  const back = await signIn(D_EMAIL, D_PASSWORD);
+  assert.equal(new URL(back.page.url()).pathname, "/", "reactivated account did not reach the app");
+  await back.ctx.close();
 });

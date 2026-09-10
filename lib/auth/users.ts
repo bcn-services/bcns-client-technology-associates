@@ -20,14 +20,32 @@ export interface AdminClient {
         error: { message: string } | null;
       }>;
       deleteUser(id: string): PromiseLike<{ error: { message: string } | null }>;
+      listUsers(a: { page: number; perPage: number }): PromiseLike<{
+        data: { users: { id: string; email?: string | null }[] };
+        error: { message: string } | null;
+      }>;
     };
   };
   from(table: "profiles"): {
-    insert(row: { id: string; email: string; role: string; personid: null }): PromiseLike<{ error: { message: string } | null }>;
+    insert(row: { id: string; email: string; role: string; personid: null }): PromiseLike<{ error: { message: string; code?: string } | null }>;
   };
 }
 
-export type CreateResult = { ok: true; email: string; password: string } | { ok: false; error: string };
+/** `password: null` = a deactivated account was reactivated and keeps its existing password. */
+export type CreateResult = { ok: true; email: string; password: string | null } | { ok: false; error: string };
+
+// auth-js 2.116 has no getUserByEmail, so paging listUsers() is the only lookup.
+// ponytail: linear scan of every auth user; fine at this firm's size, revisit past ~10k logins.
+const PER_PAGE = 1000;
+async function findAuthUserId(admin: AdminClient, email: string): Promise<string | null> {
+  for (let page = 1; ; page++) {
+    const { data, error } = await admin.auth.admin.listUsers({ page, perPage: PER_PAGE });
+    if (error) return null;
+    const hit = data.users.find((u) => String(u.email).toLowerCase() === email);
+    if (hit) return hit.id;
+    if (data.users.length < PER_PAGE) return null;
+  }
+}
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -43,9 +61,7 @@ export async function createStaffUser(
   // email_confirm: true — the admin reads the password to the person; there is no confirmation email.
   const created = await admin.auth.admin.createUser({ email, password, email_confirm: true });
   if (created.error || !created.data.user) {
-    // An existing auth user is reported, never modified — its password stays untouched.
-    if (created.error && /already.*registered/i.test(created.error.message))
-      return { ok: false, error: `An account for ${email} already exists.` };
+    if (created.error && /already.*registered/i.test(created.error.message)) return reactivate(admin, email);
     return { ok: false, error: "Could not create the account. Please try again." };
   }
 
@@ -58,6 +74,20 @@ export async function createStaffUser(
     return { ok: false, error: "Could not create the account. Please try again." };
   }
   return { ok: true, email, password };
+}
+
+/**
+ * The auth user exists. Deactivation deletes only the profiles row, so re-inserting it as
+ * staff reactivates the account. The auth user is never modified — its password stays untouched.
+ * A primary-key conflict means the row is still there: an active account, reported as a duplicate.
+ */
+async function reactivate(admin: AdminClient, email: string): Promise<CreateResult> {
+  const id = await findAuthUserId(admin, email);
+  if (!id) return { ok: false, error: "Could not create the account. Please try again." };
+  const { error } = await admin.from("profiles").insert({ id, email, role: "staff", personid: null });
+  if (error?.code === "23505") return { ok: false, error: `An account for ${email} already exists.` };
+  if (error) return { ok: false, error: "Could not reactivate the account. Please try again." };
+  return { ok: true, email, password: null };
 }
 
 // ---------------------------------------------------------------------------

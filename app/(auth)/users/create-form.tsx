@@ -28,7 +28,12 @@ export function CreateUserForm() {
           {state.error}
         </p>
       )}
-      {state?.ok && (
+      {state?.ok && state.password === null && (
+        <p role="status" className="rounded border border-emerald-300 bg-emerald-50 p-3 text-sm">
+          Reactivated <strong>{state.email}</strong> as staff. They sign in with their existing password.
+        </p>
+      )}
+      {state?.ok && state.password !== null && (
         <div role="status" className="rounded border border-amber-300 bg-amber-50 p-3 text-sm">
           <p>
             Created <strong>{state.email}</strong>. Temporary password (shown once — read it to them now):
