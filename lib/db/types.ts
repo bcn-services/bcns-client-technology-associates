@@ -878,7 +878,24 @@ export type Database = {
         Relationships: []
       }
     }
-    Views: { [_ in never]: never }
+    Views: {
+      case_search: {
+        Row: {
+          caseid: number | null
+          casetitle: string | null
+          casenotes: string | null
+          casecaption: string | null
+          attyname: string | null
+          attyemail: string | null
+          attyphone: string | null
+          frmname: string | null
+          frmphone: string | null
+          clientname: string | null
+          otherexperts: string | null
+        }
+        Relationships: []
+      }
+    }
     Functions: { [_ in never]: never }
     Enums: { [_ in never]: never }
     CompositeTypes: { [_ in never]: never }

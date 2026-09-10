@@ -16,6 +16,9 @@ test.describe('Receptionist logs an inquiry → engineer converts it to a case w
     const inquiryId = inquiryUrl.match(/\/inquiries\/(\d+)/)?.[1] ?? '1';
 
     await page.goto(`/inquiries/${inquiryId}`);
+    // tblcase.caseatty / caseclient are NOT NULL — convert picks the fixture attorney (Pat Example) and client (Sam Sample).
+    await page.getByLabel('Case attorney').selectOption('1');
+    await page.getByLabel('Case client').selectOption('1');
     await page.getByRole('button', { name: /convert to case/i }).click();
 
     await expect(page).toHaveURL(/\/cases\/\d+$/);
