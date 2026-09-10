@@ -1,6 +1,7 @@
 import { requireSession } from "@/lib/auth/session";
 import { createServerClient } from "@/lib/db/client";
 import { CreateUserForm } from "./create-form";
+import { RowControls } from "./row-controls";
 
 export const dynamic = "force-dynamic";
 
@@ -9,15 +10,15 @@ export default async function UsersPage() {
   await requireSession("admin");
 
   const db = createServerClient();
-  const { data: profiles, error } = await db.from("profiles").select("id, email, role, personid").order("email");
+  const [{ data: profiles, error }, { data: billingRows, error: billingError }] = await Promise.all([
+    db.from("profiles").select("id, email, role, personid").order("email"),
+    // Legitimately empty until the migration lane loads tblbillingnames.
+    db.from("tblbillingnames").select("personid, initials").order("initials"),
+  ]);
   if (error) throw new Error(`profiles: ${error.message}`);
-
-  const personIds = profiles.flatMap((p) => (p.personid == null ? [] : [p.personid]));
-  const initials = new Map<number, string>();
-  if (personIds.length) {
-    const { data } = await db.from("tblbillingnames").select("personid, initials").in("personid", personIds);
-    for (const b of data ?? []) initials.set(b.personid, b.initials);
-  }
+  if (billingError) throw new Error(`tblbillingnames: ${billingError.message}`);
+  const billing = billingRows ?? [];
+  const initials = new Map(billing.map((b) => [b.personid, b.initials]));
 
   return (
     <main className="mx-auto max-w-6xl space-y-6 px-4 py-6">
@@ -29,14 +30,18 @@ export default async function UsersPage() {
             <th className="py-2">Email</th>
             <th className="py-2">Role</th>
             <th className="py-2">Initials</th>
+            <th className="py-2">Manage</th>
           </tr>
         </thead>
         <tbody>
           {profiles.map((p) => (
-            <tr key={p.id} data-user-id={p.id} className="border-b border-slate-100">
+            <tr key={p.id} data-user-id={p.id} className="border-b border-slate-100 align-top">
               <td className="py-2">{p.email}</td>
               <td className="py-2">{p.role}</td>
               <td className="py-2">{p.personid == null ? "" : initials.get(p.personid) ?? ""}</td>
+              <td className="py-2">
+                <RowControls userId={p.id} email={p.email} role={p.role} personid={p.personid} billing={billing} />
+              </td>
             </tr>
           ))}
         </tbody>
