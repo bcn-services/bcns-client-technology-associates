@@ -168,3 +168,49 @@ test("billing person: valid personid written, empty → null, unknown/garbage re
   assert.equal((await setBillingPerson(db, "a", "")).ok, true);
   assert.equal(row().personid, null);
 });
+
+// ---------------------------------------------------------------------------
+// QA additions (item 6): real interleaving, partial state, action auth wiring.
+// ---------------------------------------------------------------------------
+import { readFileSync } from "node:fs";
+
+test("qa: two concurrent deactivations of the last two admins leave ≥1 admin, auth untouched", async () => {
+  const { db, tables, calls } = fakeDb([{ id: "a", role: "admin" }, { id: "b", role: "admin" }]);
+  const [r1, r2] = await Promise.all([deactivateUser(db, "a", "b"), deactivateUser(db, "b", "a")]);
+  const admins = tables.profiles.filter((r) => r.role === "admin").length;
+  assert.ok(admins >= 1, `0 admins left: ${JSON.stringify([r1, r2])}`);
+  assert.ok(!(r1.ok && r2.ok), "both deactivations reported success");
+  assert.equal(calls.authDelete, 0);
+});
+
+test("qa: two concurrent demotions of the last two admins leave ≥1 admin", async () => {
+  const { db, tables } = fakeDb([{ id: "a", role: "admin" }, { id: "b", role: "admin" }]);
+  await Promise.all([setUserRole(db, "a", "staff"), setUserRole(db, "b", "staff")]);
+  assert.ok(tables.profiles.some((r) => r.role === "admin"), "both demoted");
+});
+
+test("qa: failed restore after a zero recount is refused loudly, never reported ok", async () => {
+  const { db } = fakeDb([{ id: "a", role: "admin" }, { id: "b", role: "admin" }, { id: "s", role: "staff" }], {
+    afterDelete: (t) => { t.profiles = t.profiles.filter((r) => r.id !== "a"); },
+    insertError: "restore failed",
+  });
+  const r = await deactivateUser(db, "s", "b");
+  assert.equal(r.ok, false);
+  assert.match(r.error, /contact support/);
+});
+
+test("qa: self-deactivation refused before any DB read", async () => {
+  const db = { from() { throw new Error("db touched"); }, auth: { admin: { deleteUser() { throw new Error("auth touched"); } } } };
+  const r = await deactivateUser(db, "a", "a");
+  assert.equal(r.ok, false);
+  assert.match(r.error, /own account/);
+});
+
+test("qa: every item-6 server action calls requireSession('admin') as its first statement", () => {
+  const src = readFileSync(new URL("../../app/(auth)/users/actions.ts", import.meta.url), "utf8");
+  for (const name of ["setRoleAction", "setBillingPersonAction", "deactivateAction"]) {
+    const body = src.split(`export async function ${name}(`)[1]?.split("\n}")[0] ?? "";
+    const first = body.split("{").slice(1).join("{").trim().split("\n")[0];
+    assert.match(first, /await requireSession\("admin"\);$/, `${name} first statement: ${first}`);
+  }
+});
