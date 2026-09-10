@@ -126,7 +126,7 @@ Test against the fixture, not the producing lane. Do not wait for it to exist.
     - A request carrying a valid session cookie for a user with a profiles row reaches the page, and the response carries refreshed auth cookies
     - Existing passing tests remain passing
   caution: true
-  status: not started
+  status: done — commit 3d5d980
   parallel-group: a
 
 - task: `app/(auth)/login/page.tsx` with a server action calling

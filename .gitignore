@@ -16,3 +16,5 @@ scripts/migrate/in/
 
 # dev-team scratch worktrees (full repo copies; MAP.md lists this unowned)
 .claude/worktrees/
+.claude/dev-team/*-report.md
+!.claude/dev-team/team-memory.md
