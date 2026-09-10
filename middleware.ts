@@ -76,8 +76,10 @@ export function middleware(request: NextRequest): Promise<NextResponse> {
 
 export const config = {
   matcher: [
-    // Everything except Next internals and static assets. /login and /api/health are
-    // matched but allowlisted in PUBLIC_PATHS, so they pass through untouched.
-    "/((?!_next/static|_next/image|favicon.ico|robots.txt|sitemap.xml|.*\\.(?:png|jpg|jpeg|gif|svg|webp|ico|css|js|woff|woff2|ttf|map)$).*)",
+    // Everything except Next internals. Excluded prefixes are fixed literals only:
+    // a general file-extension clause would match any path ending in that extension,
+    // letting a dynamic segment (/cases/90001.js) steer around the gate entirely.
+    // /login and /api/health are matched, then allowlisted in PUBLIC_PATHS.
+    "/((?!_next/static|_next/image|favicon.ico|robots.txt|sitemap.xml).*)",
   ],
 };
