@@ -8,16 +8,18 @@ across rounds — never reset. Per-item detail lives in `progress/<lane>.md`.
 | Lane | Assignee | Branch | Status |
 |------|----------|--------|--------|
 | migration | nate | lane/migration | done — 4/4 items, merged 2026-09-09 (`a3add4b`) |
-| app-shell | nate | lane/app-shell | not started — preconditions unmet (Tailwind 3.4 not installed; `middleware.ts` + `app/not-found.tsx` not in its `owns:`). Supabase project `technology-associates` (`hoxolnqsbfdmrzjfgtcm`, us-east-1) exists and is healthy; it is not linked locally and its applied-migration state has not been checked. |
+| app-shell | nate | lane/app-shell | done — 12/12 items (7 planned + 5 polish), merged 2026-09-10 (`464ab58`) |
 | cases | nate | — | not started — no LANE.md yet |
 | time | nate | — | not started — no LANE.md yet |
 | billing | nate | — | not started — no LANE.md yet |
 | money | nate | — | not started — no LANE.md yet |
 | docs-reports | nate | — | not started — no LANE.md yet |
 
-**Journeys:** 0 of 6 green. Red by design until the lanes wire them — every spec
-fails at `page.goto('/login')` with `ERR_CONNECTION_REFUSED`, because no app shell
-exists yet. This is a progress reading, not a merge gate.
+**Journeys:** 0 of 6 green (2026-09-10, after app-shell). Red by design until the lanes wire them.
+02–06 now get past sign-in and fail on screens later lanes build (cases, time, funds, bank import,
+dashboard). 01 lands back on `/login?next=/cases/90001`: `tests/journeys/helpers.ts` `login()` clicks
+Sign in and returns without awaiting navigation, so the next `page.goto` aborts the sign-in POST —
+needs an amendment on `main` (protected file) to await `waitForURL` off /login. This is a progress reading, not a merge gate.
 
 **Amendments this round**
 
