@@ -73,7 +73,9 @@ export async function createStaffUser(
 // and both undo, or the later one sees the first's undo and proceeds — either way
 // ≥1 admin survives. Every unknown (query error, null count, missing id) refuses.
 // ponytail: residual window — between mutate and undo, 0 admins exist for one
-// round trip; and if the undo itself fails we report it loudly. A Postgres
+// round trip; the deactivation undo re-inserts the row snapshot, so a personid
+// changed concurrently inside that window is silently reverted; and if the undo
+// itself fails we report it loudly. A Postgres
 // function with a row lock closes both, add it if a migration is ever allowed.
 // ---------------------------------------------------------------------------
 
@@ -83,6 +85,18 @@ export type ManageResult = { ok: true; message: string } | { ok: false; error: s
 
 const refuse = (error: string): ManageResult => ({ ok: false, error });
 const RETRY = "Could not confirm another admin remains — nothing was changed.";
+const CHANGED = "That account changed meanwhile — reload and try again.";
+const UNDO_FAILED = (what: string) =>
+  `${what} went through, but undoing it failed — there may be no admin left; contact support now.`;
+
+/** Canonical form for comparing ids: Postgres uuid matching ignores case and {braces}. */
+const canon = (id: string) => id.trim().toLowerCase().replace(/[{}]/g, "");
+
+/** For server actions: a ForbiddenError (staff caller) becomes null; anything else (e.g. Next's redirect) is rethrown. */
+export function onlyForbidden(e: unknown): null {
+  if (e instanceof Error && e.name === "ForbiddenError") return null;
+  throw e;
+}
 
 async function loadProfile(db: Db, id: string): Promise<ProfileRow | null> {
   const { data, error } = await db.from("profiles").select("*").eq("id", id).maybeSingle();
@@ -97,10 +111,14 @@ async function adminCount(db: Db): Promise<number | null> {
 
 export async function deactivateUser(db: Db, actorId: string | null | undefined, targetId: string | null | undefined): Promise<ManageResult> {
   if (!actorId || !targetId) return refuse("Missing account id — nothing was changed.");
-  if (actorId === targetId) return refuse("You cannot deactivate your own account.");
+  const SELF = "You cannot deactivate your own account.";
+  if (canon(actorId) === canon(targetId)) return refuse(SELF);
 
   const row = await loadProfile(db, targetId);
   if (!row) return refuse("That account was not found or could not be read.");
+  // Re-check against the DB's canonical id: the form string may match the actor's row
+  // in Postgres (case, braces, hyphenation) without being string-equal to it.
+  if (!row.id || canon(row.id) === canon(actorId)) return refuse(SELF);
 
   const wasAdmin = row.role === "admin";
   if (wasAdmin) {
@@ -109,17 +127,19 @@ export async function deactivateUser(db: Db, actorId: string | null | undefined,
     if (n < 2) return refuse("You cannot deactivate the last remaining admin.");
   }
 
-  const del = await db.from("profiles").delete().eq("id", targetId).select("id");
+  // Conditional on the role we read: a target promoted meanwhile must not be deleted
+  // as "staff" (that would skip the last-admin pre-check and the recount).
+  const del = await db.from("profiles").delete().eq("id", row.id).eq("role", row.role).select("id");
   if (del.error) return refuse("Could not deactivate the account. Nothing was changed.");
-  if (!del.data?.length) return refuse("That account was already deactivated.");
+  if (!del.data?.length) return refuse(CHANGED);
 
   if (wasAdmin) {
     const after = await adminCount(db);
     if (after === null || after < 1) {
       const { error } = await db.from("profiles").insert(row);
       if (error) {
-        console.error(`deactivateUser: restore of profiles row ${targetId} FAILED: ${error.message}`);
-        return refuse("Deactivation was undone but the restore failed — contact support now.");
+        console.error(`deactivateUser: restore of profiles row ${row.id} FAILED: ${error.message}`);
+        return refuse(UNDO_FAILED(`Deactivating ${row.email}`));
       }
       return refuse(after === null ? RETRY : "You cannot deactivate the last remaining admin.");
     }
@@ -142,17 +162,18 @@ export async function setUserRole(db: Db, targetId: string | null | undefined, r
   }
 
   // Conditional on the role we read, so a concurrent change is not silently overwritten.
-  const upd = await db.from("profiles").update({ role: rawRole }).eq("id", targetId).eq("role", row.role).select("id");
+  const upd = await db.from("profiles").update({ role: rawRole }).eq("id", row.id).eq("role", row.role).select("id");
   if (upd.error) return refuse("Could not change the role. Nothing was changed.");
-  if (!upd.data?.length) return refuse("That account changed meanwhile — reload and try again.");
+  if (!upd.data?.length) return refuse(CHANGED);
 
   if (demoting) {
     const after = await adminCount(db);
     if (after === null || after < 1) {
-      const { error } = await db.from("profiles").update({ role: "admin" }).eq("id", targetId);
-      if (error) {
-        console.error(`setUserRole: revert of ${targetId} to admin FAILED: ${error.message}`);
-        return refuse("Demotion was undone but the revert failed — contact support now.");
+      const { data, error } = await db.from("profiles").update({ role: "admin" }).eq("id", row.id).select("id");
+      // 0 rows restored (row deleted concurrently) is an undo failure too, not a clean refusal.
+      if (error || !data?.length) {
+        console.error(`setUserRole: revert of ${row.id} to admin FAILED: ${error?.message ?? "0 rows matched"}`);
+        return refuse(UNDO_FAILED(`Demoting ${row.email}`));
       }
       return refuse(after === null ? RETRY : "You cannot demote the last remaining admin.");
     }

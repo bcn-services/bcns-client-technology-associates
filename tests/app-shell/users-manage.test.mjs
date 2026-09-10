@@ -4,13 +4,13 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { deactivateUser, setUserRole, setBillingPerson } from "../../lib/auth/users.ts";
+import { deactivateUser, setUserRole, setBillingPerson, onlyForbidden } from "../../lib/auth/users.ts";
 
 /**
  * Fake db. `countErrorAt` = set of admin-count call numbers that error; `afterDelete` /
  * `afterUpdate` run right after the mutation (to simulate a concurrent removal).
  */
-function fakeDb(rows, { billing = [], countErrorAt = new Set(), afterDelete, afterUpdate, insertError = null } = {}) {
+function fakeDb(rows, { billing = [], countErrorAt = new Set(), afterDelete, afterUpdate, beforeMutate, insertError = null } = {}) {
   const tables = { profiles: rows.map((r) => ({ createdat: "t0", personid: null, ...r })), tblbillingnames: billing };
   const calls = { authDelete: 0, inserts: [], counts: 0, deletes: 0, updates: 0 };
   const db = {
@@ -18,7 +18,9 @@ function fakeDb(rows, { billing = [], countErrorAt = new Set(), afterDelete, aft
     from(table) {
       const filters = [];
       let op = "select", payload, countMode = false;
-      const match = () => tables[table].filter((r) => filters.every(([k, v]) => r[k] === v));
+      // Postgres uuid equality ignores case and {braces}; mirror that for "id".
+      const pgId = (x) => String(x).toLowerCase().replace(/[{}]/g, "");
+      const match = () => tables[table].filter((r) => filters.every(([k, v]) => (k === "id" ? pgId(r[k]) === pgId(v) : r[k] === v)));
       const run = async (shape) => {
         if (op === "select" && countMode) {
           const n = ++calls.counts;
@@ -29,6 +31,7 @@ function fakeDb(rows, { billing = [], countErrorAt = new Set(), afterDelete, aft
           const hit = match();
           return shape === "single" ? { data: hit[0] ?? null, error: null } : { data: hit, error: null };
         }
+        if (op === "delete" || op === "update") beforeMutate?.(tables, op, payload);
         if (op === "delete") {
           calls.deletes++;
           const hit = match();
@@ -211,6 +214,82 @@ test("qa: every item-6 server action calls requireSession('admin') as its first 
   for (const name of ["setRoleAction", "setBillingPersonAction", "deactivateAction"]) {
     const body = src.split(`export async function ${name}(`)[1]?.split("\n}")[0] ?? "";
     const first = body.split("{").slice(1).join("{").trim().split("\n")[0];
-    assert.match(first, /await requireSession\("admin"\);$/, `${name} first statement: ${first}`);
+    // Forbidden → clean refusal; the check itself is still the first statement.
+    assert.match(first, /^(if \(!\(|const session = )await requireSession\("admin"\)\.catch\(onlyForbidden\)/, `${name} first statement: ${first}`);
   }
+});
+
+// ---------------------------------------------------------------------------
+// Attempt-2 review fixes.
+// ---------------------------------------------------------------------------
+
+test("fix1: own id in a different case/braces is refused as self, row kept", async () => {
+  for (const variant of ["A", "{a}", " A "]) {
+    const { db, tables, calls } = fakeDb([{ id: "a", role: "admin" }, { id: "b", role: "admin" }]);
+    const r = await deactivateUser(db, "a", variant);
+    assert.equal(r.ok, false, variant);
+    assert.match(r.error, /own account/, variant);
+    assert.deepEqual(ids(tables), ["a", "b"]);
+    assert.equal(calls.deletes, 0);
+  }
+});
+
+test("fix1: post-load check refuses when the DB row is the actor even if strings differ", async () => {
+  // e.g. hyphen-less uuid form: string canon misses it, only the loaded row.id catches it.
+  const { db, tables, calls } = fakeDb([{ id: "a", role: "admin" }, { id: "b", role: "admin" }]);
+  const realFrom = db.from.bind(db);
+  db.from = (t) => { const q = realFrom(t); const eq = q.eq; q.eq = (k, v) => eq(k, k === "id" && v === "alias-of-a" ? "a" : v); return q; };
+  const r = await deactivateUser(db, "a", "alias-of-a");
+  assert.equal(r.ok, false);
+  assert.match(r.error, /own account/);
+  assert.deepEqual(ids(tables), ["a", "b"]);
+  assert.equal(calls.deletes, 0);
+});
+
+test("fix2: target promoted between read and delete is not deleted; refused as changed", async () => {
+  const { db, tables } = fakeDb([{ id: "a", role: "admin" }, { id: "b", role: "staff" }], {
+    beforeMutate: (t, op) => { if (op === "delete") t.profiles.find((r) => r.id === "b").role = "admin"; },
+  });
+  const r = await deactivateUser(db, "a", "b");
+  assert.equal(r.ok, false);
+  assert.match(r.error, /changed meanwhile/);
+  assert.ok(tables.profiles.some((r) => r.id === "b" && r.role === "admin"), "promoted target was deleted");
+});
+
+test("fix3+4: demotion revert matching 0 rows is reported as a failed undo, not a clean refusal", async () => {
+  const { db } = fakeDb([{ id: "a", role: "admin" }, { id: "b", role: "admin" }], {
+    // Concurrently: a is demoted and b's row is deleted, so recount = 0 and the revert hits nothing.
+    afterUpdate: (t, p) => {
+      if (p.role !== "staff") return;
+      t.profiles.find((r) => r.id === "a").role = "staff";
+      t.profiles = t.profiles.filter((r) => r.id !== "b");
+    },
+  });
+  const r = await setUserRole(db, "b", "staff");
+  assert.equal(r.ok, false);
+  assert.match(r.error, /went through, but undoing it failed.*[Cc]ontact support/);
+});
+
+test("fix4: failed deactivation restore says the change stands and the undo failed", async () => {
+  const { db } = fakeDb([{ id: "a", role: "admin" }, { id: "b", role: "admin" }, { id: "s", role: "staff" }], {
+    afterDelete: (t) => { t.profiles = t.profiles.filter((r) => r.id !== "a"); },
+    insertError: "restore failed",
+  });
+  const r = await deactivateUser(db, "s", "b");
+  assert.match(r.error, /went through, but undoing it failed/);
+  assert.doesNotMatch(r.error, /was undone/);
+});
+
+test("fix6: onlyForbidden maps ForbiddenError to null and rethrows everything else (redirect)", () => {
+  const forbidden = Object.assign(new Error("admin required"), { name: "ForbiddenError" });
+  assert.equal(onlyForbidden(forbidden), null);
+  const redirect = Object.assign(new Error("NEXT_REDIRECT"), { digest: "NEXT_REDIRECT;replace;/login;307;" });
+  assert.throws(() => onlyForbidden(redirect), (e) => e === redirect);
+  assert.throws(() => onlyForbidden("x"));
+});
+
+test("fix7: /users page degrades to an empty billing list instead of throwing", () => {
+  const src = readFileSync(new URL("../../app/(auth)/users/page.tsx", import.meta.url), "utf8");
+  assert.doesNotMatch(src, /throw new Error\(`tblbillingnames/);
+  assert.match(src, /billingError \? \[\]/);
 });

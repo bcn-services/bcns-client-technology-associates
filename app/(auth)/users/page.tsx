@@ -16,8 +16,9 @@ export default async function UsersPage() {
     db.from("tblbillingnames").select("personid, initials").order("initials"),
   ]);
   if (error) throw new Error(`profiles: ${error.message}`);
-  if (billingError) throw new Error(`tblbillingnames: ${billingError.message}`);
-  const billing = billingRows ?? [];
+  // Non-critical: a failed dropdown read must not block role/deactivate management.
+  if (billingError) console.error(`/users: tblbillingnames read failed: ${billingError.message}`);
+  const billing = billingError ? [] : billingRows ?? [];
   const initials = new Map(billing.map((b) => [b.personid, b.initials]));
 
   return (

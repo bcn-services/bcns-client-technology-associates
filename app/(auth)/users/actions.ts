@@ -8,6 +8,7 @@ import {
   deactivateUser,
   setBillingPerson,
   setUserRole,
+  onlyForbidden,
   type AdminClient,
   type CreateResult,
   type ManageResult,
@@ -36,17 +37,21 @@ function done(r: ManageResult): ManageState {
   return r;
 }
 
+// A staff replay gets a clean refusal, not a 500. Redirects (no session) still propagate.
+const ADMINS_ONLY: ManageState = { ok: false, error: "Admins only." };
+
 export async function setRoleAction(_prev: ManageState, formData: FormData): Promise<ManageState> {
-  await requireSession("admin");
+  if (!(await requireSession("admin").catch(onlyForbidden))) return ADMINS_ONLY;
   return done(await setUserRole(createServerClient(), field(formData, "userId"), field(formData, "role")));
 }
 
 export async function setBillingPersonAction(_prev: ManageState, formData: FormData): Promise<ManageState> {
-  await requireSession("admin");
+  if (!(await requireSession("admin").catch(onlyForbidden))) return ADMINS_ONLY;
   return done(await setBillingPerson(createServerClient(), field(formData, "userId"), field(formData, "personid")));
 }
 
 export async function deactivateAction(_prev: ManageState, formData: FormData): Promise<ManageState> {
-  const session = await requireSession("admin");
+  const session = await requireSession("admin").catch(onlyForbidden);
+  if (!session) return ADMINS_ONLY;
   return done(await deactivateUser(createServerClient(), session.userId, field(formData, "userId")));
 }
