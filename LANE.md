@@ -106,7 +106,7 @@ Test against the fixture, not the producing lane. Do not wait for it to exist.
     - Running the script against a configured project creates the auth user and its profiles row; a second run exits 0 leaving exactly one of each
     - The created account signs in via `signInWithPassword` immediately, with no pending confirmation step
     - With no Supabase environment set the script exits non-zero naming the missing variable, rather than throwing a null-reference
-  status: not started
+  status: done — commit 25b7b81
   parallel-group: a
 
 - task: `middleware.ts` at the repo root — Supabase SSR session refresh over the
