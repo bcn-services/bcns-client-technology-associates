@@ -302,7 +302,12 @@ test("item6: staff POSTing role/billing/deactivate actions changes nothing (cont
   cap.deactivate = a.last;
 
   const staff = await signIn(STAFF_EMAIL, STAFF_PASSWORD);
-  for (const k of ["role", "billing", "deactivate"]) await replayOn(staff.ctx, cap[k], bId, cId);
+  for (const k of ["role", "billing", "deactivate"]) {
+    const res = await replayOn(staff.ctx, cap[k], bId, cId);
+    // qa: a staff replay is a clean refusal, not a 500.
+    assert.equal(res.status(), 200, `staff ${k} replay status`);
+    assert.match(await res.text(), /Admins only\./, `staff ${k} replay body`);
+  }
   const c = await prof(cId);
   assert.ok(c, "staff replay deactivated C");
   assert.equal(c.role, "staff", "staff replay changed a role");
