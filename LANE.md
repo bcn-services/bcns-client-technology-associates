@@ -218,7 +218,7 @@ Test against the fixture, not the producing lane. Do not wait for it to exist.
     - The correct current password plus a new password succeeds, and the new password signs in on a fresh session while the old one is rejected
     - A wrong current password is refused with a visible error and the password is unchanged
     - Existing passing tests remain passing
-  status: not started
+  status: done — commit 973d8e9
   parallel-group: b
 
 > **⚠️ AUTONOMOUS RUN — STOP HERE**

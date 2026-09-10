@@ -18,4 +18,4 @@ are in it — if they disagree, LANE.md wins for scope.
 | App shell — layout, nav, home page | done — signed-in staff see a header with every section, their email and role, and a sign-out button; only admins see the Users link. |
 | Admin users page — list + create | done — admins can see every account and create a new one, reading the one-time temporary password to the person; staff are refused. |
 | Admin users page — role change, deactivate, billing-person link | not started |
-| Account page — change own password | not started |
+| Account page — change own password | done — anyone signed in can replace their own password (including an admin-issued temporary one) after re-entering the current one. |
