@@ -1,101 +1,282 @@
-# Technology Associates — Lane: migration
+# Technology Associates — Lane: app-shell
 
 ## Objective
 
-Every row of the client's live SQL Server database lands in Supabase unchanged, from a data-only script we generate ourselves after restoring the client's SQL Server `.bak` locally (Colima + SQL Server 2022 container), re-run identically on go-live day against the client's nightly S3 `.bak` — zero clicks from Kris, ever.
+Staff sign in with their real account and land in a navigable, role-aware app
+shell that every later lane's screen sits inside.
 
 Lane done when:
-- Loading the generated export leaves every legacy table with exactly the row count present in the source `.bak`, printed as a passing report
-- Loading the same export twice yields identical counts, zero duplicates, and identity sequences past max id
-- No credential, `.bak`, or export file is tracked in git
+- A seeded staff account signs in at /login and reaches a home page showing
+  their email and role; a wrong password shows an error and no session
+- An unauthenticated request to any non-public route lands on /login and,
+  after signing in, on the route that was asked for
+- Every nav entry is present and points at its route, and admin-only entries
+  are absent for a staff account
+- Sign out clears the session; the protected route is unreachable again
 
-Lane: migration — one-shot import of the SQL Server .bak into Supabase, re-runnable at go-live; rotates legacy credential first
+Status: nothing built yet. `main` carries `/foundation` only (frozen schema,
+generated types, `Session`/`Role`, six red journeys). A Supabase project is
+provisioned before this run; every item except the app shell needs it.
+
+Precondition — the deferred foundation/map amendment must land on `main` and
+this branch must rebase onto it before `/dev-team-auto` runs: `middleware.ts`
+and `app/not-found.tsx` move into this lane's `owns:` in MAP.md, and the
+Tailwind 3.4 toolchain (config, postcss, deps) is installed. Items 2 and 4
+assume both. Deferred so the live `lane/migration` run is not rebased mid-flight.
+
+Lane: app-shell — auth, admin/staff roles, layout, nav, home page
 
 Owned — this lane's items live inside these paths:
-  scripts/migrate/**, tests/migration/**
+  app/layout.tsx, app/page.tsx, app/globals.css, app/not-found.tsx,
+  app/(auth)/**, lib/auth/**, middleware.ts, tests/app-shell/**
 
 Open — merged lanes. Wiring items may edit these; rebase onto `integration` first:
-  (none — nothing has merged)
+  none — no lane has merged yet
 
 Stop and report if an item requires changing a path outside both lists:
-  protected — supabase/migrations/**, lib/db/**, lib/auth/session.ts, lib/auth/client.ts, lib/env.ts, scripts/gen-db-types.mjs, tests/foundation/**, tests/journeys/**, playwright.config.ts, tsconfig.foundation.json
-  an unmerged lane's — app/layout.tsx, app/page.tsx, app/globals.css, app/(auth)/**, lib/auth/**, tests/app-shell/**, app/cases/**, app/firms/**, app/attorneys/**, app/clients/**, app/inquiries/**, lib/cases/**, lib/contacts/**, lib/inquiries/**, tests/cases/**, app/time/**, lib/time/**, tests/time/**, app/bills/**, lib/bills/**, tests/billing/**, app/expenses/**, app/funds/**, app/bank-review/**, lib/expenses/**, lib/funds/**, lib/bank-import/**, tests/money/**, app/documents/**, app/reports/**, app/dashboard/**, lib/documents/**, lib/reports/**, lib/storage.ts, tests/docs-reports/**
-  unowned — . (root config), .github/workflows, .claude/worktrees, app/api/health, lib/health.ts, lib/ai.ts, lib/webhooks.ts, tests/*.test.mjs
+  protected — supabase/migrations/**, lib/db/**, lib/auth/session.ts,
+    lib/auth/client.ts, lib/env.ts, scripts/gen-db-types.mjs,
+    tests/foundation/**, tests/journeys/**, playwright.config.ts,
+    tsconfig.foundation.json
+  an unmerged lane's — scripts/migrate/**, tests/migration/**, app/cases/**,
+    app/firms/**, app/attorneys/**, app/clients/**, app/inquiries/**,
+    lib/cases/**, lib/contacts/**, lib/inquiries/**, tests/cases/**,
+    app/time/**, lib/time/**, tests/time/**, app/bills/**, lib/bills/**,
+    tests/billing/**, app/expenses/**, app/funds/**, app/bank-review/**,
+    lib/expenses/**, lib/funds/**, lib/bank-import/**, tests/money/**,
+    app/documents/**, app/reports/**, app/dashboard/**, lib/documents/**,
+    lib/reports/**, lib/storage.ts, tests/docs-reports/**
+  unowned — repo root config (package.json, pnpm-*.yaml, tsconfig,
+    next/eslint/tailwind/postcss config, *.md), .github/workflows,
+    .claude/worktrees, app/api/health, lib/health.ts, lib/ai.ts,
+    lib/webhooks.ts, tests/*.test.mjs
 
 Frozen contracts — build and test against these; they will not move:
-  supabase/migrations/0001..0005 (the 20 legacy tables + profiles/bank_transactions/audit_log) · lib/db/types.ts · tests/foundation/fixtures/rows.ts · tests/foundation/harness.mjs (resetDb / syncSequences — reuse, do not copy)
+  none — this lane has no `depends on:` edges. It consumes the frozen
+  `lib/auth/session.ts` and `lib/db/types.ts` as a reader, never an editor.
 
 Test against the fixture, not the producing lane. Do not wait for it to exist.
 
-## Status
-
-Foundation merged 2026-09-08. No Supabase project yet; every item runs and is tested against the local brew Postgres the foundation harness builds (`FOUNDATION_PG_URL`, default `postgresql://localhost/ta_foundation`). The real Supabase run is done by hand from the runbook after this lane merges. Kris produces the export himself; no tables were added since the 2026-08-18 `.bak`.
-
 ## Global rules
 
-- The 20 legacy tables are exactly: tblstates tblbranches tblcasestatus tblcasepriority tblcasewaitingfor tblbillingnames tblexptype tblfirm tblattorney tblclient tblinquiry tblcase tblbills tblactivity tblexpenses tblfundsrcvd tblsrvauth tblcaseresult tbl_scannedbillandcheck tblscanneddocument. Nothing in this lane writes to, truncates, or reads schema from any other table except `profiles` in item 4.
-- Legacy data loads as-is. No cleanup, dedupe, trimming, or "fixing" of values — report, never alter. A value that does not fit its pinned column type is a schema amendment, not a coercion: fail naming `table.column`.
-- Never commit an export file, a `.bak`, a credential, or `logins.json` with real emails. `scripts/migrate/in/` and `scripts/migrate/out/` are gitignored; tests use synthetic exports under `tests/migration/fixtures/`.
-- Scripts take the database URL from the `MIGRATE_DB_URL` env var only, defaulting to the harness DB; no other `process.env` reads (CLAUDE.md: `lib/env.ts` is the app's only reader — these scripts are outside the app and take exactly one var).
-- Scripts are plain `.mjs` run with `node`, using `psql` via `execFileSync` like the harness; no new runtime dependency unless an item says so.
-- Context: `CLAUDE.md`, `LEGACY.md`, `FOUNDATION.md`, `MAP.md`.
+- Copy `.env.local` into the worktree before running any item. It is gitignored,
+  so a fresh worktree has no Supabase keys and `createUserClient()` returns
+  null — which presents as "not signed in", not as a configuration error.
+- Every account this lane creates (seed script or admin screen) goes through the
+  service-role admin API with `email_confirm: true`. The project has no mailbox
+  and no SMTP; an unconfirmed account can never sign in.
+- `lib/env.ts` stays the only `process.env` reader.
+- The app must still build and serve with no environment variables set.
+- Seeds and fixtures use invented data only — never a real client, attorney, or
+  staff member's credentials.
+- Context: `CLAUDE.md`, `CLIENT.md`, `FOUNDATION.md`, `MAP.md`.
 
 ## Not yet specified
 
-- NAS Excel timesheets → `tblactivity` rows (unbilled hours per person; column contract `Date, Task, Dec, Sub, Fee($), Billed`) — at cutover those rows must exist or the time→bill journey starts from nothing. Revisit when Kris sends one sample workbook.
+- Whether Jon needs a narrower role than `staff` — CLIENT.md lists "Staff list +
+  per-person access" as an open question with the client. Ask Kris before
+  go-live; a third role is a foundation amendment, not a lane item.
 
 ## Out of scope
 
-- Scanned document archive off the network shares — docs-reports lane (MAP.md).
-- Rotating the `TechAssoc` SQL Server password — human step on the client's server before cutover, listed in the runbook, no repo code.
-- Creating the Supabase project and `MIGRATE_DB_URL` — human step (`~/os` memory `reference-bcns-ci-setup`).
-- Any data cleanup or reconciliation of legacy inconsistencies — later lanes decide per feature; this lane only reports them.
-- Kris running SSMS or any export tool himself — eliminated; we restore his `.bak` and generate the load script ourselves (Colima locally, same steps at go-live against his nightly S3 backup).
+- Magic-link / passwordless sign-in — needs custom SMTP the project does not
+  have, and would amend the protected journey helper.
+- Forgot-password self-service email — no outbound email in v1; recovery is an
+  admin resetting the password from /users.
+- Invite-by-email — same reason; admins create accounts with a temporary password.
+- Grouped nav (Money as one menu) — flat entries this round, frontend polish deferred.
+- A real work dashboard at `/` — `app/dashboard/**` belongs to lane docs-reports.
+  The landing page is identity + nav, shaped to grow into it later.
 
 ---
 
-- task: Runbook `scripts/migrate/README.md`. Part 1, restoring the `.bak` (Nate, or whoever runs cutover): `brew install colima docker` → `colima start --vm-type vz --vz-rosetta --memory 4 --disk 20` → `docker run --platform linux/amd64 -e ACCEPT_EULA=Y -e MSSQL_SA_PASSWORD=<generated> -p 1433:1433 -v <dir with the .bak>:/bak mcr.microsoft.com/mssql/server:2022-latest` → unzip the `.bak` on the host into that mounted dir → `RESTORE FILELISTONLY` then `RESTORE DATABASE TechAssoc ... WITH MOVE` via `docker exec ... /opt/mssql-tools18/bin/sqlcmd -C` (logical file names come from the FILELISTONLY output, never hardcoded) → generate the load script with `mssql-scripter -S localhost -d TechAssoc -U sa -P <password> --data-only --target-server-version vNext --include-objects <the 20 tables, dbo-qualified> -f out.sql`. Part 2, cutover sequence: Kris freezes Access → get the latest `.bak` (manual copy today, the client's nightly S3 backup at go-live — zero clicks from Kris either way) → restore + generate per Part 1 → `node scripts/migrate/load.mjs out.sql` → `node scripts/migrate/verify.mjs out.sql` → `node scripts/migrate/seed-logins.mjs in/logins.json` → hand over; plus the branch when verify fails (do not seed, do not hand over, send the report back). Part 3: the two human pre-steps (rotate `TechAssoc` password, create Supabase project + `MIGRATE_DB_URL`) and the go-live re-run being identical to the first run except the `.bak` source. Add `scripts/migrate/in/` and `scripts/migrate/out/` to `.gitignore` via a `scripts/migrate/.gitignore`.
+- task: Seed script `tests/app-shell/seed-e2e.ts` — idempotently creates the
+    end-to-end test account the six journey specs log in as. Reads `E2E_EMAIL` /
+    `E2E_PASSWORD` with the same defaults `tests/journeys/helpers.ts` uses
+    (`staff@example.test` / `password`), creates the auth user through the
+    service-role admin API with `email_confirm: true`, and inserts its `profiles`
+    row with `role: 'staff'` and `personid` null. Run it with
+    `pnpm exec tsx tests/app-shell/seed-e2e.ts` — do not add a package.json
+    script, package.json is unowned root config.
   guardrails:
-    - No step in Part 1 or Part 2 requires Kris to install or run anything — the runbook is entirely ours to execute
-    - Never write the container's generated SA password to the README, git, or any committed file — the runbook names the env var it lives in, not a value
-    - Commands in the runbook are the exact invocations items 2–4 ship; update them if a later item changes a flag
+    - Idempotent — a second run must not create a duplicate auth user or throw
+    - Never write a real person's email or password into the seed
+    - Service-role config comes from `getConfig()`; no direct `process.env` read
   done when:
-    - `scripts/migrate/README.md` exists with the three parts above and names all 20 tables in the `mssql-scripter --include-objects` list
-    - `scripts/migrate/.gitignore` ignores `in/` and `out/`; `git check-ignore scripts/migrate/in/x.sql` succeeds
-    - Every `node scripts/migrate/*.mjs` invocation in the README matches a script file and flag set present on the branch
-  status: done
+    - Running the script against a configured project creates the auth user and its profiles row; a second run exits 0 leaving exactly one of each
+    - The created account signs in via `signInWithPassword` immediately, with no pending confirmation step
+    - With no Supabase environment set the script exits non-zero naming the missing variable, rather than throwing a null-reference
+  status: done — commit 25b7b81
+  parallel-group: a
 
-- task: `scripts/migrate/load.mjs <export.sql>` — load a data-only script (`mssql-scripter --data-only`, same INSERT/VALUES grammar SSMS "Generate Scripts" would emit) into Postgres. Read the file as UTF-8 with BOM stripped, falling back to UTF-16 LE with BOM if decoding fails. Parse the machine-generated grammar: `USE`/`GO`/`SET IDENTITY_INSERT ... ON|OFF`/`SET ANSI_NULLS` lines dropped; `INSERT [dbo].[Tbl] ([Col], ...) VALUES (...)` (also the `INSERT ... VALUES (...), (...)` multi-row form SSMS emits in batches of 100) → table + column list lowercased, brackets stripped. Value translation per column type read once from `information_schema.columns` for the 20 tables: `N'…'`/`'…'` string literals with `''` escaping and embedded newlines kept verbatim; `NULL` → NULL; `CAST(N'yyyy-mm-ddThh:mm:ss.fff' AS DateTime)`/`AS Date`/`AS Time`/`CAST(N'yyyy-mm-ddThh:mm:ss.fffffff' AS DateTime2)` (7-digit fraction — every date/time column in the real schema is `datetime2`, confirmed against the restored `.bak`) → the ISO literal, cast by Postgres to the pinned `date`/`time`/`timestamptz`; `CAST(x AS Decimal(…))`/`AS Money` → numeric literal; integer `0`/`1` targeting a `boolean` column → `false`/`true`; a value that Postgres rejects surfaces as `table.column: <pg error>` and aborts. Table in the file but not one of the 20 → skipped, listed on stderr. Execution: one `psql` session, `set session_replication_role = replica` (so `NOT VALID` FKs and the `audit` triggers stay quiet), `truncate <20 tables> cascade`-free — truncate only the 20 by name, inserts in file order, then the `syncSequences` SQL from the harness (import it), print rows inserted per table. Whole run in one transaction: any failure → nothing changed.
+- task: `middleware.ts` at the repo root — Supabase SSR session refresh over the
+    request/response cookie pair, plus the route gate. A request whose path is not
+    in the public allowlist and carries no valid session redirects to
+    `/login?next=<pathname + search>`. Public allowlist: `/login`, `/api/health`,
+    and Next internals (`/_next/*`, favicon, static assets), expressed in
+    `config.matcher`. This is the app's only authentication boundary — every later
+    lane's screen is protected by this file and nothing else.
   guardrails:
-    - Truncates only the 20 legacy tables; `profiles`, `bank_transactions`, `audit_log` are never named in this script
-    - No coercion beyond the listed translations — never trim, never default a NULL, never clamp a number
-    - Replica mode is set for the session only; the script never alters constraints or triggers
+    - Fail closed — if the session cannot be determined for any reason, redirect to /login; never fall through to the page
+    - Never import from or edit `lib/auth/session.ts` or `lib/auth/client.ts`; both are protected contracts
+    - The allowlist is an explicit set of paths, never a prefix match against user-controlled input
   done when:
-    - Loading `tests/migration/fixtures/export-small.sql` (synthetic, ≥3 rows per table across all 20 tables, one `ntext` value containing a newline, a `'`, and a `;`, one boolean 1 and one 0, one `DateTime` at `23:30:00`, one `DateTime2` with a 7-digit fraction, one orphan `expcaseid`, one `NULL` in a nullable text column) into the harness DB yields the exact row counts per table, the `ntext` value round-trips byte-for-byte, the boolean pair reads `true`/`false`, the date column reads the file's calendar date under both `TZ=UTC` and `TZ=America/New_York`, and the NULL stays NULL (not `''`)
-    - Loading the same fixture twice leaves identical counts, and `insert into tblcase (casetitle) values ('x')` afterwards receives an id greater than the fixture's max caseid
-    - A fixture containing `INSERT [dbo].[tblActive] ...` and an out-of-range `smallint` value: the unknown table is listed on stderr and skipped; the bad value aborts with `tblbillingnames.personid` (or the relevant `table.column`) in the error and leaves every table empty
-    - `audit_log` has zero rows after a load, and existing `pnpm test` stays green
-  status: done
+    - An unauthenticated GET of `/cases/90001` redirects to `/login?next=%2Fcases%2F90001`
+    - An unauthenticated GET of `/login` and of `/api/health` return 200 with no redirect
+    - A request carrying a valid session cookie for a user with a profiles row reaches the page, and the response carries refreshed auth cookies
+    - Existing passing tests remain passing
+  caution: true
+  status: done — commit 3d5d980
+  parallel-group: a
 
-- task: `scripts/migrate/verify.mjs <export.sql>` — fidelity report after a load. Re-parse the export with the parser from item 2 (export it from `load.mjs` or a shared `scripts/migrate/parse.mjs`) to get source row counts per table and per-table sums of every `numeric` column, then query the database for: row count per table, the same sums, max of the identity column, orphan count per `NOT VALID` FK (from `pg_constraint` where `convalidated = false`, counted with a `left join`), drift on the VBA-maintained denormalized columns (`tblcase.numunpaidbills` vs `count(tblbills where billpaiddate is null)` per case, `numunapprovedsa` vs `count(tblsrvauth where srvauthstatus <> 'Approved')` per case — report count of cases where they disagree), and max length of every `text` column that came from `ntext`. Print a Markdown table to stdout and write it to `scripts/migrate/out/verify-<timestamp>.md`. Exit 1 on any count or sum mismatch; orphans and drift are informational.
+- task: `app/(auth)/login/page.tsx` with a server action calling
+    `signInWithPassword` on `createUserClient()`; on success redirect to the
+    `next` query param when it is a relative path, otherwise `/`. On failure
+    re-render with a visible error and no session. Plus
+    `app/(auth)/signout/route.ts` — POST calls `signOut()` and redirects to
+    `/login`. The email and password fields and the "Sign in" button must match
+    what `tests/journeys/helpers.ts` queries for; that file is protected and
+    cannot be changed to suit this screen.
   guardrails:
-    - Read-only against the database: no writes, no fixes, no `set session_replication_role`
-    - Mismatch exit is on counts and sums only; orphans and denormalized drift never fail the run
+    - `next` must be a path beginning with a single `/` — an absolute URL or protocol-relative `//host` falls back to `/`
+    - Never log, echo back, or place a password in a URL, redirect, or error message
+    - Do not change the field labels or button name the protected journey helper depends on
   done when:
-    - After loading `export-small.sql`, `verify.mjs` exits 0 and its report shows equal source/database counts for all 20 tables, the orphan `expcaseid` counted under its FK, and at least one line of denormalized drift the fixture deliberately plants
-    - After deleting one `tblexpenses` row directly, `verify.mjs` exits 1 and the report marks the `tblexpenses` count and `expamount` sum as mismatched
-    - The report file lands in `scripts/migrate/out/` and that path is ignored by git
-  status: done
+    - Correct credentials sign in and land on the path given by `?next=`; `?next=https://example.com` and `?next=//example.com` both land on `/`
+    - A wrong password re-renders the login page with a visible error and sets no session cookie
+    - POST to /signout clears the session, and a following request to a gated path redirects to /login
+    - Existing passing tests remain passing
+  status: done — commit 1e17d4e
 
-- task: `scripts/migrate/seed-logins.mjs <logins.json>` — create the first Supabase auth users and their `profiles` rows. Input: array of `{ email, role: 'admin'|'staff', personid: number|null }`. For each: `supabase.auth.admin.createUser({ email, email_confirm: true })` via `createServerClient()` from `lib/db/client.ts` (service role); on "already registered" look the user up by email instead; then `upsert` into `profiles` on `id` with `email`, `role`, `personid`. `personid` must exist in `tblbillingnames` (query first; unknown → abort before any user is created). Print `email → role (created|existing)`. Ship `scripts/migrate/logins.example.json` with three invented entries; the real `in/logins.json` is gitignored by item 1. Because auth users need a real Supabase project, tests cover the pure parts: input validation, the personid check against the harness DB, and the upsert SQL shape via an injected fake admin client.
+- task: The app shell — `app/layout.tsx` renders a header with the nine section
+    nav entries (Cases /cases, Time /time, Bills /bills, Expenses /expenses,
+    Funds /funds, Bank review /bank-review, Documents /documents,
+    Reports /reports, Dashboard /dashboard), an Account entry (/account), an
+    admin-only Users entry (/users), the signed-in email and role, and a sign-out
+    control posting to /signout. `app/globals.css` moves to Tailwind.
+    `app/page.tsx` replaces the template's pricing demo with the signed-in
+    landing (identity + section links). `app/not-found.tsx` renders inside the
+    shell so the not-yet-built sections stay navigable.
   guardrails:
-    - Never sets a password — users get an invite/reset flow from the app; the script only creates the account and profile
-    - Idempotent on email: a second run with the same file creates nothing and changes only `role`/`personid` if the file changed
-    - Uses the frozen `Session`/`Role` contract's role values only (`admin`, `staff`); any other string aborts
+    - Nav entries are plain links — never import a lane's `lib/` module that does not exist yet
+    - The Users entry must be absent from the markup for a staff session, not hidden with CSS
+    - No template placeholder copy about plans, seats, or pricing survives in `app/page.tsx`
   done when:
-    - `logins.example.json` with three entries passes validation; a file with `role: 'owner'` or a `personid` absent from `tblbillingnames` aborts before any `createUser` call (fake client records zero calls)
-    - With a fake admin client that reports the second email as already registered, the run ends with three `profiles` rows in the harness DB, two `created` and one `existing`, and a second run leaves the row count at three
-    - `pnpm typecheck` passes with the script's imports from `lib/db/client.ts`
-  status: done
+    - Signed in as staff, the header shows the user's email and role and links to the nine section routes plus /account, and /users appears nowhere in the markup
+    - Signed in as admin, the same header additionally links to /users
+    - Visiting /cases renders the not-found page inside the shell with the nav present and usable, not Next's default 404
+    - Existing passing tests remain passing
+  status: done — commit 73e9dea
+
+- task: `app/(auth)/users/page.tsx` — the admin user list and account creation,
+    gated by `requireSession('admin')`. Lists every `profiles` row with email,
+    role, and linked initials. A create form takes an email, generates a
+    temporary password with `crypto.randomBytes`, creates the auth user through
+    the service-role admin API with `email_confirm: true`, inserts the profiles
+    row, and displays the temporary password once on the resulting page for the
+    admin to read to the person.
+  guardrails:
+    - The temporary password is generated with `crypto.randomBytes`, never `Math.random`
+    - The service-role client is constructed and used only in server code; never imported into a client component
+    - The temporary password is never stored in `profiles`, logged, or emailed — it appears once in the response and nowhere else
+  done when:
+    - A staff session requesting /users is refused with a ForbiddenError; an admin session renders the list
+    - Creating a user with a new email produces both an auth user and a profiles row, and that person signs in with the displayed temporary password with no confirmation step
+    - The temporary password appears exactly once, on the page that created the user, and is absent after a reload
+    - Existing passing tests remain passing
+  status: done — commit 1103778
+
+- task: On the same /users screen — change a person's role between admin and
+    staff; deactivate a person by deleting their `profiles` row (the frozen
+    contract's definition of "no session"), guarded so that the last remaining
+    admin cannot be deactivated and no admin can deactivate themselves; and a
+    billing-person dropdown listing `tblbillingnames.initials` that sets
+    `profiles.personid`. The dropdown is nullable and is legitimately empty until
+    the migration lane has loaded `tblbillingnames`.
+  guardrails:
+    - Deleting a profiles row must never delete the `auth.users` row — deactivation is reversible by re-inserting
+    - Both guards fail closed: the action is refused unless it can positively confirm another admin remains and that the target is not the actor
+    - Never add a column or a migration; `supabase/migrations/**` is protected
+  done when:
+    - An admin attempting to deactivate their own account is refused with a visible message and their profiles row still exists
+    - With exactly one admin remaining, deactivating that admin is refused; after a second person is promoted to admin, deactivating the first succeeds
+    - Setting the billing-person dropdown writes `personid`, and `getSession()` returns it as `personId`; leaving it unset stores null
+    - Deactivating a person and then re-creating their profiles row restores sign-in on the same auth account
+  caution: true
+  status: done — commit e14535b
+  parallel-group: b
+
+- task: `app/(auth)/account/page.tsx` — the signed-in user changes their own
+    password. Current password, new password, confirm. Verifies the current
+    password by re-authenticating with `signInWithPassword` before calling
+    `updateUser`, so a temporary password handed over by an admin can be replaced
+    privately.
+  guardrails:
+    - A user may change only their own password; the screen never accepts a target user id
+    - Never log or echo either password
+  done when:
+    - The correct current password plus a new password succeeds, and the new password signs in on a fresh session while the old one is rejected
+    - A wrong current password is refused with a visible error and the password is unchanged
+    - Existing passing tests remain passing
+  status: done — commit 973d8e9
+  parallel-group: b
+
+- task: Polish (after the hand test) — `middleware.ts` gate redirects. A denied
+    non-GET/HEAD request redirects to /login with 303, not 307, so an expired
+    session's form POST is not replayed at /login. Add `/signout` to
+    `PUBLIC_PATHS` so signing out from an expired tab clears cookies instead of
+    bouncing to a 405.
+  guardrails:
+    - Every other protected path still fails closed; PUBLIC_PATHS stays an exact-match set
+  done when:
+    - A denied POST returns 303 to /login; a denied GET or HEAD still returns 307
+    - A signed-out POST /signout reaches the route (no redirect to /login)
+    - Existing passing tests remain passing
+  status: done — commit 4cc3eb1
+
+- task: Polish — staff get a clean "Admins only." refusal on /users instead of a
+    500: the page catches ForbiddenError with `onlyForbidden` and renders the
+    message, and `createUserAction` returns `{ ok: false, error: "Admins only." }`
+    like the item-6 actions.
+  guardrails:
+    - The admin check still runs before any profiles query; no list, form, or other email reaches staff
+  done when:
+    - Staff GET /users returns 200 with "Admins only." and no list, create form, or other profile's email
+    - A staff replay of the create action returns 200 "Admins only." and creates nothing
+  status: done — commit 78a4c01
+
+- task: Polish — `app/(auth)/login/actions.ts`: after a successful password
+    sign-in, read the user's profiles row with the same role rule as
+    getSession(). No row (deactivated) → sign out and show "This account is
+    deactivated — ask an admin." instead of the gate silently bouncing back to
+    the form.
+  guardrails:
+    - A deactivated sign-in must leave no auth cookie behind
+    - Never echo the email or password in the redirect
+  done when:
+    - A deactivated account signing in lands on /login?error=deactivated with the message visible and no sb-*-auth-token cookie
+    - Existing passing tests remain passing
+  status: done — commit 277bd4b
+
+- task: Polish — reactivation from /users. In `createStaffUser`, when the auth
+    user already exists, look it up (listUsers) and re-insert its profiles row as
+    staff. A primary-key conflict means the account is active → "already
+    exists". The form shows "Reactivated … they sign in with their existing
+    password" and no temporary password.
+  guardrails:
+    - The existing auth user is never modified; its password stays untouched
+    - Only a 23505 conflict reads as "already exists"; any other insert error is a failure
+  done when:
+    - Creating a deactivated person's email restores their staff profiles row, shows no temporary password, and they sign in with their old password
+    - Creating an active person's email still shows "already exists" and changes nothing
+  status: done — commit 8ee8881
+
+- task: Polish — style /login with Tailwind (card, visible input borders, a real
+    button), replacing the inline styles.
+  guardrails:
+    - Label text "Email", "Password" and the "Sign in" button name stay exactly as tests/journeys/helpers.ts expects
+  done when:
+    - Existing login live tests pass against the restyled page
+  status: done — commit 277bd4b (same file as the deactivated message)
 
 > **⚠️ AUTONOMOUS RUN — STOP HERE**

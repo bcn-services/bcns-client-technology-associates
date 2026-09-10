@@ -1,23 +1,32 @@
-import { PRICING, formatUsd, monthlyCharge } from "@nseluga/app-core";
-import { isAiEnabled } from "@/lib/ai";
+import Link from "next/link";
+import { getSession } from "@/lib/auth/session";
+import { SECTIONS } from "@/lib/auth/sections";
 
-// Proves the three workspace:* deps resolve and the app renders 200 with no
-// keys set and the AI flag off.
-export default function HomePage() {
-  const aiOn = isAiEnabled();
-  const standard = monthlyCharge("standard", 20);
+export default async function HomePage() {
+  const session = await getSession().catch(() => null);
 
   return (
-    <main>
-      <h1>Technology Associates</h1>
-      <p>
-        A runnable starter for a hosted client app. AI features are{" "}
-        <strong>{aiOn ? "enabled" : "disabled"}</strong> (set <code>AI_ENABLED=1</code> to opt in).
-      </p>
-      <p>
-        Standard plan base: {formatUsd(PRICING.standard.monthlyCents)}/mo. At 20 seats:{" "}
-        {formatUsd(standard.totalCents)}/mo.
-      </p>
+    <main className="space-y-6">
+      <div>
+        <h1 className="text-2xl font-semibold text-slate-900">Technology Associates</h1>
+        {session && (
+          <p className="mt-1 text-slate-600">
+            Signed in as {session.email} ({session.role}).
+          </p>
+        )}
+      </div>
+      <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+        {SECTIONS.map((s) => (
+          <li key={s.href}>
+            <Link
+              href={s.href}
+              className="block rounded-lg border border-slate-200 bg-white px-4 py-3 font-medium text-slate-800 hover:border-slate-400"
+            >
+              {s.label}
+            </Link>
+          </li>
+        ))}
+      </ul>
     </main>
   );
 }
