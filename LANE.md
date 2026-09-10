@@ -203,7 +203,7 @@ Test against the fixture, not the producing lane. Do not wait for it to exist.
     - Setting the billing-person dropdown writes `personid`, and `getSession()` returns it as `personId`; leaving it unset stores null
     - Deactivating a person and then re-creating their profiles row restores sign-in on the same auth account
   caution: true
-  status: not started
+  status: done — commit e14535b
   parallel-group: b
 
 - task: `app/(auth)/account/page.tsx` — the signed-in user changes their own
