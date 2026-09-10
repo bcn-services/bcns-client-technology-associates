@@ -184,7 +184,7 @@ Test against the fixture, not the producing lane. Do not wait for it to exist.
     - Creating a user with a new email produces both an auth user and a profiles row, and that person signs in with the displayed temporary password with no confirmation step
     - The temporary password appears exactly once, on the page that created the user, and is absent after a reload
     - Existing passing tests remain passing
-  status: not started
+  status: done — commit 1103778
 
 - task: On the same /users screen — change a person's role between admin and
     staff; deactivate a person by deleting their `profiles` row (the frozen
