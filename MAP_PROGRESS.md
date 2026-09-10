@@ -17,9 +17,8 @@ across rounds — never reset. Per-item detail lives in `progress/<lane>.md`.
 
 **Journeys:** 0 of 6 green (2026-09-10, after app-shell). Red by design until the lanes wire them.
 02–06 now get past sign-in and fail on screens later lanes build (cases, time, funds, bank import,
-dashboard). 01 lands back on `/login?next=/cases/90001`: `tests/journeys/helpers.ts` `login()` clicks
-Sign in and returns without awaiting navigation, so the next `page.goto` aborts the sign-in POST —
-needs an amendment on `main` (protected file) to await `waitForURL` off /login. This is a progress reading, not a merge gate.
+dashboard). 01 (after the `login()` amendment below) reaches `/cases/90001` and fails on the missing
+case screen (cases lane). This is a progress reading, not a merge gate.
 
 **Amendments this round**
 
@@ -29,3 +28,5 @@ needs an amendment on `main` (protected file) to await `waitForURL` off /login. 
   `tblcase.casestatusharddeadline` is dropped. `FOUNDATION.md`'s type map and
   `lib/db/types.ts` were amended to match. Any live lane must rebase onto
   `integration` before assuming the frozen shapes.
+- 2026-09-10 — `tests/journeys/helpers.ts` (`966a523` on `main`). `login()` now awaits
+  the redirect off /login; the next `page.goto` was aborting the sign-in POST.
