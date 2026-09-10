@@ -146,7 +146,7 @@ Test against the fixture, not the producing lane. Do not wait for it to exist.
     - A wrong password re-renders the login page with a visible error and sets no session cookie
     - POST to /signout clears the session, and a following request to a gated path redirects to /login
     - Existing passing tests remain passing
-  status: not started
+  status: done — commit 1e17d4e
 
 - task: The app shell — `app/layout.tsx` renders a header with the nine section
     nav entries (Cases /cases, Time /time, Bills /bills, Expenses /expenses,
