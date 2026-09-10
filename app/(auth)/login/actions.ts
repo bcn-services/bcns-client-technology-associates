@@ -19,8 +19,17 @@ export async function signIn(formData: FormData): Promise<never> {
   const supabase = createUserClient();
   if (!supabase) back("unavailable");
 
-  const { error } = await supabase!.auth.signInWithPassword({ email, password });
+  const { data, error } = await supabase!.auth.signInWithPassword({ email, password });
   if (error) back("invalid");
+
+  // A deactivated account (no profiles row) authenticates fine, then the gate would bounce
+  // it back here with no message. Same role rule as getSession(); sign out so no session is kept.
+  const { data: profile, error: profileError } = await supabase!
+    .from("profiles").select("role").eq("id", data.user!.id).maybeSingle();
+  if (profileError || (profile?.role !== "admin" && profile?.role !== "staff")) {
+    await supabase!.auth.signOut();
+    back(profileError ? "unavailable" : "deactivated");
+  }
 
   redirect(next);
 }
