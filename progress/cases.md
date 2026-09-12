@@ -1,12 +1,12 @@
-# Progress — cases lane
+# Progress — cases lane (archived on merge to integration, 2026-09-11)
 
 Tracks where we are in `LANE.md`. LANE.md is the contract; this tracks where we
 are in it — if they disagree, LANE.md wins for scope.
 
 **Current position**
 
-- **Status:** all 9 items done; lane accepted, PR open into integration
-- **Next:** Nate reviews the PR into integration (flagged items: case search, case record, service authorizations)
+- **Status:** all 9 items done; merged to integration 2026-09-11 (PR #4, `298b6ac`)
+- **Next:** follow-ups listed in PR #4 (stale-form overwrite in contacts/inquiries, journey 01 and shell.live amendments, open decisions)
 - **Blockers:** none (migration 0007 pushed to hosted 2026-09-11)
 - **Last updated:** 2026-09-11
 

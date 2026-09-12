@@ -9,16 +9,16 @@ across rounds — never reset. Per-item detail lives in `progress/<lane>.md`.
 |------|----------|--------|--------|
 | migration | nate | lane/migration | done — 4/4 items, merged 2026-09-09 (`a3add4b`) |
 | app-shell | nate | lane/app-shell | done — 12/12 items (7 planned + 5 polish), merged 2026-09-10 (`464ab58`) |
-| cases | nate | — | not started — no LANE.md yet |
+| cases | nate | lane/cases | done — 9/9 items, merged 2026-09-11 (`298b6ac`, PR #4) |
 | time | nate | — | not started — no LANE.md yet |
 | billing | nate | — | not started — no LANE.md yet |
 | money | nate | — | not started — no LANE.md yet |
 | docs-reports | nate | — | not started — no LANE.md yet |
 
-**Journeys:** 0 of 6 green (2026-09-10, after app-shell). Red by design until the lanes wire them.
-02–06 now get past sign-in and fail on screens later lanes build (cases, time, funds, bank import,
-dashboard). 01 (after the `login()` amendment below) reaches `/cases/90001` and fails on the missing
-case screen (cases lane). This is a progress reading, not a merge gate.
+**Journeys:** 1 of 6 green (2026-09-11, after cases). 02 (inquiry → case) passes. 01 now reaches the
+case screen and fails only on an ambiguous `getByText(/bills/i)` (matches nav link + the case's "Bills"
+heading) — protected-path amendment: scope to `main` or use `getByRole('heading')`. 03–06 fail on screens
+later lanes build (time, funds, bank import, dashboard). Progress reading, not a merge gate.
 
 **Amendments this round**
 
