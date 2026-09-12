@@ -142,7 +142,7 @@ Test against the fixture, not the producing lane. Do not wait for it to exist.
     - Each of the five presets returns the rows its legacy query returns against a seeded set, in the legacy sort order
     - The fixture attorney Pat Example opens showing firm "Example & Partners LLP"
     - Existing passing tests remain passing
-  status: not started
+  status: done
   parallel-group: a
 
 - task: Inquiries — `/inquiries` list, `/inquiries/new`, `/inquiries/[id]` edit,
