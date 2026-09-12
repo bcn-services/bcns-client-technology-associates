@@ -171,7 +171,7 @@ Test against the fixture, not the producing lane. Do not wait for it to exist.
     - Quick search finds a seeded inquiry by a substring of each of the 16 legacy fields, case-insensitively
     - Advanced search date modes return exactly the inquiries between two dates, on or after, and on or before a date, boundaries inclusive
     - Every "sent" checkbox and its paired name field persists on edit
-  status: not started
+  status: done
   parallel-group: a
 
 - task: Case search and lists — `/cases` with quick search over the `case_search`
