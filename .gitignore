@@ -16,3 +16,6 @@ scripts/migrate/in/
 
 # dev-team scratch worktrees (full repo copies; MAP.md lists this unowned)
 .claude/worktrees/
+
+# Supabase CLI local state (project ref, versions)
+supabase/.temp/
