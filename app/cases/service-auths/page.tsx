@@ -2,7 +2,7 @@ import Link from "next/link";
 import { requireSession } from "@/lib/auth/session";
 import { createServerClient } from "@/lib/db/client";
 import type { Db } from "@/lib/cases/record";
-import { SA_LISTS, serviceAuthList, serviceAuthTotals, type SaListKind, type SaListRow, type SaTotal } from "@/lib/cases/service-auths";
+import { SA_LISTS, serviceAuthList, serviceAuthTotals, serviceAuthGrandTotal, type SaListKind, type SaListRow, type SaTotal } from "@/lib/cases/service-auths";
 import { Back, CaseLink, ErrorNote, Table } from "../lists/ui";
 
 export const dynamic = "force-dynamic";
@@ -45,7 +45,7 @@ export default async function ServiceAuthsPage({ searchParams }: { searchParams:
         : view === "totals"
           ? <Table testId="sa-totals" head={["Status", "Count", "Hours"]}
               rows={[...totals.map((t) => ({ key: t.status, cells: [t.status || "(blank)", t.count, t.hours] })),
-                { key: "__all", cells: ["All", totals.reduce((n, t) => n + t.count, 0), (totals.reduce((n, t) => n + Math.round(Number(t.hours) * 1000), 0) / 1000).toFixed(3)] }]} />
+                ((a) => ({ key: "__all", cells: [a.status, a.count, a.hours] }))(serviceAuthGrandTotal(totals))]} />
           : !rows.length ? <p className="text-sm text-slate-600">No service authorizations.</p>
           : <Table testId={`sa-${view}`} head={[dateCol, "Case #", "Title", "Branch", "Attorney", "Firm phone", "Status", "Hours"]}
               rows={rows.map((r) => ({ key: r.srvauthid, cells: [view === "approved" ? r.approvedDate : r.authDate, <CaseLink key="c" id={r.caseid} />, r.title, r.branch, r.attorney, r.firmPhone, r.status, r.hours] }))} />}

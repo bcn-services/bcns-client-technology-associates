@@ -186,7 +186,7 @@ async function pages(db: Db, cols: string, statuses: string[] | null): Promise<R
     const { data, error } = await q.order("srvauthid").range(from, from + PAGE - 1);
     if (error) throw new Error(`tblsrvauth read: ${error.message}`);
     out.push(...data);
-    if (data.length < PAGE) return out;
+    if (data.length === 0) return out; // not `< PAGE`: a lower PostgREST max-rows would truncate
   }
 }
 
@@ -194,8 +194,9 @@ async function pages(db: Db, cols: string, statuses: string[] | null): Promise<R
 async function byId(db: Db, table: string, cols: string, col: string, ids: unknown[]): Promise<Map<unknown, Row>> {
   const uniq = [...new Set(ids.filter((v) => v != null))];
   const out = new Map<unknown, Row>();
-  for (let i = 0; i < uniq.length; i += 200) { // URL length
-    const { data, error } = await db.from(table).select(cols).in(col, uniq.slice(i, i + 200));
+  const chunks: unknown[][] = [];
+  for (let i = 0; i < uniq.length; i += 200) chunks.push(uniq.slice(i, i + 200)); // URL length
+  for (const { data, error } of await Promise.all(chunks.map((c) => db.from(table).select(cols).in(col, c)))) {
     if (error) throw new Error(`${table} read: ${error.message}`);
     for (const r of data as Row[]) out.set(r[col], r);
   }
@@ -259,4 +260,10 @@ export async function serviceAuthTotals(db: Db): Promise<SaTotal[]> {
   }
   return [...groups.values()].sort((a, b) => byStr(a.status.toLowerCase(), b.status.toLowerCase()))
     .map((g) => ({ status: g.status, count: g.count, hours: (g.milli / 1000).toFixed(3) }));
+}
+
+/** The "All" row for serviceAuthTotals output, summed in integer thousandths like the groups. */
+export function serviceAuthGrandTotal(totals: SaTotal[]): SaTotal {
+  const m = totals.reduce((n, t) => n + milli(t.hours), 0);
+  return { status: "All", count: totals.reduce((n, t) => n + t.count, 0), hours: (m / 1000).toFixed(3) };
 }
