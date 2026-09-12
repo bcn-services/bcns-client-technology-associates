@@ -19,4 +19,4 @@ LANE.md wins for scope.
 | Edit and delete at /time/[id] | done — Staff can open their own unbilled entry to fix or delete it; billed entries and other people's entries can't be changed. |
 | Start/stop timer on /time | done — Staff can start a timer on a case, stop it, and save the rounded time as an entry; it survives a page reload and can be discarded. |
 | Time panel on the case page | done — Every case page now lists its time entries and shows its unbilled hours, with links to add an entry or start a timer. Journey 02 was already failing before this item (the header's "Firms" link and the case page's "Firm" heading both match its check); fixing it needs a change outside this lane. |
-| Running-timer header indicator + E2E staff seed | not started |
+| Running-timer header indicator + E2E staff seed | done — While a timer runs, every page's header shows its case and elapsed time with a link back to the Time page; the test staff login is now linked to KJS, so the time-to-bill journey gets through time entry. |

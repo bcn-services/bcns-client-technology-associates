@@ -218,6 +218,6 @@ Test against the fixture, not the producing lane. Do not wait for it to exist.
     - After `tests/app-shell/seed-e2e.ts` runs, the staff E2E profile has `personid = 1`, and journey 03 passes its `/time` steps through "Entry added" (its later `/bills` steps still fail; they belong to billing)
     - `tests/app-shell/*.test.mjs` remain passing
   after: app-shell
-  status: not started
+  status: done
 
 > **⚠️ AUTONOMOUS RUN — STOP HERE**
