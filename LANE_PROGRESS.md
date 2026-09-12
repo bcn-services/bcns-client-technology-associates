@@ -5,9 +5,9 @@ LANE.md wins for scope.
 
 ## Current position
 
-- **Status:** autonomous run in progress (started 2026-09-12)
-- **Next:** item 6 — running-timer header indicator + E2E staff seed
-- **Blockers:** none
+- **Status:** autonomous run complete — all 6 items done, none blocked; lane acceptance review found all 4 "Lane done when" criteria met in code; PR into `integration` open
+- **Next:** review and merge `lane/time` into `integration` (add `tests/time/*.test.mjs` to the `test` script at merge)
+- **Blockers:** none in this lane. Journey 02 was already failing before this lane (header "Firms" link vs. case page "Firm" heading); journey 03 now reaches the bills page, which is the billing lane's work
 - **Last updated:** 2026-09-12
 
 ## Round: time lane (v1)
