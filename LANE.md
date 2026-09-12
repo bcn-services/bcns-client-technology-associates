@@ -127,7 +127,7 @@ Test against the fixture, not the producing lane. Do not wait for it to exist.
     - `weekBounds` returns the same Monday under `TZ=UTC` and `TZ=America/New_York` for the same anchor
     - Admin `?who=2` shows JON's fixture row; staff `?who=2` still shows only their own rows; the admin unbilled-by-case table lists case 90001 at 2.000 and omits a case whose rows are all billed
     - Existing passing tests remain passing
-  status: not started
+  status: done
   parallel-group: a
 
 - task: Edit and delete at `/time/[id]`. `app/time/[id]/page.tsx` loads the row.
@@ -154,7 +154,7 @@ Test against the fixture, not the producing lane. Do not wait for it to exist.
     - Editing or deleting fixture row 2 (billed) is refused: the page shows it read-only with no Save or Delete, and a direct call of either action reports "This entry can't be changed" with the row unchanged
     - A staff call of `updateEntry` or `deleteEntry` against another person's unbilled row is refused and the row is unchanged; the same call as admin succeeds
     - Deleting an own unbilled row removes it from `tblactivity` and shows "Entry deleted"
-  status: not started
+  status: done
   parallel-group: a
 
 - task: Start/stop timer on `/time`. Client component `app/time/timer.tsx`
