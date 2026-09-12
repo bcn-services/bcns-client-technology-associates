@@ -2,11 +2,12 @@
 
 import { useFormState, useFormStatus } from "react-dom";
 import type { FormState } from "./actions";
-import type { InquiryOptions, InquiryRow } from "@/lib/inquiries/inquiries";
+import {
+  CALLER_TITLES, CLIENT_ROLES, ENGINEERS, HOW_HEARD, SUBJECT_SUGGESTIONS, withCurrent,
+  type InquiryOptions, type InquiryRow,
+} from "@/lib/inquiries/inquiries";
 
 type Values = Partial<InquiryRow>;
-const CALLER_TITLES = ["Attorney", "Paralegal", "Secretary", "Insurance Claims Rep", "Investigator"];
-const CLIENT_ROLES = ["Plaintiff", "Defendant", "Third Party", "Unknown", "Other"];
 
 const input = "rounded border border-slate-300 px-2 py-1";
 const box = "grid gap-1 text-sm";
@@ -24,7 +25,8 @@ function Text({ name, label, v, list, type = "text" }: { name: keyof InquiryRow;
 /** A select over a value list; a legacy value outside the list is kept as an extra option so editing never drops it. */
 function Pick({ name, label, v, options }: { name: keyof InquiryRow; label: string; v: Values; options: { value: string; label: string }[] }) {
   const cur = v[name] == null ? "" : String(v[name]);
-  const all = cur && !options.some((o) => o.value.toLowerCase() === cur.toLowerCase()) ? [...options, { value: cur, label: cur }] : options;
+  const labels = new Map(options.map((o) => [o.value, o.label]));
+  const all = withCurrent(options.map((o) => o.value), cur).map((value) => ({ value, label: labels.get(value) ?? value }));
   const selected = all.find((o) => o.value.toLowerCase() === cur.toLowerCase())?.value ?? "";
   return (
     <label className={box}>
@@ -69,9 +71,7 @@ export function InquiryForm({ action, values: v, options }: {
   return (
     <form action={formAction} className="space-y-6">
       {v.id != null && <input type="hidden" name="id" value={v.id} />}
-      <datalist id="inq-subjects">{options.subjects.map((s) => <option key={s} value={s} />)}</datalist>
-      <datalist id="inq-howheard">{options.howHeard.map((s) => <option key={s} value={s} />)}</datalist>
-      <datalist id="inq-engineers">{options.engineers.map((s) => <option key={s} value={s} />)}</datalist>
+      <datalist id="inq-subjects">{SUBJECT_SUGGESTIONS.map((s) => <option key={s} value={s} />)}</datalist>
 
       <fieldset className="grid gap-3 sm:grid-cols-3">
         <Text name="inqdate" label="Date" type="date" v={v} />
@@ -93,10 +93,10 @@ export function InquiryForm({ action, values: v, options }: {
         <Text name="inqsubject" label="Subject" list="inq-subjects" v={v} />
         <Pick name="tabranch" label="Branch" v={v} options={branches} />
         <Text name="inqrefferredby" label="Referred by" v={v} />
-        <Text name="inqhowheardaboutus" label="How heard" list="inq-howheard" v={v} />
+        <Pick name="inqhowheardaboutus" label="How heard" v={v} options={asOptions(HOW_HEARD)} />
         <Text name="inqpreviouscase" label="Previous case" v={v} />
         <Pick name="inqclient" label="Client role" v={v} options={asOptions(CLIENT_ROLES)} />
-        <Text name="inqengineer" label="Engineer" list="inq-engineers" v={v} />
+        <Pick name="inqengineer" label="Engineer" v={v} options={asOptions(ENGINEERS)} />
       </fieldset>
 
       <label className={box}>

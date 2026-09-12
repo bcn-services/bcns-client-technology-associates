@@ -10,7 +10,10 @@ import { QUICK_SEARCH_FIELDS as MOD_QUICK_SEARCH_FIELDS, SENT_BOOLS as MOD_SENT_
 
 // Pinned independently of the module under test, so dropping a column there turns a test red.
 const SENT_BOOLS = ["sentfee", "sentchecklist", "sentllb", "sentkjs", "sentiuo", "sentiuobio", "sentoren", "sentlarry", "sentcoppolino", "sentother1", "sentother2"];
-const QUICK_SEARCH_FIELDS = ["inqsubject", "inqlocation", "tabranch", "inqrefferredby", "inqcallertitle", "inqcallername", "inqattyname", "inqfirm", "inqfirmlocation", "inqaccidentlocation", "inqdescription", "inqhowheardaboutus", "inqclient", "inqphonenumber", "inqemail", "inqcaption"];
+// Access InquirySearchQuery, in order.
+const QUICK_SEARCH_FIELDS = ["id", "inqdate", "inqcallername", "inqattyname", "inqfirm", "inqfirmlocation", "inqaccidentlocation", "inqrefferredby", "inqphonenumber", "inqemail", "inqdescription", "inqengineer", "inqsubject", "inqlocation", "inqhowheardaboutus", "inqcaption"];
+const TEXT_FIELDS = QUICK_SEARCH_FIELDS.slice(2);
+const FIELD_DATE = "2037-11-23"; // invented; Access shows it as 11/23/2037
 test("module field lists match the pinned legacy lists", () => {
   assert.deepEqual([...MOD_SENT_BOOLS], SENT_BOOLS);
   assert.deepEqual([...MOD_QUICK_SEARCH_FIELDS], QUICK_SEARCH_FIELDS);
@@ -35,7 +38,7 @@ let fieldRow;
 const dated = {};
 const lit = {};
 before(async () => {
-  [fieldRow] = await insert([{ inqdate: "2031-01-01", ...Object.fromEntries(QUICK_SEARCH_FIELDS.map((f) => [f, `pre ${M}-${f}-mixedCase post`])) }]);
+  [fieldRow] = await insert([{ inqdate: FIELD_DATE, ...Object.fromEntries(TEXT_FIELDS.map((f) => [f, `pre ${M}-${f}-mixedCase post`])) }]);
   for (const d of ["2031-05-09", "2031-05-10", "2031-05-15", "2031-05-20", "2031-05-21"]) [dated[d]] = await insert([{ inqdate: d, inqsubject: `${M}date` }]);
   const subjects = { pct: `${M}lit 50%off`, pctX: `${M}lit 50Xoff`, und: `${M}lit a_b`, undX: `${M}lit aXb`, punct: `${M}lit x,(y)"z` };
   for (const [k, s] of Object.entries(subjects)) [lit[k]] = await insert([{ inqdate: "2031-02-02", inqsubject: s }]);
@@ -47,12 +50,23 @@ after(async () => {
   if (all.length) await db.from("tblinquiry").delete().in("id", all);
 });
 
-for (const f of QUICK_SEARCH_FIELDS) {
+for (const f of TEXT_FIELDS) {
   test(`quick search finds the row by an upper-case substring of ${f}`, async () => {
     const rows = await quickSearch(db, `${M}-${f}-MIXEDcase`.toUpperCase());
     assert.deepEqual(rows.map((r) => r.id), [fieldRow], `${f} not searched`);
   });
 }
+// ids and dates are shared with other rows, so these assert membership, not uniqueness.
+test("quick search finds the row by a substring of its id", async () => {
+  const s = String(fieldRow);
+  const sub = s.length > 2 ? s.slice(1) : s;
+  assert.ok((await quickSearch(db, sub)).some((r) => r.id === fieldRow), `id substring ${sub} missed`);
+});
+test("quick search finds the row by a substring of inqdate in ISO and m/d/yyyy form", async () => {
+  for (const sub of ["037-11-2", "11/23/203"]) {
+    assert.ok((await quickSearch(db, sub)).some((r) => r.id === fieldRow), `inqdate substring ${sub} missed`);
+  }
+});
 
 const dateIds = (rows) => rows.map((r) => r.id).sort((a, b) => a - b);
 const exp = (...ds) => ds.map((d) => dated[d]).sort((a, b) => a - b);
