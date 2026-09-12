@@ -5,7 +5,7 @@ are in it — if they disagree, LANE.md wins for scope.
 
 **Current position**
 
-- **Status:** 3 of 9 items done; case record and case presets in progress
+- **Status:** 4 of 9 items done; case record in progress
 - **Next:** new case, service authorizations, convert inquiry, app-shell wiring
 - **Blockers:** hosted Supabase is missing migration 0007 (case search view) and has no fixture case — needs `supabase db push` by Nate before journey 02 / live case pages can pass
 - **Last updated:** 2026-09-11
@@ -16,7 +16,7 @@ are in it — if they disagree, LANE.md wins for scope.
 | Inquiries | done — Staff can search inquiries (quick, advanced, and saved lists), log a new inquiry, and edit one; the quick-search fields and the how-heard/engineer suggestion lists are reconstructed and need confirming against the Access file. |
 | Case search and lists | done — Staff can find a case by number, title, attorney, client, or firm, run the checkbox search with AND/OR, browse the three case lists, and print an address label; cases with a missing attorney or client still show up. Flagged for human review. |
 | The case record | not started |
-| Case presets | not started |
+| Case presets | done — Staff can open the Work Status (two sort orders plus a print sheet), Waiting For (with funds received), Other experts, and Recent activity lists, each matching the legacy Access query. |
 | New case | not started |
 | Service authorizations on the case page | not started |
 | Convert an inquiry to a case | not started |

@@ -252,7 +252,7 @@ Test against the fixture, not the producing lane. Do not wait for it to exist.
     - Against a seeded set, Work Status returns exactly the legacy query's rows — "P9" and null priority excluded, null point man included under any filter — in each variant's order
     - Waiting For lists only the three waiting-for values with the correct funds total per case, 0 for a case with no funds
     - Recent activity includes a 34-day-old status change and excludes a 36-day-old one
-  status: not started
+  status: done
   parallel-group: b
 
 - task: New case — `/cases/new`, per legacy `frmCaseAdd`. Case number prefilled
