@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireSession } from "@/lib/auth/session";
 import { createServerClient } from "@/lib/db/client";
+import { safeReturnTo } from "@/lib/cases/create";
 import { saveContact } from "./actions";
 import { SPECS, eqi, fetchAll, formOptions, loadAttorneyWithFirm, loadContact, type Db, type Field, type Kind, type Row } from "./contacts";
 
@@ -53,11 +54,12 @@ function FieldInput({ f, row, options }: { f: Field; row: Row | null; options: O
       </select>
     );
   } else if (f.type === "active") {
+    // Picks from the values already stored (text, not boolean); an off-list current value stays selectable.
     control = (
-      <>
-        <input id={id} name={f.col} defaultValue={str} required list="active-values" className={input} />
-        <datalist id="active-values">{options.activeValues.map((v) => <option key={v} value={v} />)}</datalist>
-      </>
+      <select id={id} name={f.col} defaultValue={str} required className={input}>
+        <option value="" />
+        {listOptions(options.activeValues, value).map((o) => <option key={o} value={o}>{o}</option>)}
+      </select>
     );
   } else control = <input id={id} name={f.col} defaultValue={str} required={f.required} className={input} />;
   return (
@@ -81,6 +83,7 @@ export async function ContactEditPage({ kind, idParam, flash }: { kind: Kind; id
   if (id !== null && !loaded) notFound();
   const row = loaded?.atty ?? null;
   const firm = loaded?.firm ?? null;
+  const cancelTo = id === null ? safeReturnTo(flash.returnTo) : null;
 
   return (
     <main className="mx-auto max-w-3xl space-y-4 px-4 py-6">
@@ -97,8 +100,9 @@ export async function ContactEditPage({ kind, idParam, flash }: { kind: Kind; id
         {id === null && flash.returnTo && <input type="hidden" name="returnTo" value={flash.returnTo} />}
         {row && <input type="hidden" name="__orig" value={JSON.stringify(row)} />}
         {spec.fields.map((f) => <FieldInput key={f.col} f={f} row={row} options={options} />)}
-        <div className="sm:col-span-2">
+        <div className="flex items-center gap-4 sm:col-span-2">
           <button type="submit" className="rounded border border-slate-300 px-3 py-1 hover:bg-slate-100">Save</button>
+          {cancelTo && <Link href={cancelTo} className="text-sm text-slate-600 underline">Cancel</Link>}
         </div>
       </form>
     </main>
