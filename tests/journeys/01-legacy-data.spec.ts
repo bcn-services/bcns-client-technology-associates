@@ -9,8 +9,8 @@ test.describe('Legacy .bak loaded into Supabase → an existing case shows its f
     await expect(page).toHaveURL(new RegExp(`/cases/${CASE_ID}$`));
 
     await expect(page.getByRole('heading', { name: new RegExp(String(CASE_ID)) })).toBeVisible();
-    await expect(page.getByText(/bills/i)).toBeVisible();
-    await expect(page.getByText(/funds received/i)).toBeVisible();
-    await expect(page.getByText(/expenses/i)).toBeVisible();
+    await expect(page.getByRole('heading', { name: /bills/i })).toBeVisible();
+    await expect(page.getByRole('heading', { name: /funds received/i })).toBeVisible();
+    await expect(page.getByRole('heading', { name: /expenses/i })).toBeVisible();
   });
 });

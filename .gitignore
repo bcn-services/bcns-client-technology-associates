@@ -18,3 +18,6 @@ scripts/migrate/in/
 .claude/worktrees/
 .claude/dev-team/*-report.md
 !.claude/dev-team/team-memory.md
+
+# Supabase CLI local state (project ref, versions)
+supabase/.temp/
