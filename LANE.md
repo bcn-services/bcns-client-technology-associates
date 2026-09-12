@@ -292,7 +292,7 @@ Test against the fixture, not the producing lane. Do not wait for it to exist.
     - Seeded "awaiting approval", "Awaiting Approval", and "Modified" rows all appear in Unapproved; only the first two in Awaiting approval only
     - Recently approved orders by approval date; totals match a hand count per status
   caution: true
-  status: not started
+  status: done
 
 - task: Convert an inquiry to a case — on `/inquiries/[id]`, attorney and client
     pickers (labelled exactly "Case attorney" and "Case client", option values

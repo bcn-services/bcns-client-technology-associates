@@ -5,7 +5,7 @@ are in it — if they disagree, LANE.md wins for scope.
 
 **Current position**
 
-- **Status:** 6 of 9 items done; service authorizations in progress
+- **Status:** 7 of 9 items done; convert inquiry in progress
 - **Next:** convert inquiry, app-shell wiring
 - **Blockers:** hosted Supabase is missing migration 0007 (case search view) — needs `supabase db push` by Nate before case search and lists work on hosted (fixture case 90001 is seeded)
 - **Last updated:** 2026-09-11
@@ -18,6 +18,6 @@ are in it — if they disagree, LANE.md wins for scope.
 | The case record | done — Staff can open a case, unlock it, edit and save it (only changed fields are written, and a stale form can't undo someone else's edit), see the Unpaid Bill / Unapproved SA / fee-schedule badges, step to the previous or next case, and print a rolodex card. Flagged for human review. |
 | Case presets | done — Staff can open the Work Status (two sort orders plus a print sheet), Waiting For (with funds received), Other experts, and Recent activity lists, each matching the legacy Access query. |
 | New case | done — Staff can open a new case form prefilled with the next case number, TBD title, today's date and Open status, add an attorney or client without losing their place, and are told "Case number already exists" if someone else took the number first. |
-| Service authorizations on the case page | not started |
+| Service authorizations on the case page | done — Staff can add and edit service authorizations on a case (approving one stamps today's date unless a date is already set), and open the Unapproved, Awaiting approval, Recently approved and Totals lists. Flagged for human review. |
 | Convert an inquiry to a case | not started |
 | Wire cases into the app shell | not started |
