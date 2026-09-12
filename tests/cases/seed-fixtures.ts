@@ -52,6 +52,30 @@ export async function seedFixtures(db: Admin): Promise<{ upserted: number; inser
   return { upserted, inserted, skipped };
 }
 
+/**
+ * The priority tests need two tblcasepriority values; the fixtures seed one. Adds an invented
+ * one only when fewer than two exist and returns its cleanup (a no-op when nothing was added).
+ * Run the cleanup after restoring any case that points at it (tblcase FK).
+ */
+export async function ensureSecondPriority(db: Admin): Promise<() => Promise<void>> {
+  const loose = db as unknown as { from(t: string): any };
+  const temp = "Test Priority (temp)";
+  // Self-heal a crashed earlier run: point 90001 back at High, then drop any leftover temp priority.
+  const reset = await loose.from("tblcase").update({ casestatpriority: "High" }).eq("caseid", 90001).eq("casestatpriority", temp);
+  if (reset.error) throw new Error(`tblcase reset: ${reset.error.message}`);
+  const stale = await loose.from("tblcasepriority").delete().eq("priority", temp);
+  if (stale.error) throw new Error(`tblcasepriority leftover: ${stale.error.message}`);
+  const { data, error } = await loose.from("tblcasepriority").select("priority");
+  if (error) throw new Error(`tblcasepriority: ${error.message}`);
+  if (data.length >= 2) return async () => {};
+  const ins = await loose.from("tblcasepriority").upsert({ priority: temp }, { onConflict: "priority" });
+  if (ins.error) throw new Error(`tblcasepriority: ${ins.error.message}`);
+  return async () => {
+    const del = await loose.from("tblcasepriority").delete().eq("priority", temp);
+    if (del.error) throw new Error(`tblcasepriority cleanup: ${del.error.message}`);
+  };
+}
+
 /** Needs DATABASE_URL (PostgREST can't setval). Returns false when it isn't set. */
 export function syncSequences(databaseUrl = process.env.DATABASE_URL): boolean {
   if (!databaseUrl) return false;
