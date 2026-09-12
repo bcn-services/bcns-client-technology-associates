@@ -100,6 +100,41 @@ test("stale editor through the action: notes-only save must not revert an out-of
   assert.equal((await readCase()).casesubject, "QA out-of-band", "stale form reverted casesubject");
 });
 
+test("tampered POST through the action: forged __orig, non-editable and unknown keys, missing __orig write nothing", { skip }, async () => {
+  await page.goto(`/cases/${ID}`);
+  const before = await readCase();
+  await unlockAndSave(() => page.evaluate(() => {
+    const form = document.querySelector("#f-casenotes").form;
+    const add = (n, v) => { const i = document.createElement("input"); i.type = "hidden"; i.name = n; i.value = v; form.append(i); };
+    for (const [n, v] of [["numunpaidbills", "99"], ["numunpaidbills__orig", "0"], ["numunapprovedsa", "99"], ["numunapprovedsa__orig", "0"],
+      ["casestatlastupdated", "2000-01-01T00:00:00Z"], ["casestatlastupdated__orig", "x"], ["casenum", "999"], ["casenum__orig", "1"],
+      ["caseid", "1"], ["bogus_col", "1"], ["bogus_col__orig", "0"]]) add(n, v);
+    form.querySelector('[name="casesubject__orig"]').remove();
+    document.querySelector("#f-casesubject").value = "QA tamper no orig";
+  }));
+  assert.match(page.url(), /saved=0/);
+  assert.deepEqual(await readCase(), before);
+});
+
+test("unchanged save through the action: CRLF / leading-newline textarea values write nothing", { skip }, async () => {
+  ok(await db.from("tblcase").update({ casenotes: "\nlead\r\nline  ", casecaption: "x\ny\n", casestatdescription: "a\r\n\r\nb" }).eq("caseid", ID));
+  await page.goto(`/cases/${ID}`);
+  const before = await readCase();
+  await unlockAndSave(async () => {});
+  assert.match(page.url(), /saved=0/);
+  assert.deepEqual(await readCase(), before);
+});
+
+test("unchanged save through the action: legacy newline in a single-line field writes nothing", { skip }, async () => {
+  ok(await db.from("tblcase").update({ casesubject: "line1\nline2", otherexperts: "  padded  " }).eq("caseid", ID));
+  await page.goto(`/cases/${ID}`);
+  const before = await readCase();
+  await unlockAndSave(async () => {});
+  const after = await readCase();
+  assert.deepEqual({ url: /saved=0/.test(page.url()), casesubject: after.casesubject, otherexperts: after.otherexperts },
+    { url: true, casesubject: before.casesubject, otherexperts: before.otherexperts });
+});
+
 test("non-numeric id 404s; array searchParams do not 500", { skip }, async () => {
   assert.equal((await page.goto("/cases/abc")).status(), 404);
   assert.equal((await page.goto(`/cases/${ID}?saved=1&saved=0&error=x&error=y&t=1&t=2`)).status(), 200);

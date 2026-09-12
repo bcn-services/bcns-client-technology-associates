@@ -6,7 +6,7 @@ import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { loadEnvLocal } from "../app-shell/seed-e2e.ts";
 import { createServerClient } from "../../lib/db/client.ts";
-import { FIELDS, BADGE, formValue, saveCase, badges } from "../../lib/cases/record.ts";
+import { FIELDS, BADGE, formValue, origValue, saveCase, badges } from "../../lib/cases/record.ts";
 
 loadEnvLocal();
 const skip = process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY ? false : "no Supabase config in .env.local";
@@ -18,6 +18,7 @@ const readCase = async () => ok(await db.from("tblcase").select("*").eq("caseid"
 function formFor(row, overrides = {}) {
   const f = new FormData();
   for (const fl of FIELDS) {
+    f.set(`${fl.col}__orig`, origValue(fl, row)); // without __orig nothing is written, so the checks below would pass vacuously
     if (fl.kind === "bool") { f.set(`${fl.col}__present`, "1"); if (row[fl.col] === true) f.set(fl.col, "on"); continue; }
     f.set(fl.col, formValue(fl, row));
   }
