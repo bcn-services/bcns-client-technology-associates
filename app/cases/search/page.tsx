@@ -29,18 +29,17 @@ export default async function AdvancedSearchPage({ searchParams }: { searchParam
       <form method="get" className="space-y-3">
         <input type="hidden" name="go" value="1" />
         <fieldset className="grid gap-2 sm:grid-cols-2">
-          <legend className="mb-1 text-sm text-slate-600">Tick each field to search on</legend>
+          <legend className="mb-1 text-sm text-slate-600">Fill in the fields to search on; blank fields are ignored</legend>
           {ADVANCED_FIELDS.map((f) => (
             <div key={f.key} className="flex items-center gap-2">
-              <input type="checkbox" id={`use_${f.key}`} name={`use_${f.key}`} value="1" defaultChecked={!!searchParams[`use_${f.key}`]} />
-              <label htmlFor={`use_${f.key}`} className="w-32 shrink-0 text-sm">{f.label}</label>
+              <label htmlFor={`adv-${f.key}`} className="w-32 shrink-0 text-sm">{f.label}</label>
               {f.kind === "exact" ? (
-                <select name={f.key} aria-label={f.label} defaultValue={searchParams[f.key] ?? ""} className={input}>
+                <select name={f.key} id={`adv-${f.key}`} defaultValue={searchParams[f.key] ?? ""} className={input}>
                   <option value="" />
                   {(statuses ?? []).map((s) => <option key={s.casestatus} value={s.casestatus}>{s.casestatus}</option>)}
                 </select>
               ) : (
-                <input name={f.key} aria-label={f.label} type={f.kind === "date" ? "date" : "text"}
+                <input name={f.key} id={`adv-${f.key}`} type={f.kind === "date" ? "date" : "text"}
                   inputMode={f.kind === "number" ? "numeric" : undefined} defaultValue={searchParams[f.key] ?? ""} className={input} />
               )}
             </div>

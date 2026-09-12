@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireSession } from "@/lib/auth/session";
 import { createServerClient } from "@/lib/db/client";
@@ -27,6 +28,7 @@ export default async function CaseLabelPage({ params }: { params: { id: string }
     <main className="mx-auto max-w-6xl space-y-4 px-4 py-6">
       {/* Print only the label: hide the app header and this page's chrome. */}
       <style>{`@media print { header, .no-print { display: none !important; } main { padding: 0 !important; } }`}</style>
+      <p className="no-print text-sm"><Link href={`/cases/${kase.caseid}`} className="text-slate-600 underline">Back to case {kase.caseid}</Link></p>
       <p className="no-print text-sm text-slate-600">
         Label for case {kase.caseid} — {kase.casetitle}. Use your browser&apos;s Print (Ctrl/Cmd+P).
       </p>
