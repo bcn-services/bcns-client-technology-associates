@@ -22,7 +22,10 @@ export default async function CasesPage({ searchParams }: { searchParams: Params
     <main className="mx-auto max-w-6xl space-y-4 px-4 py-6">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h1 className="text-xl font-semibold">Cases</h1>
-        <Link href="/cases/search" className="text-sm text-blue-700 hover:underline">Advanced search</Link>
+        <span className="flex gap-3">
+          <Link href="/cases/lists" className="text-sm text-blue-700 hover:underline">Case lists</Link>
+          <Link href="/cases/search" className="text-sm text-blue-700 hover:underline">Advanced search</Link>
+        </span>
       </div>
       <form method="get" className="flex flex-wrap gap-2" role="search">
         <label htmlFor="q" className="sr-only">Search cases</label>
