@@ -1,5 +1,28 @@
 # lane/cases → integration
 
+## Summary
+The cases lane: firms/attorneys/clients, inquiries, case search and lists, the case record, case presets, new case, service authorizations, convert-inquiry-to-case, and app-shell wiring. Three items (case search, case record, service authorizations) carried `caution: true` and ran the full engineer + QA + review team; they are flagged for human review. The rest ran engineer-only with every guard mutation-checked by the orchestrator.
+
+## Before merging
+- [ ] **`supabase db push`** (Nate, passkey account): hosted is missing migration 0007 (`case_search`), so `/cases` search and lists show an alert on hosted.
+- [ ] **package.json `test` script:** add `tests/cases/*.test.mjs` (run with `--test-concurrency=1`); tests/cases is not in `pnpm test` yet.
+
+## Needs amendment (protected / outside lane paths)
+- `tests/journeys/01-legacy-data.spec.ts`: `getByText(/bills/i)` now matches both the nav link and the case record's required "Bills" heading. Scope it to `main` or use `getByRole('heading')`.
+- `lib/auth/sections.ts`: no menu entry for `/cases/service-auths` (reachable from `/cases/lists` and the case page panel).
+- `tests/app-shell/shell.live.test.mjs:89`: "signed-in GET /cases → 404" is stale now that /cases exists; it fails whenever a server is up on 3100.
+- Foundation (optional): add `caseid::text` to `case_search` to allow substring case-number search; a DB-level unique on `tblcase.caseinquiry` (or an RPC) to close the convert race.
+
+## Decisions for the human
+- **Unapproved SA badge vs lists:** the case record badge (item 4) flags any SA whose status lacks "approved", so Declined/Replaced count; the Unapproved list (item 7) shows only Awaiting Approval/Modified. Pick one rule.
+- **"Open" case status:** hosted `tblcasestatus` had only "Active"; the test seeder added an invented "Open". Confirm the real legacy status list.
+- **Fixture bill notice:** fixture 90001's bill notice is "First", not on the spec's list, so it shows no Unpaid Bill badge ("1st" does).
+- **Convert adds a "Case branch" picker:** `tblcase.tabranch` is NOT NULL and inquiries may have no branch.
+- **Inquiry value lists** come from the Access form: how-heard has 15 values (spec said 14); client role stores "Other (see notes)"; a migrated value in different casing is rewritten to the list's casing on next save.
+- **Unverified labels:** Access form layouts couldn't be read (mdbtools/classifier), so contacts and case-record field labels are unverified against legacy.
+- **Known ceilings (`ponytail:`):** same-field concurrent edits are last-write-wins; contacts presets and service-auth lists join whole tables in JS; "Recently approved" has no row limit; a crash between convert's two writes can leave an unlinked case.
+- **Hosted leftovers:** "Contacts Live <tag>" rows, an invented "NY" in tblstates, an invented "Open" in tblcasestatus, journey 02's inquiries/cases (e.g. 90002, 90003, inquiry 29).
+
 ## Team-memory entries (append in merge order)
 
 ## 2026-09-11 18:37 — dev-team — lane/cases item 1: firms, attorneys, clients
