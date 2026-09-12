@@ -65,13 +65,13 @@ export type AdvancedKey = (typeof ADVANCED_FIELDS)[number]["key"];
 export const NO_VALUES = "No search values selected";
 
 /**
- * params: `use_<key>` present = checkbox ticked, `<key>` = value, `mode` = "or" | anything else AND.
- * Only ticked fields with a non-blank value join the predicate.
+ * params: `<key>` = value, `mode` = "or" | anything else AND. Every field with a non-blank value
+ * joins the predicate (legacy's tick-to-use checkboxes dropped: a filled box that was silently ignored
+ * read as "no results").
  */
 export function advancedSpec(params: Record<string, string | undefined>): { spec: Spec } | { message: string } {
   const preds: Pred[] = [];
   for (const f of ADVANCED_FIELDS) {
-    if (!params[`use_${f.key}`]) continue;
     const v = (params[f.key] ?? "").trim();
     if (!v) continue;
     if (f.kind === "number") {

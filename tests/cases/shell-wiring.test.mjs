@@ -19,6 +19,9 @@ const hasQ = (body) => /<input\b[^>]*\bname="q"/.test(body ?? "");
 test("SECTIONS includes the Inquiries entry", () => {
   assert.ok(SECTIONS.some((s) => s.href === "/inquiries" && s.label === "Inquiries"), JSON.stringify(SECTIONS));
 });
+test("SECTIONS includes Firms, Attorneys, Clients", () => {
+  for (const h of ["/firms", "/attorneys", "/clients"]) assert.ok(SECTIONS.some((s) => s.href === h), `missing ${h}`);
+});
 test("SECTIONS keeps all nine original hrefs", () => {
   const hrefs = SECTIONS.map((s) => s.href);
   for (const h of ORIGINAL) assert.ok(hrefs.includes(h), `missing ${h}`);

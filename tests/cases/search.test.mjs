@@ -51,10 +51,15 @@ test("orElement double-quotes values so , ( ) . \" cannot extend the filter", ()
     'casetitle.ilike."%a,b).or(x\\"y\\\\%"');
 });
 
-test("advancedSpec: empty or blank selections say No search values selected; unticked values ignored", () => {
+test("advancedSpec: empty or blank fields say No search values selected", () => {
   assert.deepEqual(advancedSpec({}), { message: NO_VALUES });
-  assert.deepEqual(advancedSpec({ use_title: "1", title: "  " }), { message: NO_VALUES });
-  assert.deepEqual(advancedSpec({ title: "Sample" }), { message: NO_VALUES });
+  assert.deepEqual(advancedSpec({ title: "  ", client: "" }), { message: NO_VALUES });
+});
+
+test("advancedSpec: a filled field counts with no checkbox param (hand-test: Sample + Sam returned nothing)", () => {
+  const { spec } = advancedSpec({ title: "Sample", client: "Sam", mode: "or" });
+  assert.equal(spec.mode, "or");
+  assert.deepEqual(spec.preds.map((p) => [p.column, p.value]), [["casetitle", "%Sample%"], ["clientname", "%Sam%"]]);
 });
 
 test("advancedSpec: kinds map to exact / substring / after-date predicates", () => {

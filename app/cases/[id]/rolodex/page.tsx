@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireSession } from "@/lib/auth/session";
 import { createServerClient } from "@/lib/db/client";
@@ -16,6 +17,7 @@ export default async function CaseRolodexPage({ params }: { params: { id: string
   return (
     <main className="mx-auto max-w-6xl space-y-4 px-4 py-6">
       <style>{`@media print { header, .no-print { display: none !important; } main { padding: 0 !important; } }`}</style>
+      <p className="no-print text-sm"><Link href={`/cases/${String(rec.kase.caseid)}`} className="text-slate-600 underline">Back to case {String(rec.kase.caseid)}</Link></p>
       <p className="no-print text-sm text-slate-600">
         Rolodex card for case {String(rec.kase.caseid)}. Use your browser&apos;s Print (Ctrl/Cmd+P).
       </p>
