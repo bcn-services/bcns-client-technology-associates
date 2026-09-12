@@ -13,7 +13,7 @@ const rd = createRequire(import.meta.url)("react-dom");
 rd.useFormStatus ??= () => ({ pending: false });
 rd.useFormState ??= (_action, initial) => [initial, () => {}];
 
-const NOW = new Date(2026, 8, 11, 23, 30); // local 2026-09-11
+const NOW = new Date("2026-09-12T03:30:00Z"); // 11:30pm EDT 2026-09-11
 
 /**
  * Fake DB: a tiny in-memory tblinquiry / tblcase / tblcasestatus behind the PostgREST builder shape.

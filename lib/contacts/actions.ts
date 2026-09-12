@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { requireSession } from "@/lib/auth/session";
 import { createServerClient } from "@/lib/db/client";
 import { returnWith, safeReturnTo } from "@/lib/cases/create";
-import { SPECS, ContactInputError, createContact, parseForm, updateContact, type Db, type Kind } from "./contacts";
+import { SPECS, ContactInputError, createContact, parseForm, parseOrigRow, updateContact, type Db, type Kind } from "./contacts";
 
 /** Create (id null) or edit one firm / attorney / client. Admin and staff alike. No delete action exists. */
 export async function saveContact(kind: Kind, id: number | null, formData: FormData): Promise<void> {
@@ -19,7 +19,7 @@ export async function saveContact(kind: Kind, id: number | null, formData: FormD
   try {
     const db = createServerClient() as unknown as Db;
     const payload = parseForm(kind, formData);
-    const saved = id === null ? await createContact(db, kind, payload) : (await updateContact(db, kind, id, payload), id);
+    const saved = id === null ? await createContact(db, kind, payload) : (await updateContact(db, kind, id, payload, parseOrigRow(formData.get("__orig"))), id);
     target = returnTo ? returnWith(returnTo, kind, saved) : `${spec.path}/${saved}?saved=${id === null ? "created" : "saved"}`;
   } catch (e) {
     if (!(e instanceof ContactInputError)) throw e;

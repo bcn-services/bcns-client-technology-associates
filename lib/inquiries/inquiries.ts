@@ -97,13 +97,24 @@ export async function createInquiry(db: Db, fd: FormData): Promise<Result<{ id: 
   return { ok: true, id: data.id };
 }
 
+const origRow = (v: FormDataEntryValue | null): InquiryRow | null => {
+  if (typeof v !== "string") return null;
+  try {
+    const o = JSON.parse(v);
+    return o && typeof o === "object" && !Array.isArray(o) ? o : null;
+  } catch {
+    return null;
+  }
+};
+
 export async function updateInquiry(db: Db, id: number, fd: FormData): Promise<Result<{ changed: string[] }>> {
   const p = parseInquiryForm(fd);
   if (!p.ok) return p;
   const { data: row, error: readError } = await db.from("tblinquiry").select("*").eq("id", id).maybeSingle();
   if (readError) return { ok: false, error: `Could not load inquiry: ${readError.message}` };
   if (!row) return { ok: false, error: "Inquiry not found." };
-  const diff = changedColumns(p.values, row);
+  // Diff against the row the form loaded (`__orig`), so a stale tab can't revert another tab's edits; else the live row.
+  const diff = changedColumns(p.values, origRow(fd.get("__orig")) ?? row);
   const changed = Object.keys(diff);
   if (changed.length === 0) return { ok: true, changed };
   const { error } = await db.from("tblinquiry").update(diff).eq("id", id);
@@ -236,6 +247,6 @@ export async function loadInquiryOptions(db: Db): Promise<InquiryOptions> {
   };
 }
 
-/** Today as YYYY-MM-DD in the server's local zone. */
+/** Today as YYYY-MM-DD in the firm's zone (Eastern), not the server's — a UTC server is a day ahead after 8pm ET. */
 export const todayIso = (now: Date = new Date()) =>
-  `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+  new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York" }).format(now);
