@@ -23,6 +23,7 @@ export default async function CasesPage({ searchParams }: { searchParams: Params
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h1 className="text-xl font-semibold">Cases</h1>
         <span className="flex gap-3">
+          <Link href="/cases/new" className="text-sm text-blue-700 hover:underline">New case</Link>
           <Link href="/cases/lists" className="text-sm text-blue-700 hover:underline">Case lists</Link>
           <Link href="/cases/search" className="text-sm text-blue-700 hover:underline">Advanced search</Link>
         </span>
