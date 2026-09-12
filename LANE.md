@@ -324,6 +324,6 @@ Test against the fixture, not the producing lane. Do not wait for it to exist.
     - Typing "90001" in the home case box lands on `/cases?q=90001` listing case 90001; the inquiry box lands on filtered inquiry results
     - Existing app-shell tests remain passing
   after: app-shell
-  status: not started
+  status: done
 
 > **⚠️ AUTONOMOUS RUN — STOP HERE**

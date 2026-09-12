@@ -5,8 +5,8 @@ are in it — if they disagree, LANE.md wins for scope.
 
 **Current position**
 
-- **Status:** 8 of 9 items done; app-shell wiring in progress
-- **Next:** wire cases into the app shell, then lane acceptance and PR to integration
+- **Status:** 9 of 9 items done; lane acceptance and PR in progress
+- **Next:** lane acceptance review, then PR to integration
 - **Blockers:** hosted Supabase is missing migration 0007 (case search view) — needs `supabase db push` by Nate before case search and lists work on hosted (fixture case 90001 is seeded)
 - **Last updated:** 2026-09-11
 
@@ -20,4 +20,4 @@ are in it — if they disagree, LANE.md wins for scope.
 | New case | done — Staff can open a new case form prefilled with the next case number, TBD title, today's date and Open status, add an attorney or client without losing their place, and are told "Case number already exists" if someone else took the number first. |
 | Service authorizations on the case page | done — Staff can add and edit service authorizations on a case (approving one stamps today's date unless a date is already set), and open the Unapproved, Awaiting approval, Recently approved and Totals lists. Flagged for human review. |
 | Convert an inquiry to a case | done — Staff can turn an inquiry into a case by picking the case attorney, client and branch; the new case links back to the inquiry, and an inquiry that already has a case links to it instead of offering a second convert. Journey 02 passes. |
-| Wire cases into the app shell | not started |
+| Wire cases into the app shell | done — Inquiries now sits next to Cases in the menu, and the home page has "Search cases" and "Search inquiries" boxes. One old app-shell test still expects /cases to be a missing page and needs a one-line fix outside this lane. |
