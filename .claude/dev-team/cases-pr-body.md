@@ -10,8 +10,16 @@ The cases lane: firms/attorneys/clients, inquiries, case search and lists, the c
 ## Needs amendment (protected / outside lane paths)
 - `tests/journeys/01-legacy-data.spec.ts`: `getByText(/bills/i)` now matches both the nav link and the case record's required "Bills" heading. Scope it to `main` or use `getByRole('heading')`.
 - `lib/auth/sections.ts`: no menu entry for `/cases/service-auths` (reachable from `/cases/lists` and the case page panel).
-- `tests/app-shell/shell.live.test.mjs:89`: "signed-in GET /cases → 404" is stale now that /cases exists; it fails whenever a server is up on 3100.
+- `tests/app-shell/shell.live.test.mjs:89`: "signed-in GET /cases → 404" is stale now that /cases exists; it fails whenever a server is up on 3100. Fix: replace `/cases` with `/time` in the title and on lines 91 and 99. Optionally add `"/inquiries"` to the SECTIONS list at line 19.
 - Foundation (optional): add `caseid::text` to `case_search` to allow substring case-number search; a DB-level unique on `tblcase.caseinquiry` (or an RPC) to close the convert race.
+
+## Lane acceptance (dt-review, opus): ACCEPT, no blockers
+- **Journey 02 passes.** Journey 01 fails on the known ambiguous `getByText(/bills/i)` at `tests/journeys/01-legacy-data.spec.ts:12` (protected; the plan expects 01 red until billing lands).
+- **Case 90001** opens on hosted, and all 21 fields match its `tblcase` row. Search finds it by number, title and client name on local PG.
+- **Save paths persist** (39/39 tests). Every server action checks the session.
+- **No user-reachable delete.** The only `.delete(` is `lib/inquiries/convert.ts:78`, which undoes the case convert just created if linking the inquiry fails. Decide whether that's acceptable under "no delete".
+- **Major, not blocking:** `updateContact` (`lib/contacts/contacts.ts:109`) and `updateInquiry` (`lib/inquiries/inquiries.ts:100`) diff the form against the current row, not the loaded snapshot. A stale form can silently overwrite a colleague's newer edit. Fix by copying the case-record and service-auth approach, which keeps a snapshot of the values the form loaded and compares against it.
+- Full report: `.claude/dev-team/lane-acceptance-report.md` (gitignored; local to the lane checkout).
 
 ## Decisions for the human
 - **Unapproved SA badge vs lists:** the case record badge (item 4) flags any SA whose status lacks "approved", so Declined/Replaced count; the Unapproved list (item 7) shows only Awaiting Approval/Modified. Pick one rule.
