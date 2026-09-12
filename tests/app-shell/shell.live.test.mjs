@@ -86,9 +86,9 @@ test("admin: same header plus a link to /users", { skip }, async () => {
   await ctx.close();
 });
 
-test("signed-in GET /cases → 404 rendered inside the shell with a usable nav", { skip }, async () => {
+test("signed-in GET /bills (unbuilt) → 404 rendered inside the shell with a usable nav", { skip }, async () => {
   const { ctx, page } = await signIn(STAFF_EMAIL, STAFF_PASSWORD);
-  const res = await ctx.request.get(`${BASE}/cases`);
+  const res = await ctx.request.get(`${BASE}/bills`);
   assert.equal(res.status(), 404);
   const html = await res.text();
   assertShell(html, STAFF_EMAIL, "staff");
@@ -96,7 +96,7 @@ test("signed-in GET /cases → 404 rendered inside the shell with a usable nav",
   assert.ok(!html.includes("This page could not be found"), "Next default 404 rendered");
 
   // Nav is usable: clicking a section link from the 404 navigates there.
-  await page.goto(`${BASE}/cases`);
+  await page.goto(`${BASE}/bills`);
   await page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Time" }).click();
   await page.waitForURL(`${BASE}/time`);
   assert.ok(await page.getByText("Not built yet").isVisible());
