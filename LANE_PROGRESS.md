@@ -13,7 +13,7 @@ are in it — if they disagree, LANE.md wins for scope.
 | Item | Status |
 |------|--------|
 | Firms, attorneys, and clients | done — Staff can list, add, and edit firms, attorneys, and clients, and open the five legacy contact lists; nothing can be deleted. |
-| Inquiries | done — Staff can search inquiries (quick, advanced, and saved lists), log a new inquiry, and edit one; the quick-search fields and the how-heard/engineer suggestion lists are reconstructed and need confirming against the Access file. |
+| Inquiries | done — Staff can search inquiries (quick, advanced, and saved lists), log a new inquiry, and edit one; search fields and value lists match the Access file (how-heard has 15 values, not the 14 the plan says). |
 | Case search and lists | done — Staff can find a case by number, title, attorney, client, or firm, run the checkbox search with AND/OR, browse the three case lists, and print an address label; cases with a missing attorney or client still show up. Flagged for human review. |
 | The case record | not started |
 | Case presets | done — Staff can open the Work Status (two sort orders plus a print sheet), Waiting For (with funds received), Other experts, and Recent activity lists, each matching the legacy Access query. |
