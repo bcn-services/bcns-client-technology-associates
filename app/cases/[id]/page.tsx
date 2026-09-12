@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { requireSession } from "@/lib/auth/session";
 import { createServerClient } from "@/lib/db/client";
 import {
-  EVENT_SUGGESTIONS, field, attorneyName, clientName, firmAddress, formValue, loadCaseOptions, loadCaseRecord,
+  EVENT_SUGGESTIONS, field, attorneyName, clientName, firmAddress, formValue, origValue, loadCaseOptions, loadCaseRecord,
   type CaseOptions, type Db, type Field, type Option, type Row,
 } from "@/lib/cases/record";
 import { saveCaseAction } from "./actions";
@@ -25,7 +25,17 @@ function idOptions(list: Option[], cur: string): Option[] {
   return cur && !list.some((o) => o.value === cur) ? [{ value: cur, label: `(missing #${cur})` }, ...list] : list;
 }
 
-function Control({ f, row, o, labelledBy }: { f: Field; row: Row; o: CaseOptions; labelledBy?: string }) {
+/** The input plus a hidden `<col>__orig` holding the value it was rendered with; the save diffs against that. */
+function Control(p: { f: Field; row: Row; o: CaseOptions; labelledBy?: string }) {
+  return (
+    <>
+      <Input {...p} />
+      <input type="hidden" name={`${p.f.col}__orig`} defaultValue={origValue(p.f, p.row)} />
+    </>
+  );
+}
+
+function Input({ f, row, o, labelledBy }: { f: Field; row: Row; o: CaseOptions; labelledBy?: string }) {
   const id = `f-${f.col}`;
   const v = formValue(f, row);
   const common = { id, name: f.col, className: input };

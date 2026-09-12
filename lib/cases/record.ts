@@ -109,12 +109,31 @@ function norm(kind: Kind, v: unknown): string | number | boolean | null {
   return crlf(String(v));
 }
 
-/** Only submitted columns whose normalized value differs from the current row. */
-export function diffCase(current: Row, submitted: Row): Row {
+/**
+ * Only allow-listed submitted columns whose original is known and whose normalized value
+ * differs from it. A column with no original is never written (fail closed).
+ */
+export function diffCase(original: Row, submitted: Row): Row {
   const out: Row = {};
   for (const [col, v] of Object.entries(submitted)) {
     const f = FIELD.get(col);
-    if (f && norm(f.kind, current[col]) !== norm(f.kind, v)) out[col] = v;
+    if (f && col in original && norm(f.kind, original[col]) !== norm(f.kind, v)) out[col] = v;
+  }
+  return out;
+}
+
+/** The value each field had when the form was rendered, from its `<col>__orig` hidden input. */
+export function origValue(f: Field, row: Row): string {
+  return f.kind === "bool" ? String(row[f.col] === true) : formValue(f, row);
+}
+
+/** `<col>__orig` inputs → comparable originals, for allow-listed FIELDS only. */
+export function parseOrig(form: FormData): Row {
+  const out: Row = {};
+  for (const f of FIELDS) {
+    const raw = form.get(`${f.col}__orig`);
+    if (typeof raw !== "string") continue;
+    out[f.col] = f.kind === "bool" ? raw === "true" : raw;
   }
   return out;
 }
@@ -125,15 +144,18 @@ export function stamp(changes: Row, now: Date): Row {
 }
 
 /**
- * The save the server action runs: re-read the row, diff, write only changed columns
- * (plus the stamp). An unchanged form issues no update at all. Returns what was written.
+ * The save the server action runs: diff the submission against the values the form was
+ * rendered with (not the row as it is now, so a stale form never reverts another user's
+ * change), write only changed columns (plus the stamp). An unchanged form issues no update.
+ * Returns what was written.
  */
 export async function saveCase(db: Db, id: number, form: FormData, now: Date): Promise<Row> {
   const submitted = parseCaseForm(form);
-  const { data: current, error } = await db.from("tblcase").select(FIELDS.map((f) => f.col).join(", ")).eq("caseid", id).maybeSingle();
+  const { data: current, error } = await db.from("tblcase").select("caseid").eq("caseid", id).maybeSingle();
   if (error) throw new Error(`tblcase read: ${error.message}`);
   if (!current) throw new CaseInputError(`Case ${id} not found`);
-  const changes = diffCase(current, submitted);
+  // ponytail: last-writer-wins per column when two users change the same field — add a version check if that bites.
+  const changes = diffCase(parseOrig(form), submitted);
   if (Object.keys(changes).length === 0) return changes;
   const write = stamp(changes, now);
   const { error: upErr } = await db.from("tblcase").update(write).eq("caseid", id);

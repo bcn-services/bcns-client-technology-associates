@@ -8,13 +8,14 @@ import assert from "node:assert/strict";
 import { chromium } from "@playwright/test";
 import { loadEnvLocal } from "../app-shell/seed-e2e.ts";
 import { createServerClient } from "../../lib/db/client.ts";
+import { ensureSecondPriority } from "./seed-fixtures.ts";
 
 loadEnvLocal();
 const BASE = process.env.BASE_URL ?? "http://localhost:3104";
 const ID = 90001;
 const up = await fetch(`${BASE}/login`).then((r) => r.ok, () => false);
 const skip = up && process.env.SUPABASE_SERVICE_ROLE_KEY ? false : "dev server or Supabase unavailable";
-let db, snapshot, browser, page;
+let db, snapshot, browser, page, dropTempPriority;
 const ok = ({ data, error }) => { if (error) throw new Error(error.message); return data; };
 const readCase = async () => ok(await db.from("tblcase").select("*").eq("caseid", ID).single());
 
@@ -22,6 +23,7 @@ before(async () => {
   if (skip) return;
   db = createServerClient();
   snapshot = await readCase();
+  dropTempPriority = await ensureSecondPriority(db); // the priority test needs a second option
   browser = await chromium.launch();
   page = await browser.newPage({ baseURL: BASE });
   page.on("dialog", (d) => d.dismiss());
@@ -36,6 +38,7 @@ before(async () => {
 after(async () => {
   await browser?.close();
   if (snapshot) { const { caseid, ...rest } = snapshot; ok(await db.from("tblcase").update(rest).eq("caseid", caseid)); }
+  await dropTempPriority?.(); // after the restore: 90001 may point at it
 });
 
 const unlockAndSave = async (fill) => {

@@ -2,7 +2,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-  FIELDS, STAMP_COLS, BADGE, parseCaseForm, diffCase, formValue, saveCase, badges, loadCaseRecord,
+  FIELDS, STAMP_COLS, BADGE, parseCaseForm, diffCase, formValue, origValue, saveCase, badges, loadCaseRecord,
   attorneyName, rolodexName, clientName, firmAddress, rolodexLines, loadCaseOptions, CaseInputError,
 } from "../../lib/cases/record.ts";
 
@@ -54,6 +54,7 @@ const MIGRATED = {
 function formFor(row, overrides = {}) {
   const f = new FormData();
   for (const fl of FIELDS) {
+    f.set(`${fl.col}__orig`, origValue(fl, row));
     if (fl.kind === "bool") { f.set(`${fl.col}__present`, "1"); if (row[fl.col] === true) f.set(fl.col, "on"); continue; }
     // Browsers submit textarea newlines as CRLF.
     const v = formValue(fl, row);
@@ -127,7 +128,7 @@ test("diffCase normalizes: '' = null, '2' = 2, CRLF = LF, null bool = false, tim
 });
 
 test("saving a missing case is a CaseInputError, not a crash", async () => {
-  await assert.rejects(saveCase(fakeDb({ tblcase: [] }), 5, formFor(MIGRATED), NOW), CaseInputError);
+  await assert.rejects(saveCase(fakeDb({ tblcase: [] }), 5, formFor(MIGRATED, { casenotes: "x" }), NOW), CaseInputError);
 });
 
 test("badges: live notices/statuses, case-insensitive; fee-schedule warning only when 0 and case # > 1850", () => {
@@ -183,4 +184,19 @@ test("loadCaseOptions: lookups live, inquiries newest first", async () => {
   assert.deepEqual(o.status, ["Active"]);
   assert.deepEqual(o.inquiry.map((i) => i.value), ["3", "2", "1"]);
   assert.deepEqual(o.pointman, ["IUO", "KJS", "RMD", "JH", "Oren", "RC", "LLB"]);
+});
+
+test("stale editor: a column changed by someone else since render is not reverted", async () => {
+  const db = dbWith({ ...MIGRATED, casesubject: "changed by B" }); // row now differs from what A rendered
+  const w = await saveCase(db, 1900, formFor(MIGRATED, { casenotes: "A's note" }), NOW);
+  assert.deepEqual(w, { casenotes: "A's note" });
+});
+
+test("__orig is only trusted for allow-listed fields; a field with no __orig is never written", async () => {
+  const f = formFor(MIGRATED, { numunpaidbills: "9", numunpaidbills__orig: "0", casestatlastupdated__orig: "x", casestatlastupdated: "2000-01-01" });
+  f.delete("casesubject__orig");
+  f.set("casesubject", "no orig");
+  const db = dbWith();
+  assert.deepEqual(await saveCase(db, 1900, f, NOW), {});
+  assert.equal(db.updates.length, 0);
 });

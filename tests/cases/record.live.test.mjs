@@ -9,13 +9,13 @@ import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { loadEnvLocal } from "../app-shell/seed-e2e.ts";
 import { createServerClient } from "../../lib/db/client.ts";
-import { seedFixtures } from "./seed-fixtures.ts";
-import { FIELDS, BADGE, formValue, saveCase, loadCaseRecord, attorneyName, clientName } from "../../lib/cases/record.ts";
+import { seedFixtures, ensureSecondPriority } from "./seed-fixtures.ts";
+import { FIELDS, BADGE, formValue, origValue, saveCase, loadCaseRecord, attorneyName, clientName } from "../../lib/cases/record.ts";
 
 loadEnvLocal();
 const skip = process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY ? false : "no Supabase config in .env.local";
 const ID = 90001;
-let db, snapshot;
+let db, snapshot, dropTempPriority;
 const inserted = { tblbills: [], tblsrvauth: [] };
 const PK = { tblbills: "billid", tblsrvauth: "srvauthid" };
 
@@ -26,6 +26,7 @@ const readCase = async () => ok(await db.from("tblcase").select("*").eq("caseid"
 function formFor(row, overrides = {}) {
   const f = new FormData();
   for (const fl of FIELDS) {
+    f.set(`${fl.col}__orig`, origValue(fl, row));
     if (fl.kind === "bool") { f.set(`${fl.col}__present`, "1"); if (row[fl.col] === true) f.set(fl.col, "on"); continue; }
     f.set(fl.col, formValue(fl, row));
   }
@@ -37,7 +38,7 @@ before(async () => {
   if (skip) return;
   db = createServerClient();
   await seedFixtures(db);
-  ok(await db.from("tblcasepriority").upsert({ priority: "Low" }, { onConflict: "priority" }));
+  dropTempPriority = await ensureSecondPriority(db);
   snapshot = await readCase();
 });
 
@@ -46,6 +47,7 @@ after(async () => {
   for (const [t, ids] of Object.entries(inserted)) if (ids.length) ok(await db.from(t).delete().in(PK[t], ids));
   const { caseid, ...rest } = snapshot;
   ok(await db.from("tblcase").update(rest).eq("caseid", caseid));
+  await dropTempPriority?.(); // after the restore: 90001 may point at it
 });
 
 test("case 90001 loads every fixture value with Pat Example, Example & Partners LLP, Sam Sample", { skip }, async () => {
@@ -70,7 +72,10 @@ test("unchanged save writes nothing; priority change stamps now; notes-only chan
   assert.equal(noop.length, 0, "no audit_log row from an unchanged save");
 
   const t0 = Date.now();
-  const w = await saveCase(db, ID, formFor(cur, { casestatpriority: cur.casestatpriority === "Low" ? "High" : "Low" }), new Date());
+  // Another existing priority — never invent lookup values in the shared DB.
+  const other = ok(await db.from("tblcasepriority").select("priority")).map((r) => r.priority).find((p) => p && p !== cur.casestatpriority);
+  assert.ok(other, "tblcasepriority needs a second value");
+  const w = await saveCase(db, ID, formFor(cur, { casestatpriority: other }), new Date());
   assert.deepEqual(Object.keys(w).sort(), ["casestatlastupdated", "casestatpriority"]);
   const afterPriority = await readCase();
   assert.equal(afterPriority.casestatpriority, w.casestatpriority);
