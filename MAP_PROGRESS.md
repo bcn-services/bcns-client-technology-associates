@@ -8,16 +8,17 @@ across rounds — never reset. Per-item detail lives in `progress/<lane>.md`.
 | Lane | Assignee | Branch | Status |
 |------|----------|--------|--------|
 | migration | nate | lane/migration | done — 4/4 items, merged 2026-09-09 (`a3add4b`) |
-| app-shell | nate | lane/app-shell | not started — preconditions unmet (Tailwind 3.4 not installed; `middleware.ts` + `app/not-found.tsx` not in its `owns:`). Supabase project `technology-associates` (`hoxolnqsbfdmrzjfgtcm`, us-east-1) exists and is healthy; it is not linked locally and its applied-migration state has not been checked. |
-| cases | nate | — | not started — no LANE.md yet |
+| app-shell | nate | lane/app-shell | done — 12/12 items (7 planned + 5 polish), merged 2026-09-10 (`464ab58`) |
+| cases | nate | lane/cases | done — 9/9 items, merged 2026-09-11 (`298b6ac`, PR #4) |
 | time | nate | — | not started — no LANE.md yet |
 | billing | nate | — | not started — no LANE.md yet |
 | money | nate | — | not started — no LANE.md yet |
 | docs-reports | nate | — | not started — no LANE.md yet |
 
-**Journeys:** 0 of 6 green. Red by design until the lanes wire them — every spec
-fails at `page.goto('/login')` with `ERR_CONNECTION_REFUSED`, because no app shell
-exists yet. This is a progress reading, not a merge gate.
+**Journeys:** 1 of 6 green (2026-09-11, after cases). 02 (inquiry → case) passes. 01 now reaches the
+case screen and fails only on an ambiguous `getByText(/bills/i)` (matches nav link + the case's "Bills"
+heading) — protected-path amendment: scope to `main` or use `getByRole('heading')`. 03–06 fail on screens
+later lanes build (time, funds, bank import, dashboard). Progress reading, not a merge gate.
 
 **Amendments this round**
 
@@ -27,3 +28,5 @@ exists yet. This is a progress reading, not a merge gate.
   `tblcase.casestatusharddeadline` is dropped. `FOUNDATION.md`'s type map and
   `lib/db/types.ts` were amended to match. Any live lane must rebase onto
   `integration` before assuming the frozen shapes.
+- 2026-09-10 — `tests/journeys/helpers.ts` (`966a523` on `main`). `login()` now awaits
+  the redirect off /login; the next `page.goto` was aborting the sign-in POST.
