@@ -6,7 +6,7 @@ are in it — if they disagree, LANE.md wins for scope.
 **Current position**
 
 - **Status:** 7 of 9 items done; convert inquiry in progress
-- **Next:** convert inquiry, app-shell wiring
+- **Next:** wire cases into the app shell, then lane acceptance and PR to integration
 - **Blockers:** hosted Supabase is missing migration 0007 (case search view) — needs `supabase db push` by Nate before case search and lists work on hosted (fixture case 90001 is seeded)
 - **Last updated:** 2026-09-11
 
