@@ -71,6 +71,7 @@ export function InquiryForm({ action, values: v, options }: {
   return (
     <form action={formAction} className="space-y-6">
       {v.id != null && <input type="hidden" name="id" value={v.id} />}
+      {v.id != null && <input type="hidden" name="__orig" value={JSON.stringify(v)} />}
       <datalist id="inq-subjects">{SUBJECT_SUGGESTIONS.map((s) => <option key={s} value={s} />)}</datalist>
 
       <fieldset className="grid gap-3 sm:grid-cols-3">

@@ -32,7 +32,7 @@ test("nextCaseId: empty table → 1", async () => {
 });
 
 test("defaults: title TBD, status Open, start date is the injected today", () => {
-  assert.deepEqual(newCaseDefaults(new Date(2026, 2, 7, 23, 30)), { casetitle: "TBD", casestartdate: "2026-03-07", status: "Open" });
+  assert.deepEqual(newCaseDefaults(new Date("2026-03-08T04:30:00Z")) /* 11:30pm EST */, { casetitle: "TBD", casestartdate: "2026-03-07", status: "Open" });
 });
 
 const FIELDS = { caseid: 990123, casetitle: "TBD", casestartdate: "2026-03-07", status: "Open", tabranch: "Hartford", caseatty: 7, caseclient: 9 };

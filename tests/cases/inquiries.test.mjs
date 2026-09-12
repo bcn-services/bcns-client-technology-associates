@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import {
   QUICK_SEARCH_FIELDS as MOD_QUICK_SEARCH_FIELDS, SENT_BOOLS as MOD_SENT_BOOLS, parseInquiryForm, changedColumns, createInquiry, updateInquiry,
   likePattern, orQuote, quickSearchFilter, quickSearch, advancedSearch, byAttorneyName, byHowHeard, dateFilters,
-  idDateMatches, accessDate, withCurrent, ENGINEERS, HOW_HEARD, DEFAULT_ENGINEER, DEFAULT_HOW_HEARD, CLIENT_ROLES, SUBJECT_SUGGESTIONS,
+  idDateMatches, accessDate, withCurrent, todayIso, ENGINEERS, HOW_HEARD, DEFAULT_ENGINEER, DEFAULT_HOW_HEARD, CLIENT_ROLES, SUBJECT_SUGGESTIONS,
 } from "../../lib/inquiries/inquiries.ts";
 
 // Pinned independently of the module under test, so dropping a column there turns a test red.
@@ -214,4 +214,18 @@ test("presets: attorney name ordered by date, how-heard by typed source ordered 
   await byHowHeard(h.db, "Web");
   assert.deepEqual(ops(h.calls, "ilike"), [["inqhowheardaboutus", "%Web%"]]);
   assert.deepEqual(ops(h.calls, "order"), [["id"]]);
+});
+
+test("updateInquiry diffs against __orig: a stale tab changing one field doesn't revert another tab's edit", async () => {
+  const loaded = { ...parseInquiryForm(form({ inqsubject: "Old", inqcallername: "Cy" })).values, id: 5, inqresultingcase: null };
+  const live = { ...loaded, inqsubject: "Saved by tab A" };
+  const { db, calls } = fakeDb({ data: null, error: null }, { maybeSingle: { data: live, error: null } });
+  const r = await updateInquiry(db, 5, form({ inqsubject: "Old", inqcallername: "Dee", __orig: JSON.stringify(loaded) }));
+  assert.deepEqual(r, { ok: true, changed: ["inqcallername"] });
+  assert.deepEqual(ops(calls, "update"), [[{ inqcallername: "Dee" }]]);
+});
+
+test("todayIso is the Eastern date, not the server's", () => {
+  assert.equal(todayIso(new Date("2026-09-12T02:30:00Z")), "2026-09-11"); // 10:30pm ET
+  assert.equal(todayIso(new Date("2026-09-12T16:00:00Z")), "2026-09-12");
 });

@@ -3,7 +3,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
-import { SPECS, parseForm, changedColumns, createContact, updateContact, fetchAll, loadAttorneyWithFirm, ContactInputError } from "../../lib/contacts/contacts.ts";
+import { SPECS, parseForm, changedColumns, createContact, updateContact, parseOrigRow, fetchAll, loadAttorneyWithFirm, ContactInputError } from "../../lib/contacts/contacts.ts";
 import { PRESETS, runPreset } from "../../lib/contacts/presets.ts";
 import { tables } from "./contacts-seed.mjs";
 
@@ -158,4 +158,17 @@ test("no delete path in app/firms, app/attorneys, app/clients, lib/contacts", ()
     assert.doesNotMatch(src, /export\s+(async\s+)?(function|const|let)\s+\w*(delete|remove|destroy)\w*/i, `${f}: delete-like export`);
     assert.doesNotMatch(src, /method\s*[:=]\s*["']DELETE["']|\bDELETE\s+FROM\b/i, `${f}: DELETE request/SQL`);
   }
+});
+
+test("updateContact diffs against the form's __orig snapshot: a stale tab doesn't revert another tab's edit", async () => {
+  // Tab A already saved phone 555-0001; tab B loaded before that and only changes fax.
+  const live = { frmid: 42, frmname: "ZZ", frmphone: "555-0001", frmfax: null };
+  const orig = { frmid: 42, frmname: "ZZ", frmphone: null, frmfax: null };
+  const { db, calls } = fakeDb({ tblfirm: [live] });
+  const next = { frmname: "ZZ", frmphone: "", frmfax: "555-0002" };
+  assert.deepEqual(await updateContact(db, "firm", 42, next, orig), { frmfax: "555-0002" });
+  assert.deepEqual(calls.filter((c) => c[0] === "update"), [["update", "tblfirm", { frmfax: "555-0002" }]]);
+  assert.equal(parseOrigRow(JSON.stringify(orig)).frmid, 42);
+  assert.equal(parseOrigRow("{not json"), null);
+  assert.equal(parseOrigRow(null), null);
 });

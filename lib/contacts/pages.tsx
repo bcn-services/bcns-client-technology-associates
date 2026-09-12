@@ -95,6 +95,7 @@ export async function ContactEditPage({ kind, idParam, flash }: { kind: Kind; id
       {flash.error && <p role="alert" className="text-sm text-red-700">{flash.error}</p>}
       <form action={saveContact.bind(null, kind, id)} className="grid gap-3 sm:grid-cols-2">
         {id === null && flash.returnTo && <input type="hidden" name="returnTo" value={flash.returnTo} />}
+        {row && <input type="hidden" name="__orig" value={JSON.stringify(row)} />}
         {spec.fields.map((f) => <FieldInput key={f.col} f={f} row={row} options={options} />)}
         <div className="sm:col-span-2">
           <button type="submit" className="rounded border border-slate-300 px-3 py-1 hover:bg-slate-100">Save</button>

@@ -105,12 +105,27 @@ export async function loadContact(db: Db, kind: Kind, id: number): Promise<Row |
   return data;
 }
 
-/** Writes only the changed columns; returns what was written ({} → no write at all). */
-export async function updateContact(db: Db, kind: Kind, id: number, next: Row): Promise<Row> {
+/** The form's `__orig` snapshot (the row as loaded), or null if absent/garbled. */
+export function parseOrigRow(v: FormDataEntryValue | null): Row | null {
+  if (typeof v !== "string") return null;
+  try {
+    const o = JSON.parse(v);
+    return o && typeof o === "object" && !Array.isArray(o) ? o : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Writes only the changed columns; returns what was written ({} → no write at all).
+ * Diffs against `orig` (the row the form loaded) when given, so a stale tab can't revert
+ * another tab's edits to fields it didn't touch; falls back to the live row.
+ */
+export async function updateContact(db: Db, kind: Kind, id: number, next: Row, orig: Row | null = null): Promise<Row> {
   const s = SPECS[kind];
   const current = await loadContact(db, kind, id);
   if (!current) throw new ContactInputError(`${s.title} ${id} not found`);
-  const changes = changedColumns(current, next);
+  const changes = changedColumns(orig ?? current, next);
   if (Object.keys(changes).length === 0) return changes;
   const { error } = await db.from(s.table).update(changes).eq(s.id, id);
   if (error) throw new Error(`${s.table} update: ${error.message}`);
