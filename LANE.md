@@ -311,7 +311,7 @@ Test against the fixture, not the producing lane. Do not wait for it to exist.
     - Journey 02, amended to pick Pat Example and Sam Sample, passes
     - The created case has `caseinquiry` set to the inquiry and shows firm, attorney, and client on its record
     - A second convert of the same inquiry is not offered; the inquiry page links to its case
-  status: not started
+  status: done
 
 - task: Wire cases into the app shell — add `{href:"/inquiries",label:"Inquiries"}`
     to `SECTIONS` in `lib/auth/sections.ts`, and put a case quick-search box

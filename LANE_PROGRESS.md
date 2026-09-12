@@ -5,7 +5,7 @@ are in it — if they disagree, LANE.md wins for scope.
 
 **Current position**
 
-- **Status:** 7 of 9 items done; convert inquiry in progress
+- **Status:** 8 of 9 items done; app-shell wiring in progress
 - **Next:** wire cases into the app shell, then lane acceptance and PR to integration
 - **Blockers:** hosted Supabase is missing migration 0007 (case search view) — needs `supabase db push` by Nate before case search and lists work on hosted (fixture case 90001 is seeded)
 - **Last updated:** 2026-09-11
@@ -19,5 +19,5 @@ are in it — if they disagree, LANE.md wins for scope.
 | Case presets | done — Staff can open the Work Status (two sort orders plus a print sheet), Waiting For (with funds received), Other experts, and Recent activity lists, each matching the legacy Access query. |
 | New case | done — Staff can open a new case form prefilled with the next case number, TBD title, today's date and Open status, add an attorney or client without losing their place, and are told "Case number already exists" if someone else took the number first. |
 | Service authorizations on the case page | done — Staff can add and edit service authorizations on a case (approving one stamps today's date unless a date is already set), and open the Unapproved, Awaiting approval, Recently approved and Totals lists. Flagged for human review. |
-| Convert an inquiry to a case | not started |
+| Convert an inquiry to a case | done — Staff can turn an inquiry into a case by picking the case attorney, client and branch; the new case links back to the inquiry, and an inquiry that already has a case links to it instead of offering a second convert. Journey 02 passes. |
 | Wire cases into the app shell | not started |
