@@ -2,6 +2,7 @@ import { requireSession } from "@/lib/auth/session";
 import { firmToday } from "@/lib/cases/presets";
 import { NOT_LINKED, errorMessage } from "@/lib/time/entries";
 import { EntryForm } from "./entry-form";
+import { WeekSection } from "./week-view";
 
 export const dynamic = "force-dynamic";
 
@@ -28,6 +29,7 @@ export default async function TimePage({ searchParams }: { searchParams: Params 
           <EntryForm values={values} error={error ? errorMessage(error) : undefined} />
         </>
       )}
+      <WeekSection session={session} week={first(searchParams.week)} who={first(searchParams.who)} />
     </main>
   );
 }
