@@ -269,7 +269,7 @@ Test against the fixture, not the producing lane. Do not wait for it to exist.
     - Opening `/cases/new` prefills max(caseid)+1 and the three legacy defaults; saving creates the row and lands on its record
     - Saving with an existing case number shows "Case number already exists" and inserts nothing
     - Two concurrent saves of the same number yield one row and one refusal
-  status: not started
+  status: done
 
 - task: Service authorizations on the case page — a panel on `/cases/[id]` per
     legacy `frmCaseServAuth`: date, hours, status, file, notes, advance, newest
