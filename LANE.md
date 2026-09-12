@@ -102,7 +102,7 @@ Test against the fixture, not the producing lane. Do not wait for it to exist.
     - A linked staff login submitting case 90001, hours 1.5, "Reviewed file" sees "Entry added", and a `tblactivity` row exists with that login's `personId` as `actwho`, `actbilled=false`, `actbillid` null (live test; row removed in `after()`)
     - Case 999999, hours 0, hours 25, hours 1.0625, and an empty description are each refused with a visible message and insert nothing (fake-client tests; the case check is a select on `tblcase`)
     - A login with `personId` null sees the not-linked message and no form, and a direct call of the action from it inserts nothing
-  status: not started
+  status: done
 
 - task: Week view on `/time` under the form, plus the admin unbilled-by-case
     section. `lib/time/week.ts`: `weekBounds(anchor)` returns the Monday and
