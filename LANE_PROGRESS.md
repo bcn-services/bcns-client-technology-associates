@@ -7,7 +7,7 @@ are in it — if they disagree, LANE.md wins for scope.
 
 - **Status:** all 9 items done; lane accepted, PR open into integration
 - **Next:** Nate reviews the PR into integration (flagged items: case search, case record, service authorizations)
-- **Blockers:** hosted Supabase is missing migration 0007 (case search view) — needs `supabase db push` by Nate before case search and lists work on hosted (fixture case 90001 is seeded)
+- **Blockers:** none (migration 0007 pushed to hosted 2026-09-11)
 - **Last updated:** 2026-09-11
 
 | Item | Status |

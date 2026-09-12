@@ -4,7 +4,7 @@
 The cases lane: firms/attorneys/clients, inquiries, case search and lists, the case record, case presets, new case, service authorizations, convert-inquiry-to-case, and app-shell wiring. Three items (case search, case record, service authorizations) carried `caution: true` and ran the full engineer + QA + review team; they are flagged for human review. The rest ran engineer-only with every guard mutation-checked by the orchestrator.
 
 ## Before merging
-- [ ] **`supabase db push`** (Nate, passkey account): hosted is missing migration 0007 (`case_search`), so `/cases` search and lists show an alert on hosted.
+- [x] **`supabase db push`**: done 2026-09-11, and migration 0007 (`case_search`) is applied on hosted.
 - [ ] **package.json `test` script:** add `tests/cases/*.test.mjs` (run with `--test-concurrency=1`); tests/cases is not in `pnpm test` yet.
 
 ## Needs amendment (protected / outside lane paths)
