@@ -196,7 +196,7 @@ Test against the fixture, not the producing lane. Do not wait for it to exist.
     - Advanced AND with title + client narrows to cases matching both; OR with the same fields returns cases matching either; start date returns only cases starting after the date
     - Median of 5 quick searches stays under 1s with 5,000 cases seeded
   caution: true
-  status: not started
+  status: done
   parallel-group: a
 
 - task: The case record — `/cases/[id]`, per legacy `frmCaseUpdate`. Heading
