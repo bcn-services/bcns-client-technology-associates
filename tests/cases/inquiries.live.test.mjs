@@ -6,7 +6,15 @@ import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { loadEnvLocal, seedE2eUser } from "../app-shell/seed-e2e.ts";
 import { createServerClient } from "../../lib/db/client.ts";
-import { QUICK_SEARCH_FIELDS, SENT_BOOLS, quickSearch, advancedSearch } from "../../lib/inquiries/inquiries.ts";
+import { QUICK_SEARCH_FIELDS as MOD_QUICK_SEARCH_FIELDS, SENT_BOOLS as MOD_SENT_BOOLS, quickSearch, advancedSearch } from "../../lib/inquiries/inquiries.ts";
+
+// Pinned independently of the module under test, so dropping a column there turns a test red.
+const SENT_BOOLS = ["sentfee", "sentchecklist", "sentllb", "sentkjs", "sentiuo", "sentiuobio", "sentoren", "sentlarry", "sentcoppolino", "sentother1", "sentother2"];
+const QUICK_SEARCH_FIELDS = ["inqsubject", "inqlocation", "tabranch", "inqrefferredby", "inqcallertitle", "inqcallername", "inqattyname", "inqfirm", "inqfirmlocation", "inqaccidentlocation", "inqdescription", "inqhowheardaboutus", "inqclient", "inqphonenumber", "inqemail", "inqcaption"];
+test("module field lists match the pinned legacy lists", () => {
+  assert.deepEqual([...MOD_SENT_BOOLS], SENT_BOOLS);
+  assert.deepEqual([...MOD_QUICK_SEARCH_FIELDS], QUICK_SEARCH_FIELDS);
+});
 
 loadEnvLocal();
 const BASE = process.env.BASE_URL ?? "http://localhost:3102";

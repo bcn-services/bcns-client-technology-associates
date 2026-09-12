@@ -2,9 +2,17 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-  QUICK_SEARCH_FIELDS, SENT_BOOLS, parseInquiryForm, changedColumns, createInquiry, updateInquiry,
+  QUICK_SEARCH_FIELDS as MOD_QUICK_SEARCH_FIELDS, SENT_BOOLS as MOD_SENT_BOOLS, parseInquiryForm, changedColumns, createInquiry, updateInquiry,
   likePattern, orQuote, quickSearchFilter, quickSearch, advancedSearch, byAttorneyName, byHowHeard, dateFilters,
 } from "../../lib/inquiries/inquiries.ts";
+
+// Pinned independently of the module under test, so dropping a column there turns a test red.
+const SENT_BOOLS = ["sentfee", "sentchecklist", "sentllb", "sentkjs", "sentiuo", "sentiuobio", "sentoren", "sentlarry", "sentcoppolino", "sentother1", "sentother2"];
+const QUICK_SEARCH_FIELDS = ["inqsubject", "inqlocation", "tabranch", "inqrefferredby", "inqcallertitle", "inqcallername", "inqattyname", "inqfirm", "inqfirmlocation", "inqaccidentlocation", "inqdescription", "inqhowheardaboutus", "inqclient", "inqphonenumber", "inqemail", "inqcaption"];
+test("module field lists match the pinned legacy lists", () => {
+  assert.deepEqual([...MOD_SENT_BOOLS], SENT_BOOLS);
+  assert.deepEqual([...MOD_QUICK_SEARCH_FIELDS], QUICK_SEARCH_FIELDS);
+});
 
 /** Fake Supabase client: every builder call is recorded as [method, ...args]; awaiting resolves `result`. */
 function fakeDb(result = { data: [], error: null }, byMethod = {}) {
