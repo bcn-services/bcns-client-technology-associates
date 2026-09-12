@@ -23,6 +23,7 @@ const MESSAGES: Record<string, string> = {
   hours: "Hours must be more than 0 and at most 24, with up to 3 decimals.",
   description: "Description is required.",
   date: "Date must be a valid date.",
+  locked: "This entry can't be changed",
 };
 
 /** Fixed on-screen text for an error code; unknown codes get a generic message. */
@@ -50,22 +51,90 @@ function parseDate(raw: string): string {
   return s;
 }
 
-/** Validates, checks the case exists (one select on tblcase), then inserts one tblactivity row. */
-export async function insertEntry(db: Db, session: Pick<Session, "personId">, input: EntryInput): Promise<void> {
-  const personId = session.personId;
-  if (personId == null) throw new TimeInputError("unlinked");
+/** Shape checks shared by insert and update (no DB call). */
+function parseEntry(input: EntryInput) {
   const rawCase = String(input.caseId ?? "").trim();
   if (!/^\d{1,9}$/.test(rawCase)) throw new TimeInputError("case");
   const acthrs = parseHours(String(input.hours ?? ""));
   const actdescription = String(input.description ?? "").trim();
   if (!actdescription) throw new TimeInputError("description");
   const actdate = parseDate(String(input.date ?? ""));
-  const actcaseid = Number(rawCase);
+  return { actcaseid: Number(rawCase), actdate, acthrs, actdescription };
+}
 
+async function requireCase(db: Db, actcaseid: number): Promise<void> {
   const found = await db.from("tblcase").select("caseid").eq("caseid", actcaseid).maybeSingle();
   if (found.error) throw new Error(`tblcase read: ${found.error.message}`);
   if (!found.data) throw new TimeInputError("case");
+}
 
-  const { error } = await db.from("tblactivity").insert({ actcaseid, actdate, actdescription, acthrs, actwho: personId });
+/** Validates, checks the case exists (one select on tblcase), then inserts one tblactivity row. */
+export async function insertEntry(db: Db, session: Pick<Session, "personId">, input: EntryInput): Promise<void> {
+  const personId = session.personId;
+  if (personId == null) throw new TimeInputError("unlinked");
+  const row = parseEntry(input);
+  await requireCase(db, row.actcaseid);
+  const { error } = await db.from("tblactivity").insert({ ...row, actwho: personId });
   if (error) throw new Error(`tblactivity insert: ${error.message}`);
+}
+
+export type EntryRow = {
+  actid: number; actcaseid: number; actdate: string; actdescription: string;
+  acthrs: number | string; actwho: number | null; actbilled: boolean; actbillid: number | null;
+};
+type Actor = Pick<Session, "personId" | "role">;
+
+export const isEditable = (r: Pick<EntryRow, "actbilled" | "actbillid">) => r.actbilled === false && r.actbillid == null;
+
+/**
+ * Filters every edit/delete statement carries: the row, still unbilled, and (staff) their own.
+ * These ARE the refusal — a prior read is never trusted.
+ */
+function editableOnly(q: any, actid: number, s: Actor): any {
+  q = q.eq("actid", actid).eq("actbilled", false).is("actbillid", null);
+  return s.role === "admin" ? q : q.eq("actwho", s.personId);
+}
+
+/** /time/[id] read: staff see only their own rows (another person's → null = "Not found"). */
+export async function loadEntry(db: Db, s: Actor, actid: number): Promise<EntryRow | null> {
+  let q = db.from("tblactivity").select("actid, actcaseid, actdate, actdescription, acthrs, actwho, actbilled, actbillid").eq("actid", actid);
+  if (s.role !== "admin") q = q.eq("actwho", s.personId);
+  const { data, error } = await q.maybeSingle();
+  if (error) throw new Error(`tblactivity read: ${error.message}`);
+  return data ?? null;
+}
+
+/**
+ * Edit one unbilled row. `orig` holds the values the form was rendered with (hidden `__orig`
+ * inputs, as lib/cases/record.ts); only columns that differ are written, from a fixed whitelist —
+ * never actwho, actbilled or actbillid. Returns the row's date (for the week redirect).
+ * Zero rows matched by the filtered write → "locked", nothing written.
+ */
+export async function updateEntry(db: Db, s: Actor, actid: number, input: EntryInput & { orig?: Partial<EntryInput> }): Promise<string> {
+  if (s.personId == null) throw new TimeInputError("unlinked");
+  const next = parseEntry(input);
+  const o = input.orig ?? {};
+  const was: Record<string, string | undefined> = {
+    actcaseid: o.caseId?.trim(), actdate: o.date?.trim(), acthrs: o.hours?.trim(), actdescription: o.description?.trim(),
+  };
+  const payload: Record<string, string | number> = {};
+  for (const [k, v] of Object.entries(next)) if (was[k] !== String(v)) payload[k] = v;
+  if ("actcaseid" in payload) await requireCase(db, next.actcaseid);
+
+  // Nothing changed: no write; success only if the row is still editable by this person.
+  const { data, error } = Object.keys(payload).length
+    ? await editableOnly(db.from("tblactivity").update(payload), actid, s).select("actid, actdate")
+    : await editableOnly(db.from("tblactivity").select("actid, actdate"), actid, s);
+  if (error) throw new Error(`tblactivity update: ${error.message}`);
+  if (!data?.length) throw new TimeInputError("locked");
+  return data[0].actdate;
+}
+
+/** Delete one unbilled row (own, or any if admin). Returns the deleted row's date. */
+export async function deleteEntry(db: Db, s: Actor, actid: number): Promise<string> {
+  if (s.personId == null) throw new TimeInputError("unlinked");
+  const { data, error } = await editableOnly(db.from("tblactivity").delete(), actid, s).select("actid, actdate");
+  if (error) throw new Error(`tblactivity delete: ${error.message}`);
+  if (!data?.length) throw new TimeInputError("locked");
+  return data[0].actdate;
 }
