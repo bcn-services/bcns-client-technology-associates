@@ -7,7 +7,7 @@ import assert from "node:assert/strict";
 import { createClient } from "@supabase/supabase-js";
 import { getConfig } from "../../lib/env";
 import { createServerClient } from "../../lib/db/client";
-import { loadEnvLocal, seedE2eUser } from "./seed-e2e";
+import { loadEnvLocal, seedStaffE2e } from "./seed-e2e";
 
 loadEnvLocal();
 const email = process.env.E2E_EMAIL ?? "staff@example.test";
@@ -16,8 +16,8 @@ const password = process.env.E2E_PASSWORD ?? "password";
 Promise.resolve()
   .then(async () => {
     const admin = createServerClient();
-    const first = await seedE2eUser(admin, email, password);
-    const second = await seedE2eUser(admin, email, password);
+    const first = await seedStaffE2e(admin, email, password);
+    const second = await seedStaffE2e(admin, email, password);
     assert.equal(second.id, first.id, "second run must reuse the same auth user");
     assert.equal(second.status, "existing");
 
@@ -30,7 +30,7 @@ Promise.resolve()
     assert.equal(rows.error, null);
     assert.equal(rows.data?.length, 1, `expected exactly one profiles row, got ${rows.data?.length}`);
     assert.equal(rows.data?.[0].role, "staff");
-    assert.equal(rows.data?.[0].personid, null);
+    assert.equal(rows.data?.[0].personid, 1);
 
     const { supabaseUrl, supabaseAnonKey } = getConfig();
     const anon = createClient(supabaseUrl!, supabaseAnonKey!, { auth: { persistSession: false } });
@@ -38,7 +38,7 @@ Promise.resolve()
     assert.equal(signIn.error, null, `sign-in failed: ${signIn.error?.message}`);
     assert.ok(signIn.data.session?.access_token, "no session returned");
 
-    process.stdout.write(`ok — 1 auth user, 1 profiles row (staff/null), signInWithPassword succeeded for ${email}\n`);
+    process.stdout.write(`ok — 1 auth user, 1 profiles row (staff/personid 1), signInWithPassword succeeded for ${email}\n`);
   })
   .catch((err: Error) => {
     process.stderr.write(`${err.message}\n`);

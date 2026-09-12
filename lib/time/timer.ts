@@ -51,6 +51,23 @@ export function startTimer(raw: string | null, caseValue: string, description: s
 
 export const elapsedMs = (s: TimerState, now: number) => (s.stoppedAt ?? now) - s.startedAt;
 
+/** Same-tab signal: dispatched on window after every write/clear of TIMER_KEY (`storage` fires only in other tabs). */
+export const TIMER_EVENT = "ta-timer-change";
+
+/** Elapsed ms → "h:mm" (floored minutes, never negative). */
+export function formatHm(ms: number): string {
+  const m = Math.max(0, Math.floor(ms / 60_000));
+  return `${Math.floor(m / 60)}:${String(m % 60).padStart(2, "0")}`;
+}
+
+/** Header indicator view of the stored value: null when absent or invalid, else the case and its label text. */
+export function indicatorView(raw: string | null | undefined, now: number): { caseId: string; text: string; stopped: boolean } | null {
+  const s = parseTimer(raw);
+  if (!s) return null;
+  const stopped = s.stoppedAt !== undefined;
+  return { caseId: s.caseId, stopped, text: `⏱ Case ${s.caseId} · ${formatHm(elapsedMs(s, now))}${stopped ? " stopped" : ""}` };
+}
+
 /** Stop at `now`: the stored state gains stoppedAt; rounding happens here, client-side, only. */
 export function stopTimer(s: TimerState, now: number): TimerState {
   return s.stoppedAt === undefined ? { ...s, stoppedAt: now } : s;

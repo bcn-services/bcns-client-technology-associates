@@ -1,17 +1,18 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { TIMER_KEY, elapsedMs, fillFor, formatElapsed, parseTimer, startTimer, stopTimer, type Fill, type TimerState } from "@/lib/time/timer";
+import { TIMER_EVENT, TIMER_KEY, elapsedMs, fillFor, formatElapsed, parseTimer, startTimer, stopTimer, type Fill, type TimerState } from "@/lib/time/timer";
 
 // Reuses the EntryForm's own fields (ids from entry-form.tsx); the timer renders no Case/Hours control.
 const FIELD_IDS: Record<keyof Fill, string> = { case: "t-case", date: "t-date", hours: "t-hours", description: "t-description" };
 const field = (k: keyof Fill) => document.getElementById(FIELD_IDS[k]) as HTMLInputElement | HTMLTextAreaElement | null;
 const fillForm = (f: Partial<Fill>) => (Object.keys(f) as (keyof Fill)[]).forEach((k) => { const el = field(k); if (el) el.value = f[k] ?? ""; });
 
+const changed = () => window.dispatchEvent(new Event(TIMER_EVENT)); // tells the header indicator in this tab
 const store = {
   get: () => { try { return localStorage.getItem(TIMER_KEY); } catch { return null; } },
-  set: (s: TimerState) => { try { localStorage.setItem(TIMER_KEY, JSON.stringify(s)); } catch { /* storage blocked: timer lives only in this tab */ } },
-  clear: () => { try { localStorage.removeItem(TIMER_KEY); } catch { /* ignore */ } },
+  set: (s: TimerState) => { try { localStorage.setItem(TIMER_KEY, JSON.stringify(s)); } catch { /* storage blocked: timer lives only in this tab */ } changed(); },
+  clear: () => { try { localStorage.removeItem(TIMER_KEY); } catch { /* ignore */ } changed(); },
 };
 
 const btn = "rounded border border-slate-300 px-3 py-1 text-sm hover:bg-slate-50";
