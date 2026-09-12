@@ -180,7 +180,7 @@ Test against the fixture, not the producing lane. Do not wait for it to exist.
     - With an injected clock, Stop fills Hours with 0.125 after 3 s, 0.125 after 7 min, 0.625 after 40 min, and 2.125 after 2 h 4 min
     - Reloading `/time` mid-run shows the timer still running from the stored start and Start is refused; after Stop then Add entry the row exists with the rounded hours and the key is gone; Discard clears the key and inserts nothing
     - Visiting `/time?case=90001` pre-fills Case with 90001 and Start begins a timer for that case
-  status: not started
+  status: done
 
 - task: Time panel on the case page (wiring, cases). `app/cases/[id]/time-panel.tsx`
     (server component) with `listCaseTime(db, caseId)` and `unbilledHours(rows)`
