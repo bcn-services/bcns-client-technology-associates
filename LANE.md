@@ -230,7 +230,7 @@ Test against the fixture, not the producing lane. Do not wait for it to exist.
     - Saving an unchanged migrated case writes no `audit_log` row
     - Badges appear exactly when the live counts say so, including a bill with notice "1st" and a service auth "Declined"
   caution: true
-  status: not started
+  status: done
   parallel-group: b
 
 - task: Case presets — screens under `/cases/lists/`. Work Status: cases whose
