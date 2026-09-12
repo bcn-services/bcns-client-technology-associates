@@ -9,6 +9,7 @@ import {
 import { saveCaseAction } from "./actions";
 import { LockedForm } from "./locked-form";
 import { ServiceAuthsPanel } from "./service-auths";
+import { TimePanel } from "./time-panel";
 import { loadServiceAuths } from "@/lib/cases/service-auths";
 import { firmToday } from "@/lib/cases/presets";
 
@@ -193,6 +194,7 @@ export default async function CaseRecordPage({ params, searchParams }: { params:
         <Slot title="Bills" />
         <Slot title="Funds received" />
         <Slot title="Expenses" />
+        <TimePanel caseId={id} />
       </div>
     </main>
   );
