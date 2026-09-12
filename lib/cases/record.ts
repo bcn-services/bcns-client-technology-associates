@@ -80,7 +80,7 @@ export function errorMessage(code: string): string {
 }
 
 const crlf = (s: string) => s.replace(/\r\n?/g, "\n");
-const isDate = (s: string) => /^\d{4}-\d{2}-\d{2}$/.test(s) && !Number.isNaN(Date.parse(`${s}T00:00:00Z`)) && new Date(`${s}T00:00:00Z`).toISOString().slice(0, 10) === s;
+export const isDate = (s: string) => /^\d{4}-\d{2}-\d{2}$/.test(s) && !Number.isNaN(Date.parse(`${s}T00:00:00Z`)) && new Date(`${s}T00:00:00Z`).toISOString().slice(0, 10) === s;
 
 /** The string an input shows for a stored value (and what an untouched form submits back). */
 export function formValue(f: Field, row: Row): string {

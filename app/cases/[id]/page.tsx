@@ -8,6 +8,9 @@ import {
 } from "@/lib/cases/record";
 import { saveCaseAction } from "./actions";
 import { LockedForm } from "./locked-form";
+import { ServiceAuthsPanel } from "./service-auths";
+import { loadServiceAuths } from "@/lib/cases/service-auths";
+import { firmToday } from "@/lib/cases/presets";
 
 export const dynamic = "force-dynamic";
 
@@ -98,7 +101,7 @@ export default async function CaseRecordPage({ params, searchParams }: { params:
   if (!/^\d{1,9}$/.test(params.id)) notFound();
   const id = Number(params.id);
   const db = createServerClient() as unknown as Db;
-  const [rec, o] = await Promise.all([loadCaseRecord(db, id), loadCaseOptions(db)]);
+  const [rec, o, sas] = await Promise.all([loadCaseRecord(db, id), loadCaseOptions(db), loadServiceAuths(db, id)]);
   if (!rec) notFound();
   const { kase, atty, firm, client } = rec;
   const saved = first(searchParams.saved);
@@ -184,7 +187,7 @@ export default async function CaseRecordPage({ params, searchParams }: { params:
 
       {/* Headed slots for later lanes. */}
       <div className="grid gap-4 md:grid-cols-2">
-        <Slot title="Service authorizations" />
+        <ServiceAuthsPanel caseId={id} rows={sas} today={firmToday(new Date())} saved={first(searchParams.sa)} error={first(searchParams.sa_error)} />
         <Slot title="Bills" />
         <Slot title="Funds received" />
         <Slot title="Expenses" />
