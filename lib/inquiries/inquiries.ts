@@ -8,18 +8,29 @@ import type { Database, Tables } from "../db/client";
 export type Db = SupabaseClient<Database>;
 export type InquiryRow = Tables<"tblinquiry">;
 
-// ponytail: reconstructed from tblinquiry text columns — confirm against the Access InquirySearchQuery (not on disk).
+// From Access InquirySearchQuery, in its order: one OR'd Like "*k*" per field, ORDER BY ID.
 export const QUICK_SEARCH_FIELDS = [
-  "inqsubject", "inqlocation", "tabranch", "inqrefferredby", "inqcallertitle", "inqcallername",
-  "inqattyname", "inqfirm", "inqfirmlocation", "inqaccidentlocation", "inqdescription",
-  "inqhowheardaboutus", "inqclient", "inqphonenumber", "inqemail", "inqcaption",
+  "id", "inqdate", "inqcallername", "inqattyname", "inqfirm", "inqfirmlocation", "inqaccidentlocation",
+  "inqrefferredby", "inqphonenumber", "inqemail", "inqdescription", "inqengineer", "inqsubject",
+  "inqlocation", "inqhowheardaboutus", "inqcaption",
 ] as const;
+// The text columns go through ilike; id (integer) and inqdate (date) can't, so they are matched in JS.
+export const QUICK_SEARCH_TEXT = QUICK_SEARCH_FIELDS.filter((f) => f !== "id" && f !== "inqdate");
 
 export const CALLER_TITLES = ["Attorney", "Paralegal", "Secretary", "Insurance Claims Rep", "Investigator"];
-export const CLIENT_ROLES = ["Plaintiff", "Defendant", "Third Party", "Unknown", "Other"];
-// ponytail: only the known defaults — the legacy 14-value how-heard and 5-value engineer lists must be confirmed; live distinct values fill the rest.
+export const CLIENT_ROLES = ["Plaintiff", "Defendant", "Third Party", "Unknown", "Other (see notes)"];
+export const ENGINEERS = ["Dr. Ojalvo", "Kris", "Lowell", "Oren", "Dr. Coppolino"];
+export const HOW_HEARD = [
+  "Legal Pages", "Unknown", "ALM Experts", "Bar Journal, CT", "Bar Journal, FL", "Bar Journal, NY", "ExpertPages",
+  "Forensis Group", "Google", "Internet, unspecified", "JurisPro", "Previous Case", "TA website", "Yahoo", "SEAK",
+];
+export const SUBJECT_SUGGESTIONS = ["Low Speed", "Golf Cart", "Motor Vehicle", "Ladder", "Products", "Slip, Trip and Fall"];
 export const DEFAULT_HOW_HEARD = "Unknown";
 export const DEFAULT_ENGINEER = "Dr. Ojalvo";
+
+/** Options for a value-list select: the list, plus the current value when it isn't in it (a migrated row keeps it). */
+export const withCurrent = (list: string[], cur: string | null | undefined) =>
+  cur && !list.some((x) => x.toLowerCase() === cur.toLowerCase()) ? [...list, cur] : list;
 
 export const SENT_BOOLS = [
   "sentfee", "sentchecklist", "sentllb", "sentkjs", "sentiuo", "sentiuobio",
@@ -66,6 +77,8 @@ export function parseInquiryForm(fd: FormData): Result<{ values: InquiryValues }
 
   values.inqcallertitle = canonical(values.inqcallertitle as string | null, CALLER_TITLES);
   values.inqclient = canonical(values.inqclient as string | null, CLIENT_ROLES);
+  values.inqengineer = canonical(values.inqengineer as string | null, ENGINEERS);
+  values.inqhowheardaboutus = canonical(values.inqhowheardaboutus as string | null, HOW_HEARD);
   return { ok: true, values: values as InquiryValues };
 }
 
@@ -106,9 +119,24 @@ export const likePattern = (input: string) => `%${input.replace(/[\\%_]/g, (c) =
 /** A value double-quoted for a PostgREST `.or()` string: commas, parens, and quotes in it stay data. */
 export const orQuote = (v: string) => `"${v.replace(/[\\"]/g, (c) => `\\${c}`)}"`;
 
+/** The quick-search `.or()`: every text field ilike the pattern, plus `id.in.(...)` for rows whose id/date matched in JS. */
 // ponytail: PostgREST also treats `*` in like patterns as `%`, so a typed `*` broadens the match — harmless for search.
-export const quickSearchFilter = (q: string) =>
-  QUICK_SEARCH_FIELDS.map((c) => `${c}.ilike.${orQuote(likePattern(q))}`).join(",");
+export const quickSearchFilter = (q: string, ids: number[] = []) =>
+  [...QUICK_SEARCH_TEXT.map((c) => `${c}.ilike.${orQuote(likePattern(q))}`), ...(ids.length ? [`id.in.(${ids.join(",")})`] : [])].join(",");
+
+/** Access shows dates as m/d/yyyy with no leading zeros. */
+export const accessDate = (iso: string) => {
+  const [y, m, d] = iso.split("-");
+  return `${Number(m)}/${Number(d)}/${y}`;
+};
+
+/** Ids whose id or inqdate (ISO or m/d/yyyy) contains q — a literal, case-insensitive substring, like Access's Like "*k*". */
+export function idDateMatches(rows: { id: number; inqdate: string | null }[], q: string): number[] {
+  const k = q.toLowerCase();
+  return rows
+    .filter((r) => String(r.id).includes(k) || (r.inqdate != null && (r.inqdate.toLowerCase().includes(k) || accessDate(r.inqdate).includes(k))))
+    .map((r) => r.id);
+}
 
 export const LIST_COLUMNS = "id, inqdate, inqcallername, inqattyname, inqfirm, inqsubject, tabranch, inqhowheardaboutus, inqresultingcase";
 export type InquiryListRow = Pick<InquiryRow, "id" | "inqdate" | "inqcallername" | "inqattyname" | "inqfirm" | "inqsubject" | "tabranch" | "inqhowheardaboutus" | "inqresultingcase">;
@@ -123,8 +151,14 @@ async function rows(q: PromiseLike<{ data: unknown; error: { message: string } |
   return (data ?? []) as InquiryListRow[];
 }
 
-export function quickSearch(db: Db, q: string) {
-  return rows(list(db).or(quickSearchFilter(q)).order("id").limit(SEARCH_LIMIT));
+// ponytail: scans id/inqdate of up to ID_SCAN_LIMIT rows (and PostgREST max-rows) each search — upgrade to a view with a text column when a migration is allowed.
+export const ID_SCAN_LIMIT = 10000;
+
+export async function quickSearch(db: Db, q: string) {
+  const { data, error } = await db.from("tblinquiry").select("id, inqdate").order("id").range(0, ID_SCAN_LIMIT - 1);
+  if (error) throw new Error(`tblinquiry search: ${error.message}`);
+  const ids = idDateMatches(data ?? [], q).slice(0, SEARCH_LIMIT);
+  return rows(list(db).or(quickSearchFilter(q, ids)).order("id").limit(SEARCH_LIMIT));
 }
 
 export type DateMode = "between" | "onOrAfter" | "onOrBefore";
@@ -172,7 +206,7 @@ export function byAttorneyName(db: Db, name: string) {
   return rows(list(db).ilike("inqattyname", likePattern(name.trim())).order("inqdate").order("id").limit(SEARCH_LIMIT));
 }
 
-/** Preset: how heard about us, filtered by a typed source. */
+/** Preset: how heard about us, filtered by a typed source, ordered by id (legacy qryHowYouHeardAboutUs). */
 export function byHowHeard(db: Db, source: string) {
   return rows(list(db).ilike("inqhowheardaboutus", likePattern(source.trim())).order("id").limit(SEARCH_LIMIT));
 }
@@ -183,37 +217,22 @@ export function recentInquiries(db: Db) {
 
 // --- form options --------------------------------------------------------------
 
-const distinct = (vals: (string | null)[], seed: string[] = []) => {
-  const seen = new Map(seed.map((s) => [s.toLowerCase(), s]));
-  for (const v of vals) if (v && v.trim() && !seen.has(v.trim().toLowerCase())) seen.set(v.trim().toLowerCase(), v.trim());
-  return [...seen.values()].sort((a, b) => a.localeCompare(b));
-};
-
 export type InquiryOptions = {
   branches: string[];
   attorneys: { id: number; name: string }[];
-  subjects: string[];
-  howHeard: string[];
-  engineers: string[];
 };
 
-// ponytail: suggestion lists read every tblinquiry row (PostgREST caps at its max-rows) — a distinct view would need a migration.
 export async function loadInquiryOptions(db: Db): Promise<InquiryOptions> {
-  const [b, a, i] = await Promise.all([
+  const [b, a] = await Promise.all([
     db.from("tblbranches").select("branch").order("branch"),
     db.from("tblattorney").select("attyid, attyfirstname, attylastname").order("attylastname").order("attyfirstname"),
-    db.from("tblinquiry").select("inqsubject, inqhowheardaboutus, inqengineer"),
   ]);
-  for (const [name, r] of [["tblbranches", b], ["tblattorney", a], ["tblinquiry", i]] as const) {
+  for (const [name, r] of [["tblbranches", b], ["tblattorney", a]] as const) {
     if (r.error) throw new Error(`${name}: ${r.error.message}`);
   }
-  const inq = i.data ?? [];
   return {
     branches: (b.data ?? []).map((r) => r.branch),
     attorneys: (a.data ?? []).map((r) => ({ id: r.attyid, name: `${r.attylastname}, ${r.attyfirstname}` })),
-    subjects: distinct(inq.map((r) => r.inqsubject)),
-    howHeard: distinct(inq.map((r) => r.inqhowheardaboutus), [DEFAULT_HOW_HEARD]),
-    engineers: distinct(inq.map((r) => r.inqengineer), [DEFAULT_ENGINEER]),
   };
 }
 

@@ -4,11 +4,14 @@ import assert from "node:assert/strict";
 import {
   QUICK_SEARCH_FIELDS as MOD_QUICK_SEARCH_FIELDS, SENT_BOOLS as MOD_SENT_BOOLS, parseInquiryForm, changedColumns, createInquiry, updateInquiry,
   likePattern, orQuote, quickSearchFilter, quickSearch, advancedSearch, byAttorneyName, byHowHeard, dateFilters,
+  idDateMatches, accessDate, withCurrent, ENGINEERS, HOW_HEARD, DEFAULT_ENGINEER, DEFAULT_HOW_HEARD, CLIENT_ROLES, SUBJECT_SUGGESTIONS,
 } from "../../lib/inquiries/inquiries.ts";
 
 // Pinned independently of the module under test, so dropping a column there turns a test red.
 const SENT_BOOLS = ["sentfee", "sentchecklist", "sentllb", "sentkjs", "sentiuo", "sentiuobio", "sentoren", "sentlarry", "sentcoppolino", "sentother1", "sentother2"];
-const QUICK_SEARCH_FIELDS = ["inqsubject", "inqlocation", "tabranch", "inqrefferredby", "inqcallertitle", "inqcallername", "inqattyname", "inqfirm", "inqfirmlocation", "inqaccidentlocation", "inqdescription", "inqhowheardaboutus", "inqclient", "inqphonenumber", "inqemail", "inqcaption"];
+// Access InquirySearchQuery, in order.
+const QUICK_SEARCH_FIELDS = ["id", "inqdate", "inqcallername", "inqattyname", "inqfirm", "inqfirmlocation", "inqaccidentlocation", "inqrefferredby", "inqphonenumber", "inqemail", "inqdescription", "inqengineer", "inqsubject", "inqlocation", "inqhowheardaboutus", "inqcaption"];
+const TEXT_FIELDS = QUICK_SEARCH_FIELDS.slice(2);
 test("module field lists match the pinned legacy lists", () => {
   assert.deepEqual([...MOD_SENT_BOOLS], SENT_BOOLS);
   assert.deepEqual([...MOD_QUICK_SEARCH_FIELDS], QUICK_SEARCH_FIELDS);
@@ -116,17 +119,68 @@ test("orQuote: commas, parens and quotes stay inside one quoted value", () => {
   assert.equal(orQuote('a,b)"c\\'), '"a,b)\\"c\\\\"');
 });
 
-test("quickSearchFilter: exactly the 16 legacy columns, each ilike on the escaped, quoted pattern", () => {
+test("quickSearchFilter: exactly the 14 legacy text columns, each ilike on the escaped, quoted pattern", () => {
   assert.equal(QUICK_SEARCH_FIELDS.length, 16);
   const parts = quickSearchFilter("a,b").split(/,(?=[a-z]+\.ilike\.)/);
-  assert.deepEqual(parts, QUICK_SEARCH_FIELDS.map((c) => `${c}.ilike."%a,b%"`));
+  assert.deepEqual(parts, TEXT_FIELDS.map((c) => `${c}.ilike."%a,b%"`));
+  assert.ok(quickSearchFilter("a", [3, 14]).endsWith(`,id.in.(3,14)`));
 });
 
-test("quickSearch: one or() with the 16-field filter, ordered by id", async () => {
-  const { db, calls } = fakeDb();
-  await quickSearch(db, "smith");
-  assert.deepEqual(ops(calls, "or"), [[quickSearchFilter("smith")]]);
-  assert.deepEqual(ops(calls, "order")[0], ["id"]);
+test("quickSearchFilter: fields outside the legacy query (tabranch, inqcallertitle, inqclient) are not searched", () => {
+  const cols = quickSearchFilter("x", [1]).split(",").map((p) => p.split(".")[0]);
+  for (const c of ["tabranch", "inqcallertitle", "inqclient"]) assert.ok(!cols.includes(c), `${c} must not be searched`);
+});
+
+test("idDateMatches: literal substring of id, ISO date, or m/d/yyyy date", () => {
+  const rows = [{ id: 1234, inqdate: "2037-11-03" }, { id: 58, inqdate: "2031-05-09" }, { id: 7, inqdate: null }];
+  assert.equal(accessDate("2031-05-09"), "5/9/2031");
+  assert.deepEqual(idDateMatches(rows, "23"), [1234], "id substring");
+  assert.deepEqual(idDateMatches(rows, "7-11-0"), [1234], "ISO substring");
+  assert.deepEqual(idDateMatches(rows, "11/3/20"), [1234], "m/d/yyyy substring");
+  assert.deepEqual(idDateMatches(rows, "5/9/2031"), [58]);
+  assert.deepEqual(idDateMatches(rows, "05/09"), [], "Access form has no leading zeros");
+  assert.deepEqual(idDateMatches(rows, "%"), [], "JS match is literal");
+  assert.deepEqual(idDateMatches(rows, "7"), [1234, 7]);
+});
+
+test("quickSearch: id/date scan feeds id.in into one or() with the text filter, ordered by id", async () => {
+  const { db, calls } = fakeDb({ data: [], error: null }, { range: { data: [{ id: 12, inqdate: "2031-05-09" }, { id: 40, inqdate: "2030-01-01" }], error: null } });
+  await quickSearch(db, "5/9");
+  assert.deepEqual(ops(calls, "or"), [[quickSearchFilter("5/9", [12])]]);
+  assert.deepEqual(ops(calls, "order").at(-1), ["id"]);
+  const none = fakeDb({ data: [], error: null }, { range: { data: [{ id: 12, inqdate: "2031-05-09" }], error: null } });
+  await quickSearch(none.db, "smith");
+  assert.deepEqual(ops(none.calls, "or"), [[quickSearchFilter("smith")]]);
+});
+
+test("value lists: engineer and how-heard exact legacy values and defaults; client role stores 'Other (see notes)'", () => {
+  assert.deepEqual(ENGINEERS, ["Dr. Ojalvo", "Kris", "Lowell", "Oren", "Dr. Coppolino"]);
+  assert.deepEqual(HOW_HEARD, ["Legal Pages", "Unknown", "ALM Experts", "Bar Journal, CT", "Bar Journal, FL", "Bar Journal, NY", "ExpertPages", "Forensis Group", "Google", "Internet, unspecified", "JurisPro", "Previous Case", "TA website", "Yahoo", "SEAK"]);
+  assert.equal(DEFAULT_ENGINEER, "Dr. Ojalvo");
+  assert.equal(DEFAULT_HOW_HEARD, "Unknown");
+  assert.deepEqual(CLIENT_ROLES, ["Plaintiff", "Defendant", "Third Party", "Unknown", "Other (see notes)"]);
+  assert.deepEqual(SUBJECT_SUGGESTIONS, ["Low Speed", "Golf Cart", "Motor Vehicle", "Ladder", "Products", "Slip, Trip and Fall"]);
+  const r = parseInquiryForm(form({ inqengineer: "kris", inqhowheardaboutus: "google", inqclient: "other (see notes)" }));
+  assert.equal(r.values.inqengineer, "Kris");
+  assert.equal(r.values.inqhowheardaboutus, "Google");
+  assert.equal(r.values.inqclient, "Other (see notes)");
+});
+
+test("withCurrent: an unlisted existing value is added as an extra option; a listed one (any case) is not duplicated", () => {
+  assert.deepEqual(withCurrent(ENGINEERS, "Mr. Legacy"), [...ENGINEERS, "Mr. Legacy"]);
+  assert.deepEqual(withCurrent(ENGINEERS, "dr. ojalvo"), ENGINEERS);
+  assert.deepEqual(withCurrent(HOW_HEARD, null), HOW_HEARD);
+});
+
+test("updateInquiry: unlisted engineer/how-heard values posted back unchanged survive the save untouched", async () => {
+  const posted = { inqengineer: "Mr. Legacy", inqhowheardaboutus: "Phone book", inqsubject: "new subject" };
+  const values = parseInquiryForm(form(posted)).values;
+  assert.equal(values.inqengineer, "Mr. Legacy");
+  assert.equal(values.inqhowheardaboutus, "Phone book");
+  const { db, calls } = fakeDb({ data: null, error: null }, { maybeSingle: { data: { ...values, inqsubject: "old", id: 4, inqresultingcase: null }, error: null } });
+  const r = await updateInquiry(db, 4, form(posted));
+  assert.ok(r.ok, r.error);
+  assert.deepEqual(ops(calls, "update"), [[{ inqsubject: "new subject" }]]);
 });
 
 test("dateFilters: between → gte+lte, onOrAfter → gte, onOrBefore → lte", () => {
@@ -151,7 +205,7 @@ test("advancedSearch: date modes apply gte/lte on inqdate; text fields ilike; re
   assert.deepEqual(await advancedSearch(bad.db, { resultingcase: "abc" }), []);
 });
 
-test("presets: attorney name ordered by date, how-heard by typed source", async () => {
+test("presets: attorney name ordered by date, how-heard by typed source ordered by id", async () => {
   const a = fakeDb();
   await byAttorneyName(a.db, "Pat");
   assert.deepEqual(ops(a.calls, "ilike"), [["inqattyname", "%Pat%"]]);
@@ -159,4 +213,5 @@ test("presets: attorney name ordered by date, how-heard by typed source", async 
   const h = fakeDb();
   await byHowHeard(h.db, "Web");
   assert.deepEqual(ops(h.calls, "ilike"), [["inqhowheardaboutus", "%Web%"]]);
+  assert.deepEqual(ops(h.calls, "order"), [["id"]]);
 });
