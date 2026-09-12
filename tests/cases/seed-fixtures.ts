@@ -76,6 +76,20 @@ export async function ensureSecondPriority(db: Admin): Promise<() => Promise<voi
   };
 }
 
+/**
+ * Invented fixture: the legacy default case status "Open" (convert-to-case needs it; the foundation
+ * fixtures seed only "Active"). Upserts case-insensitively — skipped when any spelling is present.
+ */
+export async function ensureOpenStatus(db: Admin): Promise<boolean> {
+  const loose = db as unknown as { from(t: string): any };
+  const { data, error } = await loose.from("tblcasestatus").select("casestatus");
+  if (error) throw new Error(`tblcasestatus: ${error.message}`);
+  if (data.some((r: { casestatus: string }) => r.casestatus.toLowerCase() === "open")) return false;
+  const ins = await loose.from("tblcasestatus").insert({ casestatus: "Open" });
+  if (ins.error) throw new Error(`tblcasestatus: ${ins.error.message}`);
+  return true;
+}
+
 /** Needs DATABASE_URL (PostgREST can't setval). Returns false when it isn't set. */
 export function syncSequences(databaseUrl = process.env.DATABASE_URL): boolean {
   if (!databaseUrl) return false;
@@ -88,6 +102,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   // No top-level await: package.json has no "type": "module", so this file transpiles to CJS.
   Promise.resolve()
     .then(() => seedFixtures(createServerClient()))
+    .then(async (r) => { await ensureOpenStatus(createServerClient()); return r; })
     .then((r) => {
       const synced = syncSequences();
       process.stdout.write(`upserted ${r.upserted}, inserted ${r.inserted}, already present ${r.skipped}; sequences ${synced ? "synced" : "NOT synced (no DATABASE_URL)"}\n`);

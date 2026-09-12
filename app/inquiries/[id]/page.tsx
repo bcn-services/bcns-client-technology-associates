@@ -3,8 +3,11 @@ import { notFound } from "next/navigation";
 import { requireSession } from "@/lib/auth/session";
 import { createServerClient } from "@/lib/db/client";
 import { loadInquiryOptions } from "@/lib/inquiries/inquiries";
-import { updateInquiryAction } from "../actions";
+import type { Db as CaseDb } from "@/lib/cases/record";
+import { existingCaseId, loadClientOptions } from "@/lib/inquiries/convert";
+import { convertInquiryAction, updateInquiryAction } from "../actions";
 import { InquiryForm } from "../inquiry-form";
+import { ConvertPanel } from "./convert-panel";
 
 export const dynamic = "force-dynamic";
 
@@ -15,12 +18,19 @@ export default async function InquiryPage({ params, searchParams }: {
   await requireSession();
   if (!/^\d+$/.test(params.id)) notFound();
   const db = createServerClient();
-  const [{ data: row, error }, options] = await Promise.all([
-    db.from("tblinquiry").select("*").eq("id", Number(params.id)).maybeSingle(),
+  const id = Number(params.id);
+  const [{ data: row, error }, options, clients, linkedCase] = await Promise.all([
+    db.from("tblinquiry").select("*").eq("id", id).maybeSingle(),
     loadInquiryOptions(db),
+    loadClientOptions(db as unknown as CaseDb),
+    existingCaseId(db as unknown as CaseDb, { id }),
   ]);
   if (error) throw new Error(`tblinquiry: ${error.message}`);
   if (!row) notFound();
+  const existingCase = linkedCase ?? row.inqresultingcase;
+  // Branch from the inquiry (in the lookup's spelling); with none, the only branch when there is exactly one.
+  const defaultBranch = options.branches.find((b) => b.toLowerCase() === (row.tabranch ?? "").toLowerCase())
+    ?? (options.branches.length === 1 ? options.branches[0] : undefined) ?? "";
 
   return (
     <main className="mx-auto max-w-6xl space-y-6 px-4 py-6">
@@ -36,7 +46,11 @@ export default async function InquiryPage({ params, searchParams }: {
           {row.inqresultingcase == null ? "none" : <Link href={`/cases/${row.inqresultingcase}`} className="underline">{row.inqresultingcase}</Link>}
         </span>
       </p>
-      {/* Item 8 (convert to case): the "Case attorney" / "Case client" pickers and the "Convert to case" button go here. */}
+      <ConvertPanel
+        inquiryId={row.id} existingCase={existingCase} attorneys={options.attorneys} clients={clients} branches={options.branches}
+        defaultAttorney={row.inqattyid == null ? "" : String(row.inqattyid)} defaultBranch={defaultBranch} action={convertInquiryAction}
+      />
+
       <InquiryForm action={updateInquiryAction} options={options} values={row} />
     </main>
   );
