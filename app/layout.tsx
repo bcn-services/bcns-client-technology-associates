@@ -3,6 +3,7 @@ import Link from "next/link";
 import "./globals.css";
 import { getSession, type Session } from "@/lib/auth/session";
 import { SECTIONS } from "@/lib/auth/sections";
+import { RunningIndicator } from "@/app/time/running-indicator";
 
 export const metadata: Metadata = {
   title: "Technology Associates",
@@ -36,6 +37,7 @@ function Header({ session }: { session: Session }) {
           <Link href="/account" className={navLink}>
             Account
           </Link>
+          <RunningIndicator />
           {/* Server-side decision: staff markup never contains this link. */}
           {session.role === "admin" && (
             <Link href="/users" className={navLink}>

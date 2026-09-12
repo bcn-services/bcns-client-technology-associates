@@ -39,7 +39,20 @@ async function findUserByEmail(admin: ReturnType<typeof createServerClient>, ema
   }
 }
 
-export async function seedE2eUser(admin: ReturnType<typeof createServerClient>, email: string, password: string) {
+/** tblbillingnames row KJS — journey 03's staff login logs time as this person. */
+export const STAFF_PERSONID = 1;
+
+/** The staff E2E account tests/journeys log in as: seedE2eUser + a linked billing person. */
+export function seedStaffE2e(admin: ReturnType<typeof createServerClient>, email: string, password: string) {
+  return seedE2eUser(admin, email, password, STAFF_PERSONID);
+}
+
+export async function seedE2eUser(
+  admin: ReturnType<typeof createServerClient>,
+  email: string,
+  password: string,
+  personid: number | null = null,
+) {
   // email_confirm: true is mandatory — no mailbox exists, an unconfirmed account can never sign in.
   const created = await admin.auth.admin.createUser({ email, password, email_confirm: true });
   let id: string, status: "created" | "existing";
@@ -55,7 +68,7 @@ export async function seedE2eUser(admin: ReturnType<typeof createServerClient>, 
     status = "created";
   }
 
-  const { error } = await admin.from("profiles").upsert({ id, email, role: "staff", personid: null }, { onConflict: "id" });
+  const { error } = await admin.from("profiles").upsert({ id, email, role: "staff", personid }, { onConflict: "id" });
   if (error) throw new Error(`${email}: profiles upsert failed: ${error.message}`);
   return { id, status };
 }
@@ -67,7 +80,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   const password = process.env.E2E_PASSWORD ?? "password";
   // No top-level await: package.json has no "type": "module", so this file transpiles to CJS.
   Promise.resolve()
-    .then(() => seedE2eUser(createServerClient(), email, password))
+    .then(() => seedStaffE2e(createServerClient(), email, password))
     .then(({ id, status }) => process.stdout.write(`${email} → staff (${status}) ${id}\n`))
     .catch((err: Error) => {
       process.stderr.write(`${err.message}\n`);
