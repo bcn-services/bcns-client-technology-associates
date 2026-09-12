@@ -68,7 +68,7 @@ function FieldInput({ f, row, options }: { f: Field; row: Row | null; options: O
   );
 }
 
-export async function ContactEditPage({ kind, idParam, flash }: { kind: Kind; idParam: string; flash: { saved?: string; error?: string } }) {
+export async function ContactEditPage({ kind, idParam, flash }: { kind: Kind; idParam: string; flash: { saved?: string; error?: string; returnTo?: string } }) {
   await requireSession();
   const spec = SPECS[kind];
   const id = idParam === "new" ? null : Number(idParam);
@@ -94,6 +94,7 @@ export async function ContactEditPage({ kind, idParam, flash }: { kind: Kind; id
       {flash.saved && <p role="status" className="text-sm text-emerald-700">{flash.saved === "created" ? `${spec.title} created` : `${spec.title} saved`}</p>}
       {flash.error && <p role="alert" className="text-sm text-red-700">{flash.error}</p>}
       <form action={saveContact.bind(null, kind, id)} className="grid gap-3 sm:grid-cols-2">
+        {id === null && flash.returnTo && <input type="hidden" name="returnTo" value={flash.returnTo} />}
         {spec.fields.map((f) => <FieldInput key={f.col} f={f} row={row} options={options} />)}
         <div className="sm:col-span-2">
           <button type="submit" className="rounded border border-slate-300 px-3 py-1 hover:bg-slate-100">Save</button>
