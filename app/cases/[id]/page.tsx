@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { requireSession } from "@/lib/auth/session";
 import { createServerClient } from "@/lib/db/client";
 import {
-  EVENT_SUGGESTIONS, field, attorneyName, clientName, firmAddress, formValue, origValue, loadCaseOptions, loadCaseRecord,
+  EVENT_SUGGESTIONS, errorMessage, field, attorneyName, clientName, firmAddress, formValue, origValue, loadCaseOptions, loadCaseRecord,
   type CaseOptions, type Db, type Field, type Option, type Row,
 } from "@/lib/cases/record";
 import { saveCaseAction } from "./actions";
@@ -122,7 +122,7 @@ export default async function CaseRecordPage({ params, searchParams }: { params:
         </ul>
       )}
       {saved && <p role="status" className="text-sm text-emerald-700">{saved === "1" ? "Case saved" : "No changes to save"}</p>}
-      {error && <p role="alert" className="text-sm text-red-700">{error}</p>}
+      {error && <p role="alert" className="text-sm text-red-700">{errorMessage(error)}</p>}
 
       <LockedForm key={first(searchParams.t) ?? "initial"} action={saveCaseAction.bind(null, id)}>
         <div className="grid gap-4 md:grid-cols-3">

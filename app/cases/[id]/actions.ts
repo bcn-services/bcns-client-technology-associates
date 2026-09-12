@@ -15,11 +15,11 @@ export async function saveCaseAction(id: number, formData: FormData): Promise<vo
     const written = await saveCase(createServerClient() as unknown as Db, id, formData, new Date());
     q = `saved=${Object.keys(written).length ? "1" : "0"}`;
   } catch (e) {
-    if (e instanceof CaseInputError) q = `error=${encodeURIComponent(e.message)}`;
+    if (e instanceof CaseInputError) q = `error=${encodeURIComponent(e.code)}`;
     else {
       // Raw DB errors stay in the server log, never on screen.
       console.error(`saveCase ${id}:`, e);
-      q = `error=${encodeURIComponent("Save failed; nothing was changed.")}`;
+      q = "error=failed";
     }
   }
   revalidatePath(`/cases/${id}`);

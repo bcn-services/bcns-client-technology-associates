@@ -22,8 +22,8 @@ const readCase = async () => ok(await db.from("tblcase").select("*").eq("caseid"
 before(async () => {
   if (skip) return;
   db = createServerClient();
+  dropTempPriority = await ensureSecondPriority(db); // the priority test needs a second option; heals a crashed run first
   snapshot = await readCase();
-  dropTempPriority = await ensureSecondPriority(db); // the priority test needs a second option
   browser = await chromium.launch();
   page = await browser.newPage({ baseURL: BASE });
   page.on("dialog", (d) => d.dismiss());

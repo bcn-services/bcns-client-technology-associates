@@ -200,3 +200,31 @@ test("__orig is only trusted for allow-listed fields; a field with no __orig is 
   assert.deepEqual(await saveCase(db, 1900, f, NOW), {});
   assert.equal(db.updates.length, 0);
 });
+
+// Browsers strip CR/LF from <input type=text> values; __orig (a hidden input's attribute) keeps them.
+test("legacy newline in a single-line field: untouched save writes nothing; editing another field keeps it", async () => {
+  const row = { ...MIGRATED, casesubject: "line1\nline2", otherexperts: "a\r\nb", billingcc: "x\ny", casetitle: "T\nitle", casestatduedatedescription: "Tr\nial" };
+  const strip = (col) => formValue(FIELDS.find((f) => f.col === col), row).replace(/[\r\n]/g, "");
+  const browser = Object.fromEntries(["casesubject", "otherexperts", "billingcc", "casetitle", "casestatduedatedescription"].map((c) => [c, strip(c)]));
+  const db = dbWith(row);
+  assert.deepEqual(await saveCase(db, 1900, formFor(row, browser), NOW), {});
+  assert.equal(db.updates.length, 0);
+  const written = await saveCase(db, 1900, formFor(row, { ...browser, casenotes: "edited" }), NOW);
+  assert.deepEqual(written, { casenotes: "edited" });
+  assert.equal(db.updates[0].payload.casesubject, undefined);
+  // A real edit to the single-line field still writes.
+  assert.deepEqual(await saveCase(dbWith(row), 1900, formFor(row, { ...browser, casesubject: "line1 line2" }), NOW), { casesubject: "line1 line2" });
+  // Textareas keep newline-sensitivity.
+  assert.deepEqual(diffCase({ casenotes: "a\nb" }, { casenotes: "ab" }), { casenotes: "ab" });
+});
+
+test("error codes map to fixed messages; arbitrary ?error= text is never echoed", async () => {
+  const { errorMessage } = await import("../../lib/cases/record.ts");
+  assert.equal(errorMessage("required:casetitle"), "Title is required");
+  assert.equal(errorMessage("int:casestatsubpriority"), "Sub-Priority must be a whole number");
+  assert.equal(errorMessage("date:caseenddate"), "End Date must be a date (YYYY-MM-DD)");
+  assert.equal(errorMessage("notfound"), "This case no longer exists.");
+  for (const junk of ["Call 555-0100 now", "required:numunpaidbills", "required:", "", "failed"]) assert.equal(errorMessage(junk), "Save failed; nothing was changed.");
+  const e = (() => { try { parseCaseForm(formFor(MIGRATED, { casetitle: " " })); } catch (x) { return x; } })();
+  assert.equal(e.code, "required:casetitle");
+});

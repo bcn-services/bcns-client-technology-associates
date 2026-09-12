@@ -59,10 +59,15 @@ export async function seedFixtures(db: Admin): Promise<{ upserted: number; inser
  */
 export async function ensureSecondPriority(db: Admin): Promise<() => Promise<void>> {
   const loose = db as unknown as { from(t: string): any };
+  const temp = "Test Priority (temp)";
+  // Self-heal a crashed earlier run: point 90001 back at High, then drop any leftover temp priority.
+  const reset = await loose.from("tblcase").update({ casestatpriority: "High" }).eq("caseid", 90001).eq("casestatpriority", temp);
+  if (reset.error) throw new Error(`tblcase reset: ${reset.error.message}`);
+  const stale = await loose.from("tblcasepriority").delete().eq("priority", temp);
+  if (stale.error) throw new Error(`tblcasepriority leftover: ${stale.error.message}`);
   const { data, error } = await loose.from("tblcasepriority").select("priority");
   if (error) throw new Error(`tblcasepriority: ${error.message}`);
   if (data.length >= 2) return async () => {};
-  const temp = "Test Priority (temp)";
   const ins = await loose.from("tblcasepriority").upsert({ priority: temp }, { onConflict: "priority" });
   if (ins.error) throw new Error(`tblcasepriority: ${ins.error.message}`);
   return async () => {

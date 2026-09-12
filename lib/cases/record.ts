@@ -61,7 +61,23 @@ export const EVENT_SUGGESTIONS = ["Inspection", "Telecom", "Meeting", "IUO Depo"
 export const UNPAID_NOTICES = ["1st", "2nd", "Final", "Partial Payment", "Deadbeat", "Small Claims"];
 export const BADGE = { unpaid: "Unpaid Bill", unapproved: "Unapproved SA", feeSchedule: "Warning: No Scanned Fee Schedule on File" };
 
-export class CaseInputError extends Error {}
+/** A user-fixable save error. `code` ("required:<col>", "int:<col>", "date:<col>", "notfound") goes in the redirect URL. */
+export class CaseInputError extends Error {
+  constructor(message: string, readonly code: string) { super(message); }
+}
+
+const ERROR_TEXT: Record<string, (label: string) => string> = {
+  required: (l) => `${l} is required`,
+  int: (l) => `${l} must be a whole number`,
+  date: (l) => `${l} must be a date (YYYY-MM-DD)`,
+};
+/** Fixed on-screen text for an `?error=` code; anything unrecognized gets the generic message, never the raw param. */
+export function errorMessage(code: string): string {
+  if (code === "notfound") return "This case no longer exists.";
+  const [kind = "", col = ""] = code.split(":");
+  const f = FIELD.get(col), text = ERROR_TEXT[kind];
+  return f && text ? text(f.label) : "Save failed; nothing was changed.";
+}
 
 const crlf = (s: string) => s.replace(/\r\n?/g, "\n");
 const isDate = (s: string) => /^\d{4}-\d{2}-\d{2}$/.test(s) && !Number.isNaN(Date.parse(`${s}T00:00:00Z`)) && new Date(`${s}T00:00:00Z`).toISOString().slice(0, 10) === s;
@@ -87,26 +103,34 @@ export function parseCaseForm(form: FormData): Row {
     if (!form.has(f.col)) continue;
     const raw = form.get(f.col);
     const s = typeof raw === "string" ? raw : "";
-    if (f.required && s.trim() === "") throw new CaseInputError(`${f.label} is required`);
+    if (f.required && s.trim() === "") throw new CaseInputError(`${f.label} is required`, `required:${f.col}`);
     if (s === "") { out[f.col] = null; continue; }
     if (f.kind === "int") {
-      if (!/^-?\d{1,9}$/.test(s.trim())) throw new CaseInputError(`${f.label} must be a whole number`);
+      if (!/^-?\d{1,9}$/.test(s.trim())) throw new CaseInputError(`${f.label} must be a whole number`, `int:${f.col}`);
       out[f.col] = Number(s.trim());
     } else if (f.kind === "date") {
-      if (!isDate(s)) throw new CaseInputError(`${f.label} must be a date (YYYY-MM-DD)`);
+      if (!isDate(s)) throw new CaseInputError(`${f.label} must be a date (YYYY-MM-DD)`, `date:${f.col}`);
       out[f.col] = s;
     } else out[f.col] = crlf(s);
   }
   return out;
 }
 
-/** Comparable form of a value: blanks are null, dates are YYYY-MM-DD, numbers are numbers, CRLF is LF. */
-function norm(kind: Kind, v: unknown): string | number | boolean | null {
-  if (kind === "bool") return v === true;
+/** Controls rendered as `<input type=text>`: browsers strip CR/LF from their values. */
+const SINGLE_LINE = new Set<Control>(["text", "eventdesc"]);
+
+/**
+ * Comparable form of a value: blanks are null, dates are YYYY-MM-DD, numbers are numbers, CRLF is LF.
+ * Single-line inputs compare with CR/LF removed on both sides, so a legacy newline the browser
+ * stripped from the input (but not from `__orig`) doesn't count as a change and stays in the DB.
+ */
+function norm(f: Field, v: unknown): string | number | boolean | null {
+  if (f.kind === "bool") return v === true;
   if (v === "" || v == null) return null;
-  if (kind === "int") return Number(v);
-  if (kind === "date") return String(v).slice(0, 10);
-  return crlf(String(v));
+  if (f.kind === "int") return Number(v);
+  if (f.kind === "date") return String(v).slice(0, 10);
+  const s = crlf(String(v));
+  return SINGLE_LINE.has(f.control) ? s.replace(/\n/g, "") || null : s;
 }
 
 /**
@@ -117,7 +141,7 @@ export function diffCase(original: Row, submitted: Row): Row {
   const out: Row = {};
   for (const [col, v] of Object.entries(submitted)) {
     const f = FIELD.get(col);
-    if (f && col in original && norm(f.kind, original[col]) !== norm(f.kind, v)) out[col] = v;
+    if (f && col in original && norm(f, original[col]) !== norm(f, v)) out[col] = v;
   }
   return out;
 }
@@ -153,7 +177,7 @@ export async function saveCase(db: Db, id: number, form: FormData, now: Date): P
   const submitted = parseCaseForm(form);
   const { data: current, error } = await db.from("tblcase").select("caseid").eq("caseid", id).maybeSingle();
   if (error) throw new Error(`tblcase read: ${error.message}`);
-  if (!current) throw new CaseInputError(`Case ${id} not found`);
+  if (!current) throw new CaseInputError(`Case ${id} not found`, "notfound");
   // ponytail: last-writer-wins per column when two users change the same field — add a version check if that bites.
   const changes = diffCase(parseOrig(form), submitted);
   if (Object.keys(changes).length === 0) return changes;
