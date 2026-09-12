@@ -1,6 +1,7 @@
-/** The nine app sections, shared by the header nav and the landing page. Plain routes only. */
+/** The ten app sections, shared by the header nav and the landing page. Plain routes only. */
 export const SECTIONS = [
   { href: "/cases", label: "Cases" },
+  { href: "/inquiries", label: "Inquiries" },
   { href: "/time", label: "Time" },
   { href: "/bills", label: "Bills" },
   { href: "/expenses", label: "Expenses" },
