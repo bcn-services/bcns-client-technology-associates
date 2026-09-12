@@ -38,7 +38,7 @@ journeys:
 ---
 
 - lane: migration
-  area: one-shot import of the SQL Server .bak into Supabase, re-runnable at go-live; rotates legacy credential first
+  area: one-shot import of the SQL Server .bak into Supabase, re-runnable at go-live; rotates legacy credential first. Amended 2026-09-12: also imports the NAS Excel timesheet history (per-person workbooks, one sheet per case) into tblactivity — gated on Kris's workbook samples and on whether the migrated tblactivity rows are real
   owns: [ scripts/migrate/**, tests/migration/** ]
   assignee: nate
   depends on: — (schema frozen in supabase/migrations by /foundation; runs first)
