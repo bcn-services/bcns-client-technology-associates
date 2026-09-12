@@ -2,6 +2,7 @@ import { requireSession } from "@/lib/auth/session";
 import { firmToday } from "@/lib/cases/presets";
 import { NOT_LINKED, errorMessage } from "@/lib/time/entries";
 import { EntryForm } from "./entry-form";
+import { Timer } from "./timer";
 import { WeekSection } from "./week-view";
 
 export const dynamic = "force-dynamic";
@@ -28,6 +29,7 @@ export default async function TimePage({ searchParams }: { searchParams: Params 
           {first(searchParams.added) === "1" && <p role="status" className="text-sm text-green-700">Entry added</p>}
           {first(searchParams.saved) === "1" && <p role="status" className="text-sm text-green-700">Entry saved</p>}
           {first(searchParams.deleted) === "1" && <p role="status" className="text-sm text-green-700">Entry deleted</p>}
+          <Timer clearOnAdded={first(searchParams.added) === "1"} />
           <EntryForm values={values} error={error ? errorMessage(error) : undefined} />
         </>
       )}

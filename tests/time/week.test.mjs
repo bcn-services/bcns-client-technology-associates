@@ -209,6 +209,37 @@ for (const role of ["admin", "staff"]) {
     assert.doesNotMatch(html, /entry (added|saved)/i);
   });
 }
+// Timer (app/time/timer.tsx) sits on the same /time page: every state's markup must stay clear of journey 03's selectors.
+const T = Date.UTC(2026, 0, 15, 14, 0);
+const timerStates = {
+  "initial (server render)": async () => { const { Timer } = await import("../../app/time/timer.tsx"); return React.createElement(Timer, { now: () => T }); },
+  "running + refusal": async () => { const { TimerView } = await import("../../app/time/timer.tsx"); return React.createElement(TimerView, { timer: { caseId: "90001", startedAt: T - 40 * 60_000, description: "note" }, now: T, message: "Stop the running timer first" }); },
+  "stopped + empty-case refusal": async () => { const { TimerView } = await import("../../app/time/timer.tsx"); return React.createElement(TimerView, { timer: { caseId: "90001", startedAt: T - 40 * 60_000, description: "note", stoppedAt: T }, now: T, message: "Enter a case number first" }); },
+};
+for (const [name, el] of Object.entries(timerStates)) {
+  test(`journey 03 trap (timer ${name}): no case/hours/description label, no save/add-entry button, no entry-saved text`, async () => {
+    const html = renderToStaticMarkup(await el());
+    assert.deepEqual(labelsAndAria(html).filter((t) => /case|hours|description/i.test(t)), []);
+    assert.doesNotMatch(html, /placeholder=|aria-labelledby=|<input[^>]*title=/);
+    const buttons = [...html.matchAll(/<button[^>]*>([\s\S]*?)<\/button>/g)].map((m) => m[1]);
+    assert.ok(buttons.includes("Start timer"));
+    assert.deepEqual(buttons.filter((t) => /save|add entry/i.test(t)), []);
+    assert.doesNotMatch(html, /entry (added|saved)/i);
+  });
+}
+test("timer markup: running shows h:mm:ss from startedAt, Stop and the Timer note; stopped shows Discard, no Stop", async () => {
+  const { TimerView } = await import("../../app/time/timer.tsx");
+  const t = { caseId: "90001", startedAt: T - (2 * 3600 + 4 * 60 + 5) * 1000, description: "" };
+  const run = renderToStaticMarkup(React.createElement(TimerView, { timer: t, now: T }));
+  assert.match(run, /<span role="timer"[^>]*>2:04:05<\/span>/);
+  assert.match(run, />Stop</);
+  assert.match(run, /Timer note/);
+  const stop = renderToStaticMarkup(React.createElement(TimerView, { timer: { ...t, stoppedAt: T }, now: T + 3600_000 }));
+  assert.match(stop, />2:04:05</);
+  assert.match(stop, />Discard</);
+  assert.doesNotMatch(stop, />Stop</);
+});
+
 test("admin markup: Person select, Show button, week preserved, unbilled table", async () => {
   const html = await render({ role: "admin", personId: 1 }, { week: "2026-01-15" });
   assert.match(html, /<label[^>]*>Person<\/label><select[^>]*name="who"/);
