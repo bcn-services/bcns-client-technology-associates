@@ -200,7 +200,7 @@ Test against the fixture, not the producing lane. Do not wait for it to exist.
     - "Add entry" on the panel opens `/time?case=90001` with Case pre-filled, and an entry added there appears at the top of the panel and raises the unbilled total by its hours
     - Journey 02 stays green, journey 01 still fails only at its known `/bills/i` ambiguity, and `tests/cases/*.test.mjs` remain passing
   after: cases
-  status: not started
+  status: done
 
 - task: Running-timer indicator in the header, and the E2E staff seed (wiring,
     app-shell). `app/time/running-indicator.tsx` (client component) reads the
