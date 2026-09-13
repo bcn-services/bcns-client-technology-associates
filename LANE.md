@@ -199,7 +199,7 @@ Test against the fixture, not the producing lane. Do not wait for it to exist.
     - A 1st bill 45 days old shows "45 days" and a due badge and sorts above a 10-day-old 1st bill with no badge
     - A staff login can open `/bills` and sees the list
     - Median of 5 renders of `/bills` stays under 1 s with 5,000 bills seeded, 100 of them open
-  status: not started
+  status: done
 
 - task: Recipient alert — when the bill's case has `tblcase.billingalert`
     true, `/bills/new` and `/bills/[id]` show a banner "Bill recipient alert —
