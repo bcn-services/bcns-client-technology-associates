@@ -1,40 +1,43 @@
 # Engineer Report
-**Task:** lane/billing item 8 of 9 — wire BillsPanel into the case page
-**Branch:** auto/billing (worktree .claude/worktrees/billing-auto, base 404724a, uncommitted — orchestrator commits)
+**Task:** Billing item 9: wire bills into time screens ("Bill #N" → /bills/N on tblactivity rows with actbillid)
+**Branch:** auto/billing (worktree .claude/worktrees/billing-auto), uncommitted per orchestrator
 **Date:** 2026-09-12
-
-## Gate results
-- `FOUNDATION_PG_URL=postgresql://localhost/ta_billing_gate corepack pnpm test` → tests 584, pass 507, fail 1, skip 76 (= baseline; only fail is pre-existing `advanced AND/OR/date via runSearch…`)
-- `corepack pnpm exec tsx --test --test-concurrency=1 tests/billing/*.test.mjs` (dev server down) → tests 152, pass 128, fail 0, skip 24
-- `corepack pnpm typecheck` → clean (tsc --noEmit, no output)
-- `tests/billing/case-bills-panel.test.mjs` alone → 12/12 pass; mutation check 8/8 killed (drop case filter, billdate asc, billid asc, latest=newest-any, no admin gate, no money fmt, open≠isOpen, String(null) type)
-
-## git diff --stat (tracked) + new files
-- `app/cases/[id]/page.tsx | 3 ++-` (1 file changed, 2 insertions(+), 1 deletion(-))
-- new: app/bills/bills-panel.tsx (63), lib/bills/case.ts (24), tests/billing/case-bills-panel.test.mjs (162)
-
-## page.tsx diff
-- `+import { BillsPanel } from "@/app/bills/bills-panel";` (after the TimePanel import)
-- `-        <Slot title="Bills" />` → `+        <BillsPanel caseId={id} />`; Slot kept (Funds/Expenses), `await requireSession()` untouched
+**Gate pnpm test (ta_billing_gate):** 584 tests, 507 pass, 1 fail, 76 skip. Same as baseline; the fail is the known search-e2e "advanced AND/OR/date via runSearch"
+**Gate billing glob (server stopped):** 184 tests, 154 pass, 0 fail, 30 skip (live files skip)
+**Gate typecheck:** pass (tsc --noEmit exit 0)
+**Live tests/billing/time-bill-links.live.test.mjs:** 2 pass, 0 fail; 0 leftover rows in 991400–991499 (tblactivity/tblbills/tblcase)
+**Live tests/time/case-panel.live.test.mjs:** 2 pass, 0 fail
+**Journey 01 (tests/journeys/01-legacy-data.spec.ts):** 1 passed
 
 ## Design Decisions
-- Loader `listCaseBills(db, caseId)` selects only the 7 shown columns from tblbills, `.eq("billcaseid")`, order billdate desc, billid desc; never touches tblcase/numunpaidbills.
-- `BillsPanel({ caseId, db?, session? })` → `session ?? await requireSession()`; admin = `role === "admin"`; failed read → "Bills could not be loaded." note.
-- `BillsPanelView` is pure; open = `isOpen(billnotice)` from rules.ts; latest open = first open row in loader order (billdate desc, billid desc).
-- Balance via existing `fmtMoney` (lib/bills/edit.ts); legacy null billtype renders empty cell.
-- Count + notice dates in a `<dl>` (`unpaid-bill-count`, `second-notice-date`, `final-notice-date`), omitted only on a failed read; empty string when unset/no open bill.
-- Copy: heading "Bills" (sole heading), columns Date/Type/Balance/Status, "Unpaid", "2nd notice", "Final notice", "No bills on this case", "New bill" — no /billed/i, no buttons/inputs.
+- One shared `BillLink` in `app/bills/bill-link.tsx`, used by both views. It renders nothing when `billId == null`. The link is gated on actbillid, not isBilled.
+- There is one null guard only, inside BillLink. The case panel's extra `actbillid != null &&` gate was removed because it would mask a mutation of BillLink's guard (defect family 3).
+- The link text is a single text node, `Bill #N`. It has no aria-label or title, so it never matches /bills/i. Markers are untouched: case `data-testid="billed-marker"`, week "billed" span.
+- No loader change: both listCaseTime and listWeek already select actbillid.
 
 ## Files Changed
-- `lib/bills/case.ts` — new case-bills loader
-- `app/bills/bills-panel.tsx` — new BillsPanel + BillsPanelView
-- `tests/billing/case-bills-panel.test.mjs` — 12 unit tests through real BillsPanel with fake PostgREST (applies eq/order) + injected session
-- `app/cases/[id]/page.tsx` — import + Slot line swap (2 lines)
+- `app/bills/bill-link.tsx`: new BillLink component
+- `app/cases/[id]/time-panel.tsx`: import and render BillLink after the billed marker
+- `app/time/week-view.tsx`: import and render BillLink beside the "billed" span
+- `tests/time/case.test.mjs:83`: guard G's exact-text literal gains " Bill #12". The row has actbillid=12, and the new link is intended behavior. It still goes red if isBilled loses its actbillid half.
+- `tests/billing/time-bill-links.test.mjs`: new, 13 render and isEditable tests
+- `tests/billing/time-bill-links.live.test.mjs`: new live test on case 991401
 
-## Deferred / Out of Scope
-- No dev-server/Playwright eyeball of /cases/90001 or journey 03 `450.00` — left to QA (unit test asserts 450 → "450.00").
+## Done-when coverage
+- Case page linked/legacy/unbilled: unit tests "case panel: actbillid row keeps data-testid=billed-marker and links 'Bill #4242' → /bills/4242", "case panel: legacy billed row (actbillid null) keeps its marker and has no /bills/ link or 'Bill #' text", "case panel: unbilled row shows neither marker nor link"; live "/cases/991401 Time panel: actbillid row → marker + 'Bill #N' → /bills/N; ..."
+- Week view: unit tests "week view: actbillid row keeps its 'billed' span and links 'Bill #4242' → /bills/4242", "...legacy...", "...unbilled..."; live "/time week view (staff, personid 1): ..."
+- Link gated on actbillid rather than actbilled: "case panel: actbilled=false + actbillid=4243 still links", "week view: actbilled=false + actbillid=4243 still links"
+- Guardrail /bills/i: "case panel journey-01 trap: link text and panel text never match /bills/i; no buttons, aria-label or title"; live asserts panel innerText has no /bills/i; case-panel.live "live A" and journey 01 pass
 
-## Flags for Reviewer
-- Panel calls `requireSession()` a second time per case-page render (page discards its result; binding note forbids changing that line) — one extra profiles read.
-- listCaseBills is unpaged (PostgREST max-rows 1000), marked `ponytail:`.
-- Journey 03 `getByText(/billed/i)` may hit multiple time-panel matches ("Unbilled hours", "billed" marker) under Playwright strict mode — pre-existing, not from this panel.
+## Edit/delete rules (unchanged)
+- Existing: tests/time/edit.test.mjs "update chain filters eq actbilled false", "update chain filters is actbillid null", "delete chain filters eq actbilled false", "delete chain filters is actbillid null", "update: any select says the row is editable but the write matches 0 rows → locked", "delete: the write matches 0 rows → locked"
+- Gap: no test called isEditable directly (it gates the /time/[id] page). Added "isEditable: actbilled=false with actbillid set → not editable", "isEditable: actbilled=true with actbillid null → not editable", "isEditable: unbilled row → editable"
+- Week view keeps every row's /time/<actid> date link and renders no buttons for staff: "week view: every row keeps its /time/<actid> date link; staff view renders no button and no aria-label"
+
+## Mutation checks (each run, then restored)
+- BillLink null guard dropped → legacy/unbilled row tests red in both views. Wrong href id → the 4 link tests red. Text "Bills #" → trap test red. Week BillLink removed → the 2 week link tests red.
+- isEditable minus actbillid cond → only "isEditable: actbilled=false with actbillid set" red. isEditable minus actbilled cond → only "isEditable: actbilled=true with actbillid null" red.
+
+## Deferred / Flags for Reviewer
+- Hosted case 90001 started at 3.500 unbilled hours, not 2.000 (case-panel.live note): stray rows on the fixture case that predate this run. Not touched.
+- package.json test script still omits tests/billing/*.test.mjs; per the Global rules the Reviewer adds it at merge.

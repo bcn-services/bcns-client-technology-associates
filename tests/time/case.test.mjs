@@ -80,7 +80,7 @@ test("guard F billed marker from actbilled: actbilled=true, actbillid null → m
 
 test("guard G billed marker from actbillid: actbilled=false, actbillid set → marker", () => {
   const [r] = rowTexts(render([{ ...act(3, 90001, "2026-01-17", "0.5", 1, "Billed by id", { billid: 12 }), initials: "KJS" }]));
-  assert.equal(r, "2026-01-17 KJS 0.500 Billed by id billed");
+  assert.equal(r, "2026-01-17 KJS 0.500 Billed by id billed Bill #12"); // billing item 9 adds the "Bill #N" link
 });
 
 test("done-when fixture: panel over fake-client data shows KJS row (no marker), JON row (billed), Unbilled hours: 2.000", async () => {
