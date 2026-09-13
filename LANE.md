@@ -164,7 +164,7 @@ Test against the fixture, not the producing lane. Do not wait for it to exist.
     - Close as Cancelled on a 2nd bill sets 'Cancelled' and leaves both notice dates unchanged; both actions are refused on a Paid bill and the row is unchanged
     - Reliability: two concurrent Advance submits on the same 1st bill leave it at '2nd', not 'Final'
     - Reliability: an Advance at 23:30 America/New_York with the server on `TZ=UTC` stamps the New York date
-  status: not started
+  status: done
   ui: true
 
 - task: Revise — a "Revise" button on `/bills/[id]` for an open bill that no
