@@ -43,7 +43,12 @@ const MESSAGES: Record<string, string> = {
   notfound: "That bill no longer exists.",
   forbidden: "Only admins can edit bills.",
   failed: "The bill could not be saved.",
+  notice: "Pick a start status: 1st, Credit or Refund.",
+  case: "That case does not exist.",
+  stale: "Some entries were billed meanwhile — reload and try again",
 };
+/** Money typed as text: up to 10 digits, 2 decimals, negative allowed (commas stripped first). */
+export const BALANCE_RE = /^-?\d{1,10}(\.\d{1,2})?$/;
 export const billErrorMessage = (code: string): string => MESSAGES[code] ?? MESSAGES.failed!;
 
 /** Money as 2-decimal text. numeric(12,2) fits a double exactly enough for display; no arithmetic is done on it. */
@@ -67,7 +72,7 @@ export function parseBillEdit(get: (k: string) => string): BillEdit {
   const type = get("billtype").trim();
   if (type && !BILL_TYPES.includes(type)) throw new BillInputError("type");
   const balance = get("billbalance").trim().replace(/,/g, "");
-  if (!/^-?\d{1,10}(\.\d{1,2})?$/.test(balance)) throw new BillInputError("balance");
+  if (!BALANCE_RE.test(balance)) throw new BillInputError("balance");
   const opt = (k: string) => get(k).trim() || null;
   return {
     billdate,
