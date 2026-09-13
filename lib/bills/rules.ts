@@ -10,6 +10,8 @@ export const OPEN_NOTICES: ReadonlySet<string> = new Set(["1st", "2nd", "Final",
 export const CLOSE_AS_NOTICES: ReadonlySet<string> = new Set(["Cancelled", "Carried Over", "Deadbeat", "Settled"]);
 /** Statuses a new bill can start in. */
 export const START_NOTICES: ReadonlySet<string> = new Set(["1st", "Credit", "Refund"]);
+/** `billtype` check-constraint values (migration 0002); null = legacy bill. */
+export const BILL_TYPES: readonly string[] = ["blank", "timesheet", "depoprep", "depo", "trial", "retainer"];
 /** Days after the last notice before an open bill is due its next notice. */
 export const BILL_DUE_DAYS = 30;
 
