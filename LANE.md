@@ -145,7 +145,7 @@ Test against the fixture, not the producing lane. Do not wait for it to exist.
     - A retainer bill saved with nothing checked has `billhours` 0 and changes no `tblactivity` row
     - Reliability: when one checked row is billed elsewhere after the form loads, the save redirects with `error=stale`, no new bill row exists, and the other checked row is still unbilled
     - The create action posted as staff is refused and no `tblbills` row is inserted
-  status: not started
+  status: done
   ui: true
 
 - task: Notice actions on `/bills/[id]` — **Advance** (1st → 2nd stamps
