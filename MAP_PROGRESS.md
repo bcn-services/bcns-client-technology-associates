@@ -10,15 +10,15 @@ across rounds — never reset. Per-item detail lives in `progress/<lane>.md`.
 | migration | nate | lane/migration | done — 4/4 items, merged 2026-09-09 (`a3add4b`) |
 | app-shell | nate | lane/app-shell | done — 12/12 items (7 planned + 5 polish), merged 2026-09-10 (`464ab58`) |
 | cases | nate | lane/cases | done — 9/9 items, merged 2026-09-11 (`298b6ac`, PR #4) |
-| time | nate | — | not started — no LANE.md yet |
+| time | nate | lane/time | done — 6/6 items + 3 click-through fixes, merged 2026-09-12 (`9b8d68f`, PR #9) |
 | billing | nate | — | not started — no LANE.md yet |
 | money | nate | — | not started — no LANE.md yet |
 | docs-reports | nate | — | not started — no LANE.md yet |
 
-**Journeys:** 1 of 6 green (2026-09-11, after cases). 02 (inquiry → case) passes. 01 now reaches the
-case screen and fails only on an ambiguous `getByText(/bills/i)` (matches nav link + the case's "Bills"
-heading) — protected-path amendment: scope to `main` or use `getByRole('heading')`. 03–06 fail on screens
-later lanes build (time, funds, bank import, dashboard). Progress reading, not a merge gate.
+**Journeys:** 1 of 6 green (2026-09-12, after time). 01 passes. 02 fails on a strict
+`getByText(/firm/i)` (`02-inquiry-to-case.spec.ts:25` — header "Firms" link + case "Firm" heading) —
+protected-path amendment. 03 passes the `/time` entry and fails at `/bills/new` (billing lane). 04–06 fail
+on screens later lanes build (funds, bank import, dashboard). Progress reading, not a merge gate.
 
 **Amendments this round**
 
