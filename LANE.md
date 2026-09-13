@@ -119,7 +119,7 @@ Test against the fixture, not the producing lane. Do not wait for it to exist.
     - An admin changes balance 875.00 → 900.00 and comments; after reload both show the new values, and `billnotice` and `billhours` are unchanged in the row
     - A staff login sees no edit form; the edit action posted as staff is refused and the row is unchanged
     - A bill with two attached activity rows lists both with their hours
-  status: not started
+  status: done
   ui: true
 
 - task: Create bill — `/bills/new?case=<id>` (`app/bills/new/page.tsx`,
