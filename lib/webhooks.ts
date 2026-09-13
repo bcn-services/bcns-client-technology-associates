@@ -1,7 +1,7 @@
 /**
  * webhooks.ts — Generic inbound-webhook hygiene helpers.
  *
- * The pipeline lives in @nseluga/app-core (shared platform code — fixes
+ * The pipeline lives in @bcn-services/app-core (shared platform code — fixes
  * propagate by version bump); this file just re-exports it. Platform rules:
  * every inbound webhook verifies its signature and every handler is
  * idempotent. There are deliberately NO provider-specific routes in the
@@ -18,4 +18,4 @@ export {
   unverifiedVerifier,
   createMemoryEventStore,
   processWebhook,
-} from "@nseluga/app-core";
+} from "@bcn-services/app-core";
