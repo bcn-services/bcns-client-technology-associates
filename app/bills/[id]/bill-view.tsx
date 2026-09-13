@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { SaSubmit } from "@/app/cases/[id]/sa-submit";
-import { BILL_TYPES } from "@/lib/bills/rules";
+import { BILL_TYPES, isOpen, nextNotice } from "@/lib/bills/rules";
+import { closeTargets } from "@/lib/bills/notice";
 import { fmtMoney, type BillPageData } from "@/lib/bills/edit";
 import { fmtHours, thousandths } from "@/lib/time/week";
 
@@ -9,10 +10,12 @@ const show = (v: string | number | null | undefined) => (v == null || v === "" ?
 const input = "rounded border border-slate-300 px-2 py-1";
 
 /** Pure view of one bill. `action` is the bound editBill; passed only for admins, so staff get no form. */
-export function BillView({ data, admin, action, error, saved }: {
+export function BillView({ data, admin, action, advance, close, error, saved }: {
   data: BillPageData;
   admin: boolean;
   action?: (formData: FormData) => void | Promise<void>;
+  advance?: (formData: FormData) => void | Promise<void>;
+  close?: (formData: FormData) => void | Promise<void>;
   error?: string;
   saved?: boolean;
 }) {
@@ -34,6 +37,8 @@ export function BillView({ data, admin, action, error, saved }: {
     ["Comments", show(b.billcomments)],
   ];
   // Remount the form whenever the row changes, so a same-URL redirect shows the saved values (Next 14.2 keeps uncontrolled inputs).
+  const next = isOpen(b.billnotice) ? nextNotice(b.billnotice) : null;
+  const targets = closeTargets(b.billnotice);
   const formKey = JSON.stringify([b.billdate, b.billtype, b.billbalance, b.billestimate, b.billcomments, b.billfilename]);
   return (
     <div className="space-y-4">
@@ -73,6 +78,28 @@ export function BillView({ data, admin, action, error, saved }: {
           </table>
         )}
       </section>
+      {admin && ((advance && next) || (close && targets.length > 0)) && (
+        <section data-testid="bill-notice" className="flex flex-wrap items-end gap-3 rounded border border-slate-200 p-3">
+          {advance && next && (
+            <form key={`adv-${b.billnotice}`} action={advance}>
+              <input type="hidden" name="expected" value={b.billnotice} />
+              <SaSubmit label={`Advance to ${next}`} />
+            </form>
+          )}
+          {close && targets.length > 0 && (
+            <form key={`close-${b.billnotice}`} action={close} className="flex items-end gap-2">
+              <input type="hidden" name="expected" value={b.billnotice} />
+              <label className="grid gap-1 text-sm">Close as
+                <select name="target" required defaultValue="" className={input}>
+                  <option value="" disabled>{DASH}</option>
+                  {targets.map((t) => <option key={t} value={t}>{t}</option>)}
+                </select>
+              </label>
+              <SaSubmit label="Close bill" />
+            </form>
+          )}
+        </section>
+      )}
       {admin && action && (
         <form key={formKey} action={action} data-testid="bill-edit" className="max-w-xl space-y-3 rounded border border-slate-200 p-3">
           <h2 className="font-semibold">Edit bill</h2>

@@ -7,6 +7,7 @@ import { createServerClient } from "@/lib/db/client";
 import type { Db } from "@/lib/time/entries";
 import { runEditBill } from "@/lib/bills/edit";
 import { runCreateBill } from "@/lib/bills/create";
+import { runNoticeAction } from "@/lib/bills/notice";
 
 /** Admin create of one bill on a case, claiming the checked unbilled time rows (see createBill in lib/bills/create.ts). */
 export async function createBill(formData: FormData): Promise<void> {
@@ -16,6 +17,24 @@ export async function createBill(formData: FormData): Promise<void> {
     revalidatePath,
     redirect,
   });
+}
+
+const noticeDeps = () => ({
+  session: () => requireSession("admin"),
+  db: () => createServerClient() as unknown as Db,
+  now: () => new Date(),
+  revalidatePath,
+  redirect,
+});
+
+/** Admin: advance 1st → 2nd → Final, stamping that notice's date (see lib/bills/notice.ts). */
+export async function advanceBillNotice(billid: number, formData: FormData): Promise<void> {
+  await runNoticeAction("advance", billid, formData, noticeDeps());
+}
+
+/** Admin: close an open bill as Cancelled / Carried Over / Deadbeat / Settled (see lib/bills/notice.ts). */
+export async function closeBillAs(billid: number, formData: FormData): Promise<void> {
+  await runNoticeAction("close", billid, formData, noticeDeps());
 }
 
 /** Admin edit-in-place of one bill's six editable columns (see EDITABLE in lib/bills/edit.ts). */
