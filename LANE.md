@@ -212,7 +212,7 @@ Test against the fixture, not the producing lane. Do not wait for it to exist.
   done when:
     - A case with `billingalert` true and `billingcc` 'a@x.test, b@x.test' shows the banner and both addresses on `/bills/new?case=<id>` and on that case's bill page
     - A case with `billingalert` false shows no banner; with a non-empty `billingcc` it still shows the CC line
-  status: not started
+  status: done
 
 - task: Wire bills into the case page — replace `<Slot title="Bills" />` at
     `app/cases/[id]/page.tsx:194` with a billing-owned `BillsPanel`
