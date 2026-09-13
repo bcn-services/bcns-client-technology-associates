@@ -1,328 +1,222 @@
-# Technology Associates — Lane: cases
+# Technology Associates — Time Lane
 
 ## Objective
 
-Staff can find any case (migrated or new), open its full record (firm,
-attorney, client, status, priority, service authorizations) and edit it, and
-turn a logged inquiry into a case — replacing the Access case and inquiry forms.
+Each staff member logs their hours on a case in the app — typed in, or timed
+with a start/stop button — and corrects them in a week view; every case shows
+its unbilled hours the moment anyone opens it. This replaces the per-person
+Excel workbooks on the NAS.
 
 Lane done when:
-- Journey 02 passes on the merged branch
-- A migrated fixture case opens at `/cases/<id>` with the same values as its
-  `tblcase` row, and search finds it by case number, title, and client name
-- Editing a case as staff persists; no delete path exists anywhere in the lane
+- Journey 03 passes through its `/time` step on the merged branch, and the
+  saved `tblactivity` row has `actwho` = that login's person, `actbilled=false`,
+  `actbillid` null
+- Starting the timer on case 90001, stopping it, and saving produces an entry
+  whose hours equal the elapsed time rounded to the nearest 0.125 h (floor
+  0.125); the week view shows it under today, and editing its description
+  there persists
+- `/cases/90001` shows a Time section listing the two fixture rows, with
+  "Unbilled hours" = 2.000 (sum where `actbilled=false and actbillid is null`)
+- Editing or removing a billed row from any time screen is refused and the row
+  is unchanged
 
-Status: nothing built. `integration` carries migration + app-shell (merged
-2026-09-10, `464ab58`). Journey 01 stays red after this lane — its Bills /
-Funds / Expenses content belongs to billing and money; this lane renders the
-empty slots.
+## Status
 
-Preconditions — both amendments land on `main`, merge to `integration`, and this
-branch rebases onto them before `/dev-team-auto` runs:
-- `supabase/migrations/0007_case_search_view.sql` — view `case_search` with
-  columns caseid, casetitle, casenotes, casecaption, attyname, attyemail,
-  attyphone, frmname, frmphone, clientname, otherexperts. `tblcase` LEFT JOINs
-  attorney, firm, and client (FKs are NOT VALID; an inner join silently drops
-  orphan cases). attyname = first + ' ' + middle + ' ' + last, clientname =
-  first + ' ' + last, nulls as ''. Regenerate `lib/db/types.ts`.
-- `tests/journeys/02-inquiry-to-case.spec.ts` — before clicking "convert to
-  case", select the fixture attorney (Pat Example) and client (Sam Sample) by
-  id value `1` in pickers labelled exactly "Case attorney" and "Case client"
-  (the inquiry form already has "AttyName" and "Client" fields).
+Branch `lane/time` off `integration` (`1d493ef`). Migration, app-shell, and
+cases are merged. `/time` is already in the nav (`lib/auth/sections.ts`), and
+journey 03 (`tests/journeys/03-time-to-bill.spec.ts`) fixes the `/time` form's
+labels ("Case", "Hours", "Description"), button ("Add entry"), and success text
+("Entry added"). Nothing under `app/time`, `lib/time`, or `tests/time` exists.
 
-Both landed on `main` in `c27d712` and were merged into `integration` (`c671c55`).
-
-Merge-time step (unowned root config): add `tests/cases/*.test.mjs` to the
-`test` script in `package.json`, as app-shell did.
-
-Lane: cases — cases, firms, attorneys, clients, inquiries, service authorizations, case search
+Lane: time — in-app time entry per person per case (replaces the NAS Excel timesheets); unbilled hours per case. Rate card deferred — bills are priced in the client's other service
 
 Owned — this lane's items live inside these paths:
-  app/cases/**, app/firms/**, app/attorneys/**, app/clients/**,
-  app/inquiries/**, lib/cases/**, lib/contacts/**, lib/inquiries/**,
-  tests/cases/**
+  app/time/**, lib/time/**, tests/time/**
 
 Open — merged lanes. Wiring items may edit these; rebase onto `integration` first:
-  migration — scripts/migrate/**, tests/migration/**
-  app-shell — app/layout.tsx, app/page.tsx, app/globals.css,
-    app/not-found.tsx, middleware.ts, app/(auth)/**, lib/auth/**,
-    tests/app-shell/**
+  migration: scripts/migrate/**, tests/migration/**
+  app-shell: app/layout.tsx, app/page.tsx, app/globals.css, app/not-found.tsx, middleware.ts, app/(auth)/**, lib/auth/**, tests/app-shell/**
+  cases: app/cases/**, app/firms/**, app/attorneys/**, app/clients/**, app/inquiries/**, lib/cases/**, lib/contacts/**, lib/inquiries/**, tests/cases/**
 
 Stop and report if an item requires changing a path outside both lists:
-  protected — supabase/migrations/**, lib/db/**, lib/auth/session.ts,
-    lib/auth/client.ts, lib/env.ts, scripts/gen-db-types.mjs,
-    tests/foundation/**, tests/journeys/**, playwright.config.ts,
-    tsconfig.foundation.json
-  an unmerged lane's — app/time/**, lib/time/**, tests/time/**,
-    app/bills/**, lib/bills/**, tests/billing/**, app/expenses/**,
-    app/funds/**, app/bank-review/**, lib/expenses/**, lib/funds/**,
-    lib/bank-import/**, tests/money/**, app/documents/**, app/reports/**,
-    app/dashboard/**, lib/documents/**, lib/reports/**, lib/storage.ts,
-    tests/docs-reports/**
-  unowned — repo root config (package.json, pnpm-*.yaml, tsconfig,
-    next/eslint/tailwind/postcss config, *.md), .github/workflows,
-    .claude/worktrees, app/api/health, lib/health.ts, lib/ai.ts,
-    lib/webhooks.ts, tests/*.test.mjs
+  protected — supabase/migrations/**, lib/db/**, lib/auth/session.ts, lib/auth/client.ts, lib/env.ts, scripts/gen-db-types.mjs, tests/foundation/**, tests/journeys/**, playwright.config.ts, tsconfig.foundation.json
+  an unmerged lane's — billing: app/bills/**, lib/bills/**, tests/billing/** · money: app/expenses/**, app/funds/**, app/bank-review/**, lib/expenses/**, lib/funds/**, lib/bank-import/**, tests/money/** · docs-reports: app/documents/**, app/reports/**, app/dashboard/**, lib/documents/**, lib/reports/**, lib/storage.ts, tests/docs-reports/**
+  unowned — root config (package.json, pnpm-*.yaml, tsconfig, next/eslint/tailwind/postcss config, *.md), .github/workflows, .claude/worktrees, app/api/health, lib/health.ts, lib/ai.ts, lib/webhooks.ts, tests/*.test.mjs
 
 Frozen contracts — build and test against these; they will not move:
-  app-shell → `lib/auth/session.ts` (`requireSession`, `Session`, `Role`),
-    fixture `tests/journeys/helpers.ts` (`login`, `CASE_ID`)
-  schema → `lib/db/types.ts`, fixture `tests/foundation/fixtures/rows.ts`
+  app-shell (session) — `lib/auth/session.ts`: `Session = { userId; email; role: 'admin'|'staff'; personId: number|null }`, `requireSession()`; login helper `tests/journeys/helpers.ts`
+  cases (tblcase rows) — `lib/db/types.ts` `tblcase` Row; fixture `tests/foundation/fixtures/rows.ts` (case 90001)
+  schema (tblactivity, tblbillingnames, profiles) — `lib/db/types.ts`; fixtures `tests/foundation/fixtures/rows.ts` (actid 1: KJS 2.000 unbilled; actid 2: JON 1.500 billed; personid 1 = KJS, 2 = JON)
+  unbilled := `actbilled = false and actbillid is null` (migration 0002, check `tblactivity_billed_pair`)
 
 Test against the fixture, not the producing lane. Do not wait for it to exist.
 
 ## Global rules
 
-- Every page follows `app/(auth)/users/page.tsx`: `export const dynamic =
-  "force-dynamic"`, `requireSession()` first, then `createServerClient()` from
-  `lib/db/client.ts`, parallel reads with `Promise.all`, Tailwind.
-- Admin and staff have identical access to every screen in this lane.
-- No hard delete for anyone — no delete button, action, or query on any case,
-  firm, attorney, client, inquiry, or service-authorization row.
-- Legacy table and column names are used as migrated (lowercase). Never add a
-  column or migration; `supabase/migrations/**` is protected.
-- Screens match the legacy Access forms' fields, labels, and value lists
-  (catalog: `LEGACY.md`). Dropdowns backed by a lookup table (`tblcasestatus`,
-  `tblcasepriority`, `tblcasewaitingfor`, `tblbranches`, `tblstates`) read it
-  live — never hard-code those values.
-- Legacy text comparisons were case-insensitive (Access); every status or
-  value-list comparison ported here is case-insensitive too.
-- An update writes only the columns the user changed — a save never writes
-  back a column the form did not show.
-- `numunpaidbills` and `numunapprovedsa` are never written; both counts are
-  computed live when shown.
-- Unit tests: `tests/cases/*.test.mjs` with fake clients via `tsx --test`;
-  live tests `tests/cases/*.live.test.mjs` against local Supabase. Fixtures and
-  seeds use invented data only.
-- Copy `.env.local` into the worktree before running any item.
-- Context: `CLAUDE.md`, `CLIENT.md`, `LEGACY.md`, `FOUNDATION.md`, `MAP.md`.
+- Server-action pattern from `app/cases/[id]/actions.ts`: `"use server"`, `requireSession()`, a lib function taking `Db`, errors back through the query string, `revalidatePath`, `redirect(...)`. Pages are server components; only the timer and the header indicator are client components.
+- Admin and staff are identical here except: admin may edit or delete any unbilled row and view any person's week (`?who=`). Staff act only on rows whose `actwho` equals their own `personId`.
+- A login with `personId` null cannot enter, edit, or delete time. Show "Your login isn't linked to a person — an admin can set it on /users" in place of the form; refuse the POST server-side.
+- Never write `actbilled` or `actbillid`. A row with `actbilled=true` or `actbillid` set is read-only on every screen in this lane, and the refusal lives in the write statement's filter, never only in a prior select.
+- No migrations, no schema or type changes. Legacy lowercase table and column names. `acthrs` is `numeric(9,3)`: store hours as entered, 0 < hours ≤ 24, at most 3 decimals.
+- Dates are firm-local (America/New_York): default via `firmToday()` from `lib/cases/presets.ts`; a week is Monday–Sunday in that zone; `actdate` is handled as a date-only string, no local-time `Date` arithmetic.
+- Unit tests `tests/time/*.test.mjs` use the fake PostgREST proxy pattern from `tests/cases/create.test.mjs`. Browser checks `tests/time/*.live.test.mjs` follow `tests/cases/create.live.test.mjs`: skip cleanly without a dev server or `SUPABASE_SERVICE_ROLE_KEY`, invented case numbers 990000+, every inserted row removed in `after()` with the service role. A live test that needs a linked person sets `profiles.personid` on the E2E login with the service role in `before()` and restores the prior value in `after()`.
+- Copy `.env.local` into each worktree before running live tests.
+- At merge the Reviewer adds `tests/time/*.test.mjs` to the `test` script in `package.json` (unowned), as the cases merge did.
+- Fuller context: `CLAUDE.md`, `MAP.md`, `LEGACY.md` (timesheets section), `CLIENT.md`.
 
 ## Not yet specified
 
-- `CaseStatDueDateDescription` value list (Inspection, Telecom, Meeting, IUO
-  Depo, KJS Depo, LLB Depo, Trial) was found beside the field, not bound to it —
-  confirm with Kris after item 4 ships; free text with suggestions until then.
+- Whether the migrated `tblactivity` rows are real time or stale (LEGACY.md: tblActivity use unconfirmed; billing ran from Excel). Ask Kris. If stale, a one-shot go-live runbook step clears them — migration lane, not here — revisit after item 5 shows them on a real case
+- Rounding for timed entries: nearest 0.125 h with a 0.125 floor is used here; confirm with Kris against the workbooks' eighth-hour convention (`tests/migration/load.test.mjs` shows 0.125 in legacy rows) — revisit after item 4
 
 ## Out of scope
 
-- `AwaitingRetainer` / `AwaitingMaterial` — not in the migrated schema; ask Kris
-  whether they still matter (a schema amendment if so).
-- Bills, funds received, expenses, activity, income on the case page — billing
-  and money lanes; this lane leaves empty slots.
-- Financial presets (bill payments, income, expense, checkbook, crosstabs,
-  unbilled-case queries) — billing, money, docs-reports.
-- CasesPerYear / InquiriesPerYear — reports (docs-reports); their SQL is not
-  recoverable from the Access file.
-- Scanned documents, NAS / front-desk folder links, report/memo/summary
-  generators, email-attorney button — docs-reports.
-- Paying bills or touching a bank account — the office manager's job, handled
-  by separate scripts; the app never moves money.
-- Hard deletes, including legacy `qryDeleteAttys` / `qryDeleteFirms` — ruled out.
-- Automated duplicate-attorney detection — legacy is a sorted worksheet a human
-  scans; fuzzy matching would not be faithful.
+- Importing the NAS Excel timesheet history into `tblactivity` — migration lane; MAP.md amended 2026-09-12; needs Kris's workbook samples
+- Rates, `billingfactor` math, fees — deferred with billing output (MAP.md, 2026-09-08)
+- Marking rows billed, assigning `actbillid` — billing lane
+- Multi-row grid entry and inline cell editing — the edit page was chosen; polish after real use
+- Server-side timer state — needs a schema amendment; a browser-local timer covers one machine per person
+- Hours-by-person or by-period reports — docs-reports lane
 
 ---
 
-- task: Firms, attorneys, and clients — list, create, and edit screens at
-    `/firms`, `/attorneys`, `/clients`, logic in `lib/contacts/**`. Fields per the
-    legacy forms. Firm: name, address 1/2, city, state (from `tblstates`), zip,
-    phone, fax, email, practice type (Plaintiff / "Defendent" [legacy spelling,
-    kept] / NA), size (Small/Medium/Large), active (text, as stored). Attorney:
-    first, middle, last, suffix, Esq. checkbox, title, firm picker, phone, email,
-    cell. Client: title, first, last, phone, notes. Legacy presets as named
-    views: active firms (by `frmactive` value), attorney list by last name with
-    firm and address (duplicate worksheet), firm list by name (rename list),
-    attorneys with their cases ordered by attorney (attorney-ID fix list), cases
-    by firm state.
+- task: Time entry form and insert. `app/time/page.tsx` (server component) renders
+    `app/time/entry-form.tsx` with fields labelled exactly "Case" (typed case
+    number; `?case=` pre-fills it), "Date" (`<input type="date">`, default
+    `firmToday(new Date())`), "Hours" (`<input type="number" step="0.125"
+    min="0.125" max="24">`, up to 3 decimals accepted), "Description"; submit
+    button "Add entry". Server action `addEntry` in `app/time/actions.ts` calls
+    `insertEntry(db, session, input)` in `lib/time/entries.ts`: validates that the
+    case exists (one select on `tblcase.caseid`), hours parse to 0 < h ≤ 24 with at
+    most 3 decimals, description non-empty; inserts `tblactivity`
+    `{ actcaseid, actdate, actdescription, acthrs, actwho: session.personId }` and
+    redirects to `/time?added=1`, where the page shows "Entry added". Errors come
+    back through `?error=<code>` and render inline above the form with the typed
+    values kept. A session with `personId` null gets the not-linked message in
+    place of the form.
   guardrails:
-    - No delete path for any contact row
-    - `frmactive` is text — filter by its stored values, never cast to boolean
+    - `actwho` comes from the session, never from a form field
+    - Hours are stored as entered; the server never rounds
+    - Exactly one control labelled "Case" and one labelled "Hours" on `/time` (journey 03 uses `getByLabel`)
   done when:
-    - Creating then editing a firm, an attorney (attached to that firm), and a client persists every legacy field, re-read from the database
-    - Each of the five presets returns the rows its legacy query returns against a seeded set, in the legacy sort order
-    - The fixture attorney Pat Example opens showing firm "Example & Partners LLP"
+    - A linked staff login submitting case 90001, hours 1.5, "Reviewed file" sees "Entry added", and a `tblactivity` row exists with that login's `personId` as `actwho`, `actbilled=false`, `actbillid` null (live test; row removed in `after()`)
+    - Case 999999, hours 0, hours 25, hours 1.0625, and an empty description are each refused with a visible message and insert nothing (fake-client tests; the case check is a select on `tblcase`)
+    - A login with `personId` null sees the not-linked message and no form, and a direct call of the action from it inserts nothing
+  status: done
+
+- task: Week view on `/time` under the form, plus the admin unbilled-by-case
+    section. `lib/time/week.ts`: `weekBounds(anchor)` returns the Monday and
+    Sunday date strings of the week containing `anchor` (America/New_York;
+    `?week=YYYY-MM-DD` may be any day of the week; default this week);
+    `listWeek(db, personId, monday)` returns that person's rows joined to
+    `tblcase` (`caseid`, `casetitle`), ordered by date then `actid`. The page
+    groups rows by day with a per-day subtotal and a week total, "Previous week" /
+    "Next week" links (±7 days), and per row: date (linking to `/time/<actid>`),
+    case # + title, description, hours to 3 decimals, and a "billed" marker when
+    `actbilled` or `actbillid` is set. Admin only: a "Person" select of
+    `tblbillingnames` initials driving `?who=<personid>`, and above the week an
+    "Unbilled hours by case" table from `unbilledByCase(db)` in
+    `lib/time/unbilled.ts` (case #, title, sum of unbilled `acthrs`; cases at 0
+    omitted; ordered by case #; each row linking to `/cases/<id>`).
+  guardrails:
+    - Week bounds are computed on date strings in America/New_York; no local-time `Date` arithmetic that shifts with the server's TZ
+    - Staff see only rows where `actwho` equals their own `personId`; `?who=` is ignored for staff
+    - Read-only: this item writes nothing
+  done when:
+    - With fake rows for person 1 across two weeks, the week containing 2026-01-15 shows only that person's rows in that Mon–Sun span, grouped by day, with day subtotals and the week total equal to a hand sum; `?week=` on a Sunday and on the following Monday yield different weeks; prev/next links move exactly 7 days
+    - `weekBounds` returns the same Monday under `TZ=UTC` and `TZ=America/New_York` for the same anchor
+    - Admin `?who=2` shows JON's fixture row; staff `?who=2` still shows only their own rows; the admin unbilled-by-case table lists case 90001 at 2.000 and omits a case whose rows are all billed
     - Existing passing tests remain passing
   status: done
   parallel-group: a
 
-- task: Inquiries — `/inquiries` list, `/inquiries/new`, `/inquiries/[id]` edit,
-    logic in `lib/inquiries/**`. Fields per the legacy Add/Edit Inquiry form:
-    date, time, caller name, caller title (Attorney, Paralegal, Secretary,
-    Insurance Claims Rep, Investigator), attorney name if not caller (free
-    text), attorney picker (`inqattyid`, optional), firm, firm location, caller
-    location, accident location, description, phone, alt phone, fax, email,
-    caption, subject, branch, referred by, how heard (legacy 14-value list,
-    default "Unknown"), previous case, receptionist, client role (Plaintiff,
-    Defendant, Third Party, Unknown, Other), engineer (legacy 5-value list,
-    default "Dr. Ojalvo"), resulting case (read-only), and the "sent" panel
-    (fee schedule, checklist, LLB, KJS, IUO, IUO-Biomech, Oren, Larry,
-    Coppolino, other 1/2 with names, info sheets 1–3, branch for info). Quick
-    search: the 16-field OR wildcard of `InquirySearchQuery`, ordered by id.
-    Advanced search: attorney name, subject, location, branch, referred by,
-    resulting case, each a wildcard; date mode between / on-or-after /
-    on-or-before. Presets: inquiries by attorney name (ordered by date), and
-    how-heard-about-us filtered by a typed source.
+- task: Edit and delete at `/time/[id]`. `app/time/[id]/page.tsx` loads the row.
+    Unbilled and (own, or admin): reuse `app/time/entry-form.tsx` pre-filled, with
+    a "Save" button and a separate "Delete" button (a plain form POST, no browser
+    confirm dialog). Billed: the same fields rendered read-only with "Billed on
+    bill <actbillid>" (or "Billed" when only `actbilled` is set) and no buttons.
+    Another person's row for staff: "Not found". Actions `updateEntry` /
+    `deleteEntry` in `app/time/actions.ts` call `updateEntry(db, session, actid,
+    input)` / `deleteEntry(db, session, actid)` in `lib/time/entries.ts`: same
+    validation as insert; the UPDATE/DELETE statement itself filters
+    `actid = ? and actbilled = false and actbillid is null`, plus `actwho =
+    personId` unless admin; zero rows affected → "This entry can't be changed"
+    and nothing written. Update writes only changed columns (diff as
+    `lib/cases/record.ts` does). Success redirects to
+    `/time?week=<that row's date>&saved=1` ("Entry saved") or `&deleted=1`
+    ("Entry deleted").
   guardrails:
-    - Subject accepts free text (journey 02 types one); the legacy subject list is offered as suggestions, not enforced
-    - The labels "subject" and "caller name", the save button, and the "Inquiry saved"/"Inquiry created" message match what journey 02 queries
-    - Saving creates `/inquiries/<id>` and redirects there
+    - Ownership and unbilled checks live in the write statement's filter (`.eq("actbilled", false).is("actbillid", null)`, and `.eq("actwho", personId)` for staff), never only in a prior select
+    - An edit never changes `actwho`; `actbilled` and `actbillid` are never written
+    - No browser confirm dialog on Delete
   done when:
-    - Filling subject and caller name and saving shows "Inquiry created" and lands on `/inquiries/<new id>` with both values shown
-    - Quick search finds a seeded inquiry by a substring of each of the 16 legacy fields, case-insensitively
-    - Advanced search date modes return exactly the inquiries between two dates, on or after, and on or before a date, boundaries inclusive
-    - Every "sent" checkbox and its paired name field persists on edit
+    - Editing an own unbilled row's hours and description persists and the week view shows the new values; a fake-client test asserts the update and delete chains carry the `actbilled=false` and `actbillid is null` filters
+    - Editing or deleting fixture row 2 (billed) is refused: the page shows it read-only with no Save or Delete, and a direct call of either action reports "This entry can't be changed" with the row unchanged
+    - A staff call of `updateEntry` or `deleteEntry` against another person's unbilled row is refused and the row is unchanged; the same call as admin succeeds
+    - Deleting an own unbilled row removes it from `tblactivity` and shows "Entry deleted"
   status: done
   parallel-group: a
 
-- task: Case search and lists — `/cases` with quick search over the `case_search`
-    view (substring OR across its 11 columns, case number as text, ordered by
-    case number), and `/cases/search` advanced search per legacy
-    `frmSearchInput`: a checkbox per field (case #, title, subject, notes,
-    status, start date, attorney, client, firm, caption) and an AND/OR toggle;
-    only checked fields join the predicate. Case # and status match exactly,
-    start date matches cases strictly after the date, the rest are substring
-    matches. Empty selection shows "No search values selected". Case lists:
-    newest first (start date desc, then case # desc) as the default, the full
-    roster by case # (`qryCaseList`), and title-only. Each result row offers a
-    print-ready address label (attorney first-name-first, firm, formatted
-    address). Logic in `lib/cases/search.ts`.
+- task: Start/stop timer on `/time`. Client component `app/time/timer.tsx`
+    rendered above the entry form. "Start timer" reads the form's Case field
+    (refuses with "Enter a case number first" when empty), stores
+    `{ caseId, startedAt, description }` under one `localStorage` key
+    (`ta.timer`), and shows a ticking elapsed `h:mm:ss` with a "Stop" button and a
+    description text input for the draft. One timer at a time: while the key
+    exists, Start is refused with "Stop the running timer first". Stop computes
+    hours = max(0.125, round(elapsed_hours / 0.125) × 0.125), fills the form's
+    Hours, Date (`firmToday`), Case, and Description, and shows "Discard".
+    Submitting the form (item 1's action) clears the key on the `?added=1` render;
+    Discard clears it without inserting. The clock is injectable (`now` prop,
+    default `Date.now`) so rounding and ticking are unit-testable; a reload
+    mid-run reads the key and keeps ticking from the stored `startedAt`.
+    `?case=<id>` (from the case page) pre-fills the form's Case field, so Start
+    works immediately.
   guardrails:
-    - Search reads `case_search`; if the view is missing, stop and report — do not rebuild it with inner joins in app code
-    - Search input is parameterized; `%` and `_` typed by the user match literally
-    - A case whose attorney, firm, or client row is missing still appears in every search and list
+    - Timer state never reaches the database until the entry form is submitted
+    - Rounding happens only on Stop, client-side; the server stores what the form sends
+    - No second control labelled "Case" or "Hours"; the timer reuses the form's fields
   done when:
-    - Quick search finds fixture case 90001 by "90001", by a substring of "Sample v. Example", and by "Sam Sample"
-    - A seeded case whose `caseatty` points at no attorney row is found by its title
-    - Advanced AND with title + client narrows to cases matching both; OR with the same fields returns cases matching either; start date returns only cases starting after the date
-    - Median of 5 quick searches stays under 1s with 5,000 cases seeded
-  caution: true
-  status: done
-  parallel-group: a
-
-- task: The case record — `/cases/[id]`, per legacy `frmCaseUpdate`. Heading
-    contains the case number. Shows firm (name, formatted address, phone, fax),
-    attorney (formatted name, email, phone, cell), client. Fields: title,
-    subject, notes, caption, start and end date, status (`tblcasestatus`),
-    branch (`tblbranches`), attorney and client pickers, priority
-    (`tblcasepriority`), sub-priority, waiting for (`tblcasewaitingfor`),
-    description, event date, event description, point man (IUO, KJS, RMD, JH,
-    Oren, RC, LLB or blank), inquiry link (picker newest-first, with a link to
-    the inquiry), other experts, billing alert, billing CC, last change
-    (read-only). The record opens locked; an Unlock control enables editing, as
-    in legacy. Saving any of status, priority, sub-priority, waiting for,
-    description, event date, event description, or point man stamps
-    `casestatlastupdated` with now; other edits do not. Badges computed live:
-    "Unpaid Bill" when any `tblbills` row for the case has notice 1st, 2nd,
-    Final, Partial Payment, Deadbeat, or Small Claims; "Unapproved SA" when any
-    `tblsrvauth` row's status does not contain "approved"; "Warning: No Scanned
-    Fee Schedule on File" when `numscannedfeeschedule` is 0 and case # > 1850.
-    Previous / next case buttons. Empty headed slots "Bills", "Funds
-    received", "Expenses" for later lanes. A rolodex-card print view (attorney
-    last-name-first, firm, address, phone, fax). Logic in `lib/cases/record.ts`.
-  guardrails:
-    - Saves write only changed columns; a round-trip save of an unchanged migrated row changes nothing in `tblcase`
-    - `numunpaidbills` and `numunapprovedsa` are never written
-    - No delete control; the Unlock toggle is UI state, not a database lock
-    - A missing attorney/firm/client row renders as blank, never a crash
-  done when:
-    - `/cases/90001` shows every fixture `tblcase` value, attorney Pat Example, firm Example & Partners LLP, client Sam Sample, and the Bills / Funds received / Expenses headings
-    - Unlocking, changing priority, and saving as staff persists it and sets `casestatlastupdated` to now; changing only notes leaves `casestatlastupdated` unchanged
-    - Saving an unchanged migrated case writes no `audit_log` row
-    - Badges appear exactly when the live counts say so, including a bill with notice "1st" and a service auth "Declined"
-  caution: true
-  status: done
-  parallel-group: b
-
-- task: Case presets — screens under `/cases/lists/`. Work Status: cases whose
-    priority is not null and does not contain "9", and whose point man contains
-    the chosen point man or is null (blank picker = all), in two sort variants —
-    due date present first (legacy base query) and by priority text (legacy
-    COPY) — plus a print-ready sheet of the same rows. Waiting For: cases whose
-    waiting-for is one of "Initial Advance and Initial Case Material",
-    "Initial Advance", "Initial Case Material", with start date, event date,
-    description, event description, and the sum of `tblfundsrcvd.fndspmt` for
-    the case. Other experts: substring search over `otherexperts`. Recent
-    activity: the last 35 days of case status changes (`casestatlastupdated`),
-    service-auth approvals (`srvdateapproved`), and new service auths
-    (`srvauthdate`), newest first. Logic in `lib/cases/presets.ts`.
-  guardrails:
-    - The priority rule is the legacy substring test, not "priority != 9"
-    - Waiting-for funds sum reads `tblfundsrcvd` only; it never writes
-  done when:
-    - Against a seeded set, Work Status returns exactly the legacy query's rows — "P9" and null priority excluded, null point man included under any filter — in each variant's order
-    - Waiting For lists only the three waiting-for values with the correct funds total per case, 0 for a case with no funds
-    - Recent activity includes a 34-day-old status change and excludes a 36-day-old one
-  status: done
-  parallel-group: b
-
-- task: New case — `/cases/new`, per legacy `frmCaseAdd`. Case number prefilled
-    with max(caseid)+1 and editable; title default "TBD", start date default
-    today, status default "Open"; subject, caption, branch, attorney picker
-    (by last name), client picker (by last name, first name), optional inquiry
-    picker. "Add attorney" and "Add client" open the contact create screens and
-    return with the new row selected. Saving inserts with the explicit case
-    number and redirects to `/cases/<id>`. Logic in `lib/cases/create.ts`.
-  guardrails:
-    - Always insert an explicit `caseid`; never rely on the identity default (it lags behind migrated ids)
-    - A taken case number is refused with a visible "Case number already exists", never a 500
-  done when:
-    - Opening `/cases/new` prefills max(caseid)+1 and the three legacy defaults; saving creates the row and lands on its record
-    - Saving with an existing case number shows "Case number already exists" and inserts nothing
-    - Two concurrent saves of the same number yield one row and one refusal
+    - With an injected clock, Stop fills Hours with 0.125 after 3 s, 0.125 after 7 min, 0.625 after 40 min, and 2.125 after 2 h 4 min
+    - Reloading `/time` mid-run shows the timer still running from the stored start and Start is refused; after Stop then Add entry the row exists with the rounded hours and the key is gone; Discard clears the key and inserts nothing
+    - Visiting `/time?case=90001` pre-fills Case with 90001 and Start begins a timer for that case
   status: done
 
-- task: Service authorizations on the case page — a panel on `/cases/[id]` per
-    legacy `frmCaseServAuth`: date, hours, status, file, notes, advance, newest
-    first; add and edit rows. Status is one of Awaiting Approval, Approved
-    without advance, Declined, Modified, Modified and Approved, Approved,
-    Replaced. Moving a row into Approved or Modified and Approved stamps
-    `srvdateapproved` with today unless already set; the date stays
-    hand-editable. Lists under `/cases/service-auths/`: Unapproved (Awaiting
-    Approval or Modified, by auth date — the menu target), Awaiting approval
-    only (by auth date), Recently approved (Approved or Modified and Approved,
-    by approval date), and totals (count and hours per status). Rows show case #,
-    title, branch, attorney, firm phone, status, hours. Logic in
-    `lib/cases/service-auths.ts`.
+- task: Time panel on the case page (wiring, cases). `app/cases/[id]/time-panel.tsx`
+    (server component) with `listCaseTime(db, caseId)` and `unbilledHours(rows)`
+    in `lib/time/case.ts`. Rendered in the slot grid of `app/cases/[id]/page.tsx`
+    as a fourth panel headed "Time" beside Bills / Funds received / Expenses:
+    rows newest first (date, initials from `tblbillingnames`, hours to 3
+    decimals, description, a "billed" marker when `actbilled` or `actbillid` is
+    set), a line "Unbilled hours: N.NNN" summing rows where `actbilled=false and
+    actbillid is null`, and links "Add entry" and "Start timer", both to
+    `/time?case=<caseid>`. Empty case: "No time entries" and a total of 0.000.
   guardrails:
-    - Status comparisons are case-insensitive; a migrated "awaiting approval" in lowercase appears in both awaiting lists
-    - No delete control on a service-auth row
-    - Hours keep three decimals (`numeric(9,3)`)
+    - Adds a panel only; the case form, the service-auths panel, and the three placeholder slots are unchanged
+    - Reads only; no action is added to the case page
+    - Do not add a second element matching `/bills/i` (journey 01's known ambiguity)
   done when:
-    - Adding an auth on case 90001 and moving it to Approved stamps `srvdateapproved` with today; a hand-entered approval date survives the save
-    - Seeded "awaiting approval", "Awaiting Approval", and "Modified" rows all appear in Unapproved; only the first two in Awaiting approval only
-    - Recently approved orders by approval date; totals match a hand count per status
-  caution: true
+    - `/cases/90001` shows a "Time" panel with "KJS 2.000 Site inspection" (no billed marker), "JON 1.500 Photo review" (billed), and "Unbilled hours: 2.000" (fake-client test on the panel's data, plus a live check)
+    - "Add entry" on the panel opens `/time?case=90001` with Case pre-filled, and an entry added there appears at the top of the panel and raises the unbilled total by its hours
+    - Journey 02 stays green, journey 01 still fails only at its known `/bills/i` ambiguity, and `tests/cases/*.test.mjs` remain passing
+  after: cases
   status: done
 
-- task: Convert an inquiry to a case — on `/inquiries/[id]`, attorney and client
-    pickers (labelled exactly "Case attorney" and "Case client", option values
-    are the ids, attorney preselected from
-    `inqattyid` when set) and a "Convert to case" button. It creates the case
-    with the next case number, title from the inquiry subject, start date today,
-    status "Open", branch from the inquiry, the chosen attorney and client, and
-    `caseinquiry` = the inquiry id; sets `inqresultingcase` to the new case
-    number when it fits a smallint (≤ 32767), else leaves it; then redirects to
-    `/cases/<new id>`. An inquiry that already has a case shows a link to it
-    instead of the button.
+- task: Running-timer indicator in the header, and the E2E staff seed (wiring,
+    app-shell). `app/time/running-indicator.tsx` (client component) reads the
+    `ta.timer` localStorage key in an effect, renders nothing when it is absent,
+    else a link to `/time` reading "⏱ Case <caseId> · h:mm" that updates each
+    minute; imported into `Header` in `app/layout.tsx` next to the account link.
+    `tests/app-shell/seed-e2e.ts`: the staff profile upsert sets `personid: 1`
+    (KJS) so journey 03's staff login is a linked person.
   guardrails:
-    - Both writes succeed or neither does — no case without its inquiry link
-    - Converting requires an attorney and a client; missing either is refused with a visible message
+    - `app/layout.tsx` session handling, nav sections, and fail-closed behaviour are unchanged; the indicator is an additional child only
+    - The indicator reads no server data and renders nothing on the server pass (no hydration mismatch)
+    - The seed change touches only the staff profile's `personid`
   done when:
-    - Journey 02, amended to pick Pat Example and Sam Sample, passes
-    - The created case has `caseinquiry` set to the inquiry and shows firm, attorney, and client on its record
-    - A second convert of the same inquiry is not offered; the inquiry page links to its case
-  status: done
-
-- task: Wire cases into the app shell — add `{href:"/inquiries",label:"Inquiries"}`
-    to `SECTIONS` in `lib/auth/sections.ts`, and put a case quick-search box
-    (submits to `/cases?q=`) and an inquiry quick-search box (submits to
-    `/inquiries?q=`) on the home page `app/page.tsx`.
-  guardrails:
-    - Only adds entries and boxes; app-shell's session handling and existing nav stay unchanged
-  done when:
-    - The header links to /inquiries for both staff and admin
-    - Typing "90001" in the home case box lands on `/cases?q=90001` listing case 90001; the inquiry box lands on filtered inquiry results
-    - Existing app-shell tests remain passing
+    - With a timer running, `/cases/90001` and `/` both show "Case 90001" with the elapsed time in the header, linking to `/time`; with no timer the header is unchanged (live test)
+    - After `tests/app-shell/seed-e2e.ts` runs, the staff E2E profile has `personid = 1`, and journey 03 passes its `/time` steps through "Entry added" (its later `/bills` steps still fail; they belong to billing)
+    - `tests/app-shell/*.test.mjs` remain passing
   after: app-shell
   status: done
 

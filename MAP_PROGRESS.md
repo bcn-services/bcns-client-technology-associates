@@ -30,3 +30,12 @@ later lanes build (time, funds, bank import, dashboard). Progress reading, not a
   `integration` before assuming the frozen shapes.
 - 2026-09-10 — `tests/journeys/helpers.ts` (`966a523` on `main`). `login()` now awaits
   the redirect off /login; the next `page.goto` was aborting the sign-in POST.
+- 2026-09-12 — `MAP.md` migration lane `area:` gains the NAS Excel timesheet history
+  import (per-person workbooks, one sheet per case, columns `[Date, Task, Dec, Sub,
+  Fee($), Billed]`) into `tblactivity`. Surfaced by `/lane time`: the time lane
+  replaces the workbooks going forward but would leave their history unreachable.
+  Gated on Kris's workbook samples and on whether the migrated `tblactivity` rows
+  are real; not an item until then. Expected on the time merge: journey 03's closing
+  `getByText(/billed/i)` becomes ambiguous once the case page shows "Unbilled hours"
+  and per-row billed markers — protected-path amendment for the billing lane, scope
+  it to the bill panel.
