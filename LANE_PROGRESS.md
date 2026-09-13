@@ -5,9 +5,9 @@ LANE.md wins for scope, this file wins for state.
 
 ## Current position
 
-- **Status:** autonomous run in progress (dev-team-auto, 2026-09-12)
-- **Next:** shutdown checks
-- **Blockers:** none
+- **Status:** autonomous run finished 2026-09-12 — all 9 items done, none blocked; the lane is 3 of 4 done-when checks met
+- **Next:** none. All planned items are done and the stop marker is reached. Journey 03 still has to pass on the merged branch.
+- **Blockers:** Journey 03 needs two edits a human has to approve: an admin test login that the journey helper actually uses, and the `/billed/i` fix in the journey file.
 - **Last updated:** 2026-09-12
 
 ## Round: full v1 → go-live
