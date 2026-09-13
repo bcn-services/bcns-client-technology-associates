@@ -105,10 +105,10 @@ test("staff edits own unbilled row: hours + description persist, 'Entry saved', 
 
 test("control: admin replays update then delete on another person's unbilled row → saved (actwho unchanged), then deleted", { skip }, async () => {
   const loc = await replay(admin, "update", ids.otherAdmin, FORGED);
-  assert.match(loc, /^\/time\?week=2026-09-09&saved=1$/);
+  assert.match(loc, /^\/time\?week=2026-09-09&who=2&saved=1$/, "admin lands on the row owner's week");
   const r = await full(ids.otherAdmin);
   assert.deepEqual({ who: r.actwho, billed: r.actbilled, billid: r.actbillid, desc: r.actdescription, hrs: Number(r.acthrs) }, { who: 2, billed: false, billid: null, desc: "Forged", hrs: 7 });
-  assert.match(await replay(admin, "del", ids.otherAdmin), /^\/time\?week=2026-09-09&deleted=1$/);
+  assert.match(await replay(admin, "del", ids.otherAdmin), /^\/time\?week=2026-09-09&who=2&deleted=1$/);
   assert.equal(await full(ids.otherAdmin), null);
 });
 

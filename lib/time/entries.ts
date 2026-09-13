@@ -107,10 +107,12 @@ export async function loadEntry(db: Db, s: Actor, actid: number): Promise<EntryR
 /**
  * Edit one unbilled row. `orig` holds the values the form was rendered with (hidden `__orig`
  * inputs, as lib/cases/record.ts); only columns that differ are written, from a fixed whitelist —
- * never actwho, actbilled or actbillid. Returns the row's date (for the week redirect).
+ * never actwho, actbilled or actbillid. Returns the row's date + person (for the week redirect).
  * Zero rows matched by the filtered write → "locked", nothing written.
  */
-export async function updateEntry(db: Db, s: Actor, actid: number, input: EntryInput & { orig?: Partial<EntryInput> }): Promise<string> {
+export type WeekOf = Pick<EntryRow, "actdate" | "actwho">;
+
+export async function updateEntry(db: Db, s: Actor, actid: number, input: EntryInput & { orig?: Partial<EntryInput> }): Promise<WeekOf> {
   if (s.personId == null) throw new TimeInputError("unlinked");
   const next = parseEntry(input);
   const o = input.orig ?? {};
@@ -123,18 +125,18 @@ export async function updateEntry(db: Db, s: Actor, actid: number, input: EntryI
 
   // Nothing changed: no write; success only if the row is still editable by this person.
   const { data, error } = Object.keys(payload).length
-    ? await editableOnly(db.from("tblactivity").update(payload), actid, s).select("actid, actdate")
-    : await editableOnly(db.from("tblactivity").select("actid, actdate"), actid, s);
+    ? await editableOnly(db.from("tblactivity").update(payload), actid, s).select("actid, actdate, actwho")
+    : await editableOnly(db.from("tblactivity").select("actid, actdate, actwho"), actid, s);
   if (error) throw new Error(`tblactivity update: ${error.message}`);
   if (!data?.length) throw new TimeInputError("locked");
-  return data[0].actdate;
+  return { actdate: data[0].actdate, actwho: data[0].actwho ?? null };
 }
 
-/** Delete one unbilled row (own, or any if admin). Returns the deleted row's date. */
-export async function deleteEntry(db: Db, s: Actor, actid: number): Promise<string> {
+/** Delete one unbilled row (own, or any if admin). Returns the deleted row's date + person. */
+export async function deleteEntry(db: Db, s: Actor, actid: number): Promise<WeekOf> {
   if (s.personId == null) throw new TimeInputError("unlinked");
-  const { data, error } = await editableOnly(db.from("tblactivity").delete(), actid, s).select("actid, actdate");
+  const { data, error } = await editableOnly(db.from("tblactivity").delete(), actid, s).select("actid, actdate, actwho");
   if (error) throw new Error(`tblactivity delete: ${error.message}`);
   if (!data?.length) throw new TimeInputError("locked");
-  return data[0].actdate;
+  return { actdate: data[0].actdate, actwho: data[0].actwho ?? null };
 }

@@ -110,6 +110,19 @@ test("reload mid-run keeps ticking from the stored start and Start is refused; S
   await page.waitForFunction((k) => localStorage.getItem(k) === null, KEY);
   const rows = await newRows();
   assert.deepEqual(rows.map((r) => [r.actcaseid, Number(r.acthrs), r.actwho, r.actdescription]), [[CASE, 0.625, PERSON, "Timed work"]]);
+  assert.equal(await page.getByRole("timer").count(), 0, "timer panel goes idle after the add (no stale Discard)");
+  assert.equal(await page.getByRole("button", { name: "Discard" }).count(), 0);
+  assert.equal(await page.getByLabel(/hours/i).inputValue(), "", "form resets after the add");
+  assert.equal(await page.getByLabel(/description/i).inputValue(), "");
+
+  // A second add from /time?added=1 redirects to the same URL; the form must still reset.
+  await page.getByLabel(/case/i).fill(String(CASE));
+  await page.getByLabel(/hours/i).fill("0.5");
+  await page.getByLabel(/description/i).fill("Second add");
+  await addEntry().click();
+  await page.waitForFunction(() => document.getElementById("t-description")?.value === "", null, { timeout: 15_000 });
+  assert.equal(await page.getByLabel(/hours/i).inputValue(), "");
+  assert.deepEqual((await newRows()).map((r) => r.actdescription).sort(), ["Second add", "Timed work"]);
   await page.getByLabel(/case/i).fill(String(CASE));
   await page.getByRole("button", { name: "Start timer" }).click();
   await page.getByRole("timer").waitFor();

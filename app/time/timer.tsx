@@ -62,7 +62,7 @@ export function Timer({ now = Date.now, clearOnAdded = false }: { now?: () => nu
 
   useEffect(() => {
     const s = parseTimer(store.get());
-    if (s?.stoppedAt !== undefined && clearOnAdded) return store.clear();
+    if (s?.stoppedAt !== undefined && clearOnAdded) { store.clear(); setTimer(null); return; }
     setTimer(s);
     setTick(now());
     // Reload after Stop: re-fill the server-rendered form, unless it already echoes typed values (?error=).

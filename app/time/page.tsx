@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+import { Fragment } from "react";
 import { requireSession } from "@/lib/auth/session";
 import { firmToday } from "@/lib/cases/presets";
 import { NOT_LINKED, errorMessage } from "@/lib/time/entries";
@@ -29,8 +31,12 @@ export default async function TimePage({ searchParams }: { searchParams: Params 
           {first(searchParams.added) === "1" && <p role="status" className="text-sm text-green-700">Entry added</p>}
           {first(searchParams.saved) === "1" && <p role="status" className="text-sm text-green-700">Entry saved</p>}
           {first(searchParams.deleted) === "1" && <p role="status" className="text-sm text-green-700">Entry deleted</p>}
-          <Timer clearOnAdded={first(searchParams.added) === "1"} />
-          <EntryForm values={values} error={error ? errorMessage(error) : undefined} />
+          {/* Fresh key per render: an add redirects back to the same URL, and React keeps uncontrolled
+              inputs' typed values unless the form remounts — a second click would re-insert them. */}
+          <Fragment key={randomUUID()}>
+            <Timer clearOnAdded={first(searchParams.added) === "1"} />
+            <EntryForm values={values} error={error ? errorMessage(error) : undefined} />
+          </Fragment>
         </>
       )}
       <WeekSection session={session} week={first(searchParams.week)} who={first(searchParams.who)} />

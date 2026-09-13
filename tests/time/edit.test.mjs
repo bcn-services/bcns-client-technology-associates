@@ -26,7 +26,7 @@ function fakeDb(respond) {
 }
 const has = (chain, m) => chain.some((c) => c[0] === m);
 /** Writes succeed with one row; case lookups find the case. */
-const okDb = (writeRows = [{ actid: 5, actdate: "2026-09-10" }]) => fakeDb((chain) =>
+const okDb = (writeRows = [{ actid: 5, actdate: "2026-09-10", actwho: 2 }]) => fakeDb((chain) =>
   chain[0][1] === "tblcase" ? { data: { caseid: 90001 }, error: null } : { data: writeRows, error: null });
 const writes = (db, m) => db.chains.filter((c) => has(c, m));
 const payload = (db) => writes(db, "update")[0]?.find((c) => c[0] === "update")[1];
@@ -108,9 +108,11 @@ test("delete: the write matches 0 rows → locked", async () => {
 test("locked message is the lane's exact wording", () => {
   assert.equal(errorMessage("locked"), "This entry can't be changed");
 });
-test("update/delete return the row's date for the week redirect", async () => {
-  assert.equal(await updateEntry(okDb(), STAFF, 5, EDIT), "2026-09-10");
-  assert.equal(await deleteEntry(okDb(), STAFF, 5), "2026-09-10");
+test("update/delete return the row's date and person for the week redirect", async () => {
+  const want = { actdate: "2026-09-10", actwho: 2 };
+  assert.deepEqual(await updateEntry(okDb(), ADMIN, 5, EDIT), want);
+  assert.deepEqual(await updateEntry(okDb(), ADMIN, 5, { ...ORIG, orig: ORIG }), want); // no-change path reads actwho too
+  assert.deepEqual(await deleteEntry(okDb(), ADMIN, 5), want);
 });
 test("a DB write error is a plain Error, not a TimeInputError", async () => {
   const db = fakeDb(() => ({ data: null, error: { message: "boom" } }));
@@ -148,7 +150,7 @@ test("changed case that doesn't exist → 'case', no write", async () => {
 });
 test("nothing changed → no update statement, success while the filtered read finds the row", async () => {
   const db = okDb();
-  assert.equal(await updateEntry(db, STAFF, 5, { ...ORIG, orig: ORIG }), "2026-09-10");
+  assert.equal((await updateEntry(db, STAFF, 5, { ...ORIG, orig: ORIG })).actdate, "2026-09-10");
   assert.equal(writes(db, "update").length, 0);
   assert.deepEqual(filters(db.chains[0]), [["eq", "actid", 5], ["eq", "actbilled", false], ["is", "actbillid", null], ["eq", "actwho", 1]]);
 });
