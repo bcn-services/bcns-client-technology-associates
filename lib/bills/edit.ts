@@ -46,6 +46,7 @@ const MESSAGES: Record<string, string> = {
   notice: "Pick a start status: 1st, Credit or Refund.",
   case: "That case does not exist.",
   stale: "Some entries were billed meanwhile — reload and try again",
+  revised: "This bill has already been revised.",
 };
 /** Money typed as text: up to 10 digits, 2 decimals, negative allowed (commas stripped first). */
 export const BALANCE_RE = /^-?\d{1,10}(\.\d{1,2})?$/;

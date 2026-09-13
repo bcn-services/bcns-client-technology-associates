@@ -10,12 +10,13 @@ const show = (v: string | number | null | undefined) => (v == null || v === "" ?
 const input = "rounded border border-slate-300 px-2 py-1";
 
 /** Pure view of one bill. `action` is the bound editBill; passed only for admins, so staff get no form. */
-export function BillView({ data, admin, action, advance, close, error, saved }: {
+export function BillView({ data, admin, action, advance, close, revise, error, saved }: {
   data: BillPageData;
   admin: boolean;
   action?: (formData: FormData) => void | Promise<void>;
   advance?: (formData: FormData) => void | Promise<void>;
   close?: (formData: FormData) => void | Promise<void>;
+  revise?: (formData: FormData) => void | Promise<void>;
   error?: string;
   saved?: boolean;
 }) {
@@ -39,6 +40,7 @@ export function BillView({ data, admin, action, advance, close, error, saved }: 
   // Remount the form whenever the row changes, so a same-URL redirect shows the saved values (Next 14.2 keeps uncontrolled inputs).
   const next = isOpen(b.billnotice) ? nextNotice(b.billnotice) : null;
   const targets = closeTargets(b.billnotice);
+  const canRevise = admin && !!revise && isOpen(b.billnotice) && revisedBy.length === 0;
   const formKey = JSON.stringify([b.billdate, b.billtype, b.billbalance, b.billestimate, b.billcomments, b.billfilename]);
   return (
     <div className="space-y-4">
@@ -78,7 +80,7 @@ export function BillView({ data, admin, action, advance, close, error, saved }: 
           </table>
         )}
       </section>
-      {admin && ((advance && next) || (close && targets.length > 0)) && (
+      {admin && ((advance && next) || (close && targets.length > 0) || canRevise) && (
         <section data-testid="bill-notice" className="flex flex-wrap items-end gap-3 rounded border border-slate-200 p-3">
           {advance && next && (
             <form key={`adv-${b.billnotice}`} action={advance}>
@@ -96,6 +98,12 @@ export function BillView({ data, admin, action, advance, close, error, saved }: 
                 </select>
               </label>
               <SaSubmit label="Close bill" />
+            </form>
+          )}
+          {canRevise && (
+            <form key={`rev-${b.billnotice}`} action={revise}>
+              <input type="hidden" name="expected" value={b.billnotice} />
+              <SaSubmit label="Revise" />
             </form>
           )}
         </section>

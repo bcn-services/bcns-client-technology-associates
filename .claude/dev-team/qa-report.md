@@ -1,35 +1,49 @@
 # QA Report
-**Task:** Billing item 4 — Notice actions on /bills/[id]: Advance (1st→2nd→Final) and Close as (Cancelled / Carried Over / Deadbeat / Settled)
-**Branch:** auto/billing (worktree billing-auto)
+**Task:** Item 5 — Revise an open, not-yet-superseded bill on /bills/[id] (lib/bills/revise.ts)
+**Branch:** auto/billing (worktree billing-auto), uncommitted per orchestrator
 **Date:** 2026-09-12
 **Gate mode:** tests+behavioral
 
 ## VERDICT: PASS
 
 ## Criteria Checked
-- Advance 1st→2nd stamps second date = today; again → Final stamps final date, second unchanged — unit "QA advance 1st → 2nd → Final" (exact payloads + full-row literal) + live test 1 (clicked "Advance to 2nd", DB 2nd/second=NY today; set second to 2026-08-20, clicked "Advance to Final", DB Final/second 2026-08-20/final=NY today) — PASS
-- Final bill shows no Advance button — unit "QA render" (button texts, content-matched) + live test 1 (after reload at Final: 0 "Advance to…" buttons, 1 "Close bill") — PASS
-- Close as Cancelled on a 2nd bill leaves both dates — unit "QA close as Cancelled…" + "QA close-as payload is exactly { billnotice }" + live test 2 (selected Cancelled, clicked Close bill; whole row equal to before except billnotice; controls gone) — PASS
-- Both actions refused on Paid, row unchanged — unit "QA Paid bill" (move for Paid forms, stale for replayed 1st/2nd forms, row literal-equal) + "QA every closed notice" + live tests 3–4 (captured Advance and Close-as POSTs replayed onto a Paid row → error, row equal; Paid page renders no notice section) — PASS
-- Reliability: two concurrent Advance on one 1st bill → '2nd' — unit "QA concurrent" (fake serializes both at the write: [saved, stale], matched [0,1], row 2nd) + live test 3 (two simultaneous admin replays of the captured form → one saved=1, one error=stale, DB 2nd, final null) — PASS
-- Reliability: 23:30 NY with TZ=UTC stamps the NY date — unit "QA TZ" (TZ set before any Date use; asserts getTimezoneOffset()===0; 03:30Z Sep 13 → 2026-09-12, 04:30Z Jan 16 → 2027-01-15, 04:30Z Sep 13 → 2026-09-13) — PASS
-- Guardrail: never writes billpaiddate/'Paid'/'Partial Payment' — unit "QA no action ever writes…" (11 notices × advance + 6 targets) and "QA targets 'Paid'/'Partial Payment' refused" (zero writes); live tests assert billpaiddate null — PASS
-- Guardrail: never overwrites a stamped date — unit "QA already-stamped…" (1st with second date → stale; 2nd with final date → stale; rows unchanged) — PASS
-- Guardrail: closed bill never changed — unit "QA every closed notice" (Paid/Cancelled/Carried Over/Settled/Refund/Credit × both actions) — PASS
-- Admin-only: staff refused for both actions — unit "QA staff" (forbidden, zero from() calls) + live tests 3–4 (staff replay of the admin's captured Advance and Close-as POSTs → error=forbidden, row unchanged) + live test 5 (staff GET: no controls) — PASS
-- Duplicate submit → ?error=stale, row unchanged — unit "QA duplicate submit" + live test 3 (replayed the same captured Advance POST → error=stale, row equal) — PASS
-
-Mutation checks 6/6 caught, each named assertion confirmed, restored with cmp: A drop `.eq('billnotice')` → QA Paid / closed-notice · B drop `.is(dateCol,null)` → QA already-stamped · C forbidden → null → QA staff · D firmToday → UTC ISO slice → QA TZ · E close-target check disabled → targets/Paid/never-writes · F close payload adds a date column → close-as payload tests.
-Gate: billing 84 tests, 68 pass, 0 fail, 16 skip (no server) · `pnpm test` gate env 584 / 507 pass / 1 fail (pre-existing search-e2e "advanced AND/OR/date") / 76 skip, equal to baseline · typecheck clean · live file 5/5 against `next dev -p 3100`, run whole; server stopped; 0 leftover rows on 990800–990899, 0 throwaway admins.
-
-## Findings (non-blocking)
-- Browser QA used Playwright (headless chromium through the real dev server) instead of Claude-in-Chrome, because the Chrome login has expired. That is the accepted substitute.
-- A missing bill id returns `?error=stale`, not `notfound`. This was flagged by the engineer; behavior is unchanged.
-- Render emits a React warning: "Invalid value for prop `action` on <form>". It only appears under renderToStaticMarkup in unit tests. It's harmless and was also present in item 2.
+- Revise B with two rows gives B′ with the same type/hours/balance and '1st', both rows on B′, B 'Cancelled' with all other fields unchanged. Unit: `qa: revise B with two rows …` compares every column of B. Live: admin clicked Revise and was redirected to /bills/<B′>. DB: B′ has timesheet/3.25/812.5/'1st'/supersedes B, rows a1 and a2 point to B′, and B deepEquals its before-state except billnotice='Cancelled'. PASS
+- "Revised by #B′" and "Revises #B" links. Unit: `qa render: 'Revised by #B′' …` (checks hrefs). Live: on B′ the "Revises #B" link has href /bills/B; clicked it and landed on /bills/B, where the "Revised by #B′" link has href /bills/B′ and there is no Revise button. PASS
+- Second revise refused, no bill inserted. Unit: `qa: revising B a second time …` (with the stale '2nd' form and with 'Cancelled'; bill count stays 3). Live: replaying the captured admin Revise POST gives ?error=, case bill count unchanged, row still on B′, B unchanged. PASS
+- Case unbilled hours are the same before and after. Unit: `qa: case unbilled hours equal …` ("0.750" both times, via real listCaseTime/unbilledHours). Live: same check through the service-role db, "0.750" both times. PASS
+- Guardrail: B is never deleted and only billnotice is written. Unit: `qa: B is never deleted and the only column written to B …` (the only tblbills update/delete is {billnotice:'Cancelled'}), plus the full-row compare in unit and live. PASS
+- Guardrail: rows move only from B to B′. Unit: `qa: another bill's rows on the same case are untouched`. Live: row a3 on the other bill still points to that bill. PASS
+- Extra checks, all PASS: staff refused (unit, and a live staff replay while B was made revisable again, with an admin control replay that succeeded); already-superseded open B refused with ?error=revised; closed B refused; a stale status change before the cancel is compensated; concurrent revises leave exactly one B′; the Revise button renders only for admin + open + unsuperseded.
+- Browser QA: Chrome login expired, so Playwright (chromium, throwaway admin) was the accepted substitute. The dev server was started on :3100, warmed, and stopped.
 
 ## Tests Added
-- `tests/billing/notice.qa.test.mjs` — 13 tests. Uses runNoticeAction + the real requireSession against an independent fake PostgREST that throws on unmodelled methods, with literal expectations.
-- `tests/billing/notice.live.test.mjs` — 5 self-contained Playwright/replay tests on invented case 990801, with a throwaway admin. Cleanup runs at setup and in after().
+- `tests/billing/revise.qa.test.mjs`, 17 tests, driving the real runRevise + requireSession against a stateful fake PostgREST:
+  - qa: revise B with two rows → B′ has B's type/hours/balance and '1st', rows on B′, B Cancelled with every other column unchanged
+  - qa: B is never deleted and the only column written to B is billnotice
+  - qa: case unbilled hours equal before and after the revise
+  - qa: another bill's rows on the same case are untouched by a revise
+  - qa: revising B a second time is refused and inserts no bill
+  - qa: staff session refused (forbidden), nothing inserted
+  - qa: already-superseded OPEN B refused with ?error=revised, no insert
+  - qa: closed B (Settled) refused, no insert
+  - qa: stale status flip before cancel → ?error=stale
+  - qa: stale status flip before cancel → rows rolled back onto B
+  - qa: stale status flip before cancel → no orphan B′
+  - qa: two concurrent revises of the same B → exactly one B′, rows on it, no orphan
+  - qa render: Revise button present for admin on open unsuperseded bill / no Revise button on a superseded bill / on a closed bill / for staff
+  - qa render: 'Revised by #B′' links to /bills/B′ and 'Revises #B' links to /bills/B
+- `tests/billing/revise.live.test.mjs`, 2 tests. Case 990901, range 990900–990999 cleaned at setup and in after() (supersedesbillid is nulled before the delete because of the FK). Each test sets up its own data.
+  - click Revise: redirect to /bills/<B′>, B′ copies B, rows moved, other bill's row untouched, B only Cancelled, links both ways, unbilled hours unchanged
+  - captured Revise POST replayed: second revise refused, no bill inserted, rows stay on B′; staff sees no Revise and staff replay is refused
+
+## Gate
+- billing: 115 tests, 97 pass, 0 fail, 18 skip (no server). Live file as a whole with the server up: 2/2 pass. Typecheck clean.
+- full suite: 584 tests, 507 pass, 1 fail, 76 skip. Matches the baseline. The 1 failure is the pre-existing search-e2e test by count; the failure name was not re-read.
+- QA spot mutations 5/5 red, restored with cmp: superseded check → test 7 only; undo in the cancel catch → tests 10 and 11; cancel unguarded → tests 9–11; admin check → test 6 only; move filtered by case instead of bill → 8 tests (not isolated).
+
+## Findings
+- LOW — lib/bills/revise.ts:25 — the superseded check is a pre-read, so it doesn't close the race by itself. The concurrency test shows the move count and the cancel guard cover it. No fix needed.
+- INFO — the second-revise refusal comes back as ?error=move (the isOpen check fires first) and not ?error=revised. That's fine for the criterion; the revised branch is proven separately on an open B.
 
 ## Not Verifiable
 none

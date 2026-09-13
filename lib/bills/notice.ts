@@ -26,7 +26,8 @@ export const noticeErrorMessage = (code: string): string => NOTICE_MESSAGES[code
 export const closeTargets = (notice: string): string[] =>
   isOpen(notice) ? [...CLOSE_AS_NOTICES].filter((t) => t !== notice) : [];
 
-async function guardedUpdate(db: Db, billid: number, expected: string, payload: Record<string, string>, nullCol?: string) {
+/** Update one bill only while its notice is still `expected` (and `nullCol` still null); ≠ 1 row → stale. */
+export async function guardedUpdate(db: Db, billid: number, expected: string, payload: Record<string, string>, nullCol?: string) {
   let q = db.from("tblbills").update(payload).eq("billid", billid).eq("billnotice", expected);
   if (nullCol) q = q.is(nullCol, null);
   const { data, error } = await q.select("billid");

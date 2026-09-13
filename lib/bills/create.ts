@@ -52,6 +52,15 @@ export async function loadNewBill(db: Db, caseId: number, now: Date): Promise<Ne
   return { caseid: caseId, casetitle: k.data.casetitle, rows, today: firmToday(now) };
 }
 
+/** `billfilename` for a new bill on `caseId` dated `billdate`: n = bills already on that case and date. */
+export async function fileNameFor(db: Db, caseId: number, attyLastName: string | null | undefined, billdate: string): Promise<string | null> {
+  const same = await db.from("tblbills").select("billid").eq("billcaseid", caseId).eq("billdate", billdate);
+  if (same.error) throw new Error(`tblbills read: ${same.error.message}`);
+  const last = attyLastName?.trim();
+  // No attorney row → no file name (admin can set one on the bill page) rather than "Bill123  2026 ..." with a blank name.
+  return last ? billFileName(caseId, last, billdate, (same.data ?? []).length) : null;
+}
+
 /**
  * Insert the bill, then claim the checked rows with a write guarded on `actbilled=false and actbillid is null`.
  * Claimed count ≠ checked count → revert rows pointing at the new bill, delete it, throw `stale`.
@@ -74,11 +83,7 @@ export async function createBill(db: Db, caseId: number, input: BillCreate): Pro
     hrs = (r.data as { acthrs: number | string }[]).reduce((t, a) => t + thousandths(a.acthrs), 0);
   }
 
-  const same = await db.from("tblbills").select("billid").eq("billcaseid", caseId).eq("billdate", input.billdate);
-  if (same.error) throw new Error(`tblbills read: ${same.error.message}`);
-  const last = atty.data?.attylastname?.trim();
-  // No attorney row → no file name (admin can set one on the bill page) rather than "Bill123  2026 ..." with a blank name.
-  const billfilename = last ? billFileName(caseId, last, input.billdate, (same.data ?? []).length) : null;
+  const billfilename = await fileNameFor(db, caseId, atty.data?.attylastname, input.billdate);
 
   const ins = await db.from("tblbills").insert({
     billcaseid: caseId,
