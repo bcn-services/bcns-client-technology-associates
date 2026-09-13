@@ -101,7 +101,7 @@ Test against the fixture, not the producing lane. Do not wait for it to exist.
     - `nextNotice` maps '1st'→'2nd', '2nd'→'Final', 'Final'→null, 'Paid'→null
     - `billFileName(2788, 'Flood', '2026-08-14', 1)` returns `Bill2788 Flood 2026 08 14-1`
     - `isDue`: a 1st bill dated 30 days before `today` is due, 29 days is not; a Final bill counts from `billfinalnoticedate`; results identical under `TZ=UTC` and `TZ=America/New_York`
-  status: not started
+  status: done
 
 - task: Bill page with edit-in-place — `app/bills/[id]/page.tsx` shows every
     `tblbills` field for bill N, its case (linked to `/cases/<id>`), the
