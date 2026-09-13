@@ -232,7 +232,7 @@ Test against the fixture, not the producing lane. Do not wait for it to exist.
     - With bills in 1st, Deadbeat, and Paid and `tblcase.numunpaidbills` = 5, `unpaid-bill-count` shows 2
     - After creating a bill through `/bills/new`, the case page shows its balance — journey 03 passes through its `450.00` assertion
     - A staff login sees the panel without the "New bill" link
-  status: not started
+  status: done
   ui: true
   after: cases
 

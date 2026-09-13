@@ -6,7 +6,7 @@ LANE.md wins for scope, this file wins for state.
 ## Current position
 
 - **Status:** autonomous run in progress (dev-team-auto, 2026-09-12)
-- **Next:** Wire bills into the case page
+- **Next:** Wire bills into time screens
 - **Blockers:** none
 - **Last updated:** 2026-09-12
 
@@ -21,5 +21,5 @@ LANE.md wins for scope, this file wins for state.
 | Revise | done — Admins can revise an unpaid bill: a new 1st-notice copy takes over its time entries, the old bill is marked Cancelled, the two bills link to each other, and a bill can only be revised once. |
 | /bills list | done — Everyone can open /bills to see every unpaid bill grouped by notice stage, longest-waiting first, with a "due" badge on bills 30 days past their last notice; it loads in about half a second with 5,000 bills. |
 | Recipient alert | done — When a case bills a different party, the new-bill page and the bill page now show a warning banner, and any CC addresses on the case show on both pages, with or without the warning. |
-| Wire bills into the case page | not started |
+| Wire bills into the case page | done — Each case page now lists all its bills, old ones from Access included, newest first, with a live count of unpaid bills and the latest 2nd and final notice dates; admins get a "New bill" link. |
 | Wire bills into time screens | not started |
