@@ -4,6 +4,7 @@ import { BILL_TYPES, isOpen, nextNotice } from "@/lib/bills/rules";
 import { closeTargets } from "@/lib/bills/notice";
 import { fmtMoney, type BillPageData } from "@/lib/bills/edit";
 import { fmtHours, thousandths } from "@/lib/time/week";
+import { RecipientAlert } from "../recipient-alert";
 
 const DASH = "—";
 const show = (v: string | number | null | undefined) => (v == null || v === "" ? DASH : String(v));
@@ -46,6 +47,7 @@ export function BillView({ data, admin, action, advance, close, revise, error, s
     <div className="space-y-4">
       {error && <p role="alert" className="text-sm text-red-700">{error}</p>}
       {saved && !error && <p role="status" className="text-sm text-green-700">Bill updated</p>}
+      <RecipientAlert alert={data.billingalert} cc={data.billingcc} />
       <dl data-testid="bill-fields" className="grid grid-cols-[max-content_1fr] gap-x-4 gap-y-1 text-sm">
         {fields.map(([k, v]) => (
           <div key={k} className="contents">

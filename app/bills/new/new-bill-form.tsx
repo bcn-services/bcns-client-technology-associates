@@ -6,6 +6,7 @@ import { SaSubmit } from "@/app/cases/[id]/sa-submit";
 import { BILL_TYPES, START_NOTICES } from "@/lib/bills/rules";
 import type { NewBillData } from "@/lib/bills/create";
 import { fmtHours, thousandths } from "@/lib/time/week";
+import { RecipientAlert } from "../recipient-alert";
 
 const input = "rounded border border-slate-300 px-2 py-1";
 const sum = (rows: { acthrs: number | string }[]) => fmtHours(rows.reduce((t, r) => t + thousandths(r.acthrs), 0));
@@ -33,6 +34,7 @@ export function NewBillForm({ data, action, error }: {
       <p className="text-sm">
         <Link href={`/cases/${caseid}`} className="underline">{`Case ${caseid}: ${casetitle}`}</Link>
       </p>
+      <RecipientAlert alert={data.billingalert} cc={data.billingcc} />
       <input type="hidden" name="caseid" value={caseid} />
       <div className="grid gap-3 sm:grid-cols-2">
         <label className="grid gap-1 text-sm">Bill type

@@ -25,6 +25,9 @@ export type BillActivity = { actid: number; actdate: string; actdescription: str
 export type BillPageData = {
   bill: BillRow;
   casetitle: string | null;
+  /** From the case row; display only (cases lane owns them). */
+  billingalert: boolean;
+  billingcc: string | null;
   activity: BillActivity[];
   revisedBy: number[];
 };
@@ -100,7 +103,7 @@ export async function loadBill(db: Db, billid: number): Promise<BillPageData | n
   if (!b.data) return null;
   const bill = b.data as BillRow;
   const [kase, act, names, rev] = await Promise.all([
-    db.from("tblcase").select("caseid, casetitle").eq("caseid", bill.billcaseid).maybeSingle(),
+    db.from("tblcase").select("caseid, casetitle, billingalert, billingcc").eq("caseid", bill.billcaseid).maybeSingle(),
     db.from("tblactivity")
       .select("actid, actdate, actdescription, acthrs, actwho")
       .eq("actbillid", billid)
@@ -116,6 +119,8 @@ export async function loadBill(db: Db, billid: number): Promise<BillPageData | n
   return {
     bill,
     casetitle: kase.data?.casetitle ?? null,
+    billingalert: kase.data?.billingalert === true,
+    billingcc: kase.data?.billingcc ?? null,
     activity: (act.data ?? []).map((r: BillActivity & { actwho: number | null }) => ({
       actid: r.actid,
       actdate: r.actdate,

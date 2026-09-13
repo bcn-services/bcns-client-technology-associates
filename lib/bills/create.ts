@@ -41,15 +41,23 @@ export function parseBillCreate(formData: FormData): BillCreate {
   };
 }
 
-export type NewBillData = { caseid: number; casetitle: string; rows: CaseTimeRow[]; today: string };
+/** `billingalert` / `billingcc` come from the case row for display only (cases lane owns them). */
+export type NewBillData = { caseid: number; casetitle: string; billingalert: boolean; billingcc: string | null; rows: CaseTimeRow[]; today: string };
 
 /** The case and its unbilled rows (actbilled = false AND actbillid is null); null when the case doesn't exist. */
 export async function loadNewBill(db: Db, caseId: number, now: Date): Promise<NewBillData | null> {
-  const k = await db.from("tblcase").select("caseid, casetitle").eq("caseid", caseId).maybeSingle();
+  const k = await db.from("tblcase").select("caseid, casetitle, billingalert, billingcc").eq("caseid", caseId).maybeSingle();
   if (k.error) throw new Error(`tblcase read: ${k.error.message}`);
   if (!k.data) return null;
   const rows = (await listCaseTime(db, caseId)).filter((r) => r.actbilled === false && r.actbillid == null);
-  return { caseid: caseId, casetitle: k.data.casetitle, rows, today: firmToday(now) };
+  return {
+    caseid: caseId,
+    casetitle: k.data.casetitle,
+    billingalert: k.data.billingalert === true,
+    billingcc: k.data.billingcc ?? null,
+    rows,
+    today: firmToday(now),
+  };
 }
 
 /** `billfilename` for a new bill on `caseId` dated `billdate`: n = bills already on that case and date. */
