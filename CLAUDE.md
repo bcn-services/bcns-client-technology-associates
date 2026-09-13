@@ -28,7 +28,7 @@ storage) · Cloudflare front · Resend for email · Anthropic API as an
 ## Repo layout
 
 Same shape as the template: `app/` (routes), `lib/` (one folder per domain,
-thin bindings into `@nseluga/app-core` — shared logic lives there and reaches
+thin bindings into `@bcn-services/app-core` — shared logic lives there and reaches
 every client via a version bump, not a per-repo edit), `supabase/migrations/`
 (plain SQL via Supabase CLI, never hand-run), `tests/` (`pnpm test`;
 `tests/rls-forbidden-read.test.mjs` is the standing RLS scaffold).

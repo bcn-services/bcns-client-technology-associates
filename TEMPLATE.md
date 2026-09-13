@@ -12,7 +12,7 @@ placeholders, so `pnpm build && pnpm test` is always green here.
 
 | File | What to change | Example (client "Coventry Hills", slug `coventry-hills`) |
 | --- | --- | --- |
-| `package.json` | `"name"`: `@nseluga/hosted-web-template` → `@nseluga/bcns-client-<slug>` | `@nseluga/bcns-client-coventry-hills` |
+| `package.json` | `"name"`: `@bcn-services/hosted-web-template` → `@bcn-services/bcns-client-<slug>` | `@bcn-services/bcns-client-coventry-hills` |
 | `app/layout.tsx` | `metadata.title` / `metadata.description` → client display name | `title: "Coventry Hills"` |
 | `app/page.tsx` | The `<h1>` heading and intro copy → client display name | `<h1>Coventry Hills</h1>` |
 | `README.md` | Title line + first paragraph → client name; delete the "Use this template" blockquote | `# coventry-hills — hosted client app` |

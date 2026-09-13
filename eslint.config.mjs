@@ -1,4 +1,4 @@
-import { next } from "@nseluga/config/eslint/next";
+import { next } from "@bcn-services/config/eslint/next";
 
 export default [
   ...next,
