@@ -247,7 +247,7 @@ Test against the fixture, not the producing lane. Do not wait for it to exist.
   done when:
     - On the case page, a row with `actbillid = N` shows "Bill #N" linking to `/bills/N`; a legacy billed row shows its billed marker and no link; an unbilled row shows neither
     - In the `/time` week view, the logged-in person's row with `actbillid = N` shows the same "Bill #N" link
-  status: not started
+  status: done
   after: time
 
 > **⚠️ AUTONOMOUS RUN — STOP HERE**
