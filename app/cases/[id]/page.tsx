@@ -10,6 +10,7 @@ import { saveCaseAction } from "./actions";
 import { LockedForm } from "./locked-form";
 import { ServiceAuthsPanel } from "./service-auths";
 import { TimePanel } from "./time-panel";
+import { BillsPanel } from "@/app/bills/bills-panel";
 import { loadServiceAuths } from "@/lib/cases/service-auths";
 import { firmToday } from "@/lib/cases/presets";
 
@@ -191,7 +192,7 @@ export default async function CaseRecordPage({ params, searchParams }: { params:
       {/* Headed slots for later lanes. */}
       <div className="grid gap-4 md:grid-cols-2">
         <ServiceAuthsPanel t={first(searchParams.t) ?? "initial"} caseId={id} rows={sas} today={firmToday(new Date())} saved={first(searchParams.sa)} error={first(searchParams.sa_error)} />
-        <Slot title="Bills" />
+        <BillsPanel caseId={id} />
         <Slot title="Funds received" />
         <Slot title="Expenses" />
         <TimePanel caseId={id} />
