@@ -183,7 +183,7 @@ Test against the fixture, not the producing lane. Do not wait for it to exist.
     - B's page shows "Revised by #B′" linking to B′, and B′'s page shows "Revises #B"
     - Revising B a second time is refused and inserts no bill
     - The case's unbilled hours are the same before and after the revise
-  status: not started
+  status: done
   ui: true
 
 - task: `/bills` list — `app/bills/page.tsx`, readable by staff. Open bills
