@@ -22,8 +22,9 @@ test.describe('Receptionist logs an inquiry → engineer converts it to a case w
     await page.getByRole('button', { name: /convert to case/i }).click();
 
     await expect(page).toHaveURL(/\/cases\/\d+$/);
-    await expect(page.getByText(/firm/i)).toBeVisible();
-    await expect(page.getByText(/attorney/i)).toBeVisible();
-    await expect(page.getByText(/client/i)).toBeVisible();
+    // Headings, not getByText(/firm/i): the header nav's "Firms" link also matches.
+    for (const name of ['Firm', 'Attorney', 'Client']) {
+      await expect(page.getByRole('heading', { name, exact: true })).toBeVisible();
+    }
   });
 });
