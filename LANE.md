@@ -1,223 +1,253 @@
-# Technology Associates — Time Lane
+# Technology Associates — Billing Lane
 
 ## Objective
 
-Each staff member logs their hours on a case in the app — typed in, or timed
-with a start/stop button — and corrects them in a week view; every case shows
-its unbilled hours the moment anyone opens it. This replaces the per-person
-Excel workbooks on the NAS.
+Kris records every bill in the app instead of Access: each bill sits on a case
+with a type, pulls its hours from the case's unbilled time, takes its balance
+from the billing service, and moves through 1st → 2nd → Final notice while
+unpaid — so every case shows what has been billed and what is still owed.
 
 Lane done when:
-- Journey 03 passes through its `/time` step on the merged branch, and the
-  saved `tblactivity` row has `actwho` = that login's person, `actbilled=false`,
-  `actbillid` null
-- Starting the timer on case 90001, stopping it, and saving produces an entry
-  whose hours equal the elapsed time rounded to the nearest 0.125 h (floor
-  0.125); the week view shows it under today, and editing its description
-  there persists
-- `/cases/90001` shows a Time section listing the two fixture rows, with
-  "Unbilled hours" = 2.000 (sum where `actbilled=false and actbillid is null`)
-- Editing or removing a billed row from any time screen is refused and the row
-  is unchanged
+- Journey 03 passes end to end on the merged branch (after the `/billed/i`
+  amendment below)
+- Creating a timesheet bill on case 90001 takes the case page's "Unbilled
+  hours" to 0.000, and every `tblactivity` row pulled in carries that bill's
+  `billid` with `actbilled=true`
+- The case page lists every bill on the case, legacy bills included, with its
+  notice status; `data-testid="unpaid-bill-count"` is computed live from the
+  bills, never read from `tblcase.numunpaidbills`
+- Advancing an open bill 1st → 2nd → Final stamps each notice's date, and
+  `/bills` lists open bills grouped by notice stage
 
 ## Status
 
-Branch `lane/time` off `integration` (`1d493ef`). Migration, app-shell, and
-cases are merged. `/time` is already in the nav (`lib/auth/sections.ts`), and
-journey 03 (`tests/journeys/03-time-to-bill.spec.ts`) fixes the `/time` form's
-labels ("Case", "Hours", "Description"), button ("Add entry"), and success text
-("Entry added"). Nothing under `app/time`, `lib/time`, or `tests/time` exists.
+Branch `lane/billing` off `integration` (`59c6cd4`). Migration, app-shell,
+cases, and time are merged. `/bills` is already in the nav
+(`lib/auth/sections.ts`); the case page holds a `<Slot title="Bills" />`
+placeholder (`app/cases/[id]/page.tsx:194`). Journey 03
+(`tests/journeys/03-time-to-bill.spec.ts`) fixes `/bills/new?case=<id>`: text
+"Unbilled hours", a "Balance" field, a "Create bill" button. Nothing under
+`app/bills`, `lib/bills`, or `tests/billing` exists.
 
-Lane: time — in-app time entry per person per case (replaces the NAS Excel timesheets); unbilled hours per case. Rate card deferred — bills are priced in the client's other service
+Lane: billing — bill records tagged with one of 6 types, hours pulled from unbilled activity rows (merged multi-person), balance entered from the client's billing service, notice sequence dates, threshold alert, revisions as versions — no PDF, no email, no rate math
 
 Owned — this lane's items live inside these paths:
-  app/time/**, lib/time/**, tests/time/**
+  app/bills/**, lib/bills/**, tests/billing/**
 
 Open — merged lanes. Wiring items may edit these; rebase onto `integration` first:
   migration: scripts/migrate/**, tests/migration/**
   app-shell: app/layout.tsx, app/page.tsx, app/globals.css, app/not-found.tsx, middleware.ts, app/(auth)/**, lib/auth/**, tests/app-shell/**
   cases: app/cases/**, app/firms/**, app/attorneys/**, app/clients/**, app/inquiries/**, lib/cases/**, lib/contacts/**, lib/inquiries/**, tests/cases/**
+  time: app/time/**, lib/time/**, tests/time/**
 
 Stop and report if an item requires changing a path outside both lists:
   protected — supabase/migrations/**, lib/db/**, lib/auth/session.ts, lib/auth/client.ts, lib/env.ts, scripts/gen-db-types.mjs, tests/foundation/**, tests/journeys/**, playwright.config.ts, tsconfig.foundation.json
-  an unmerged lane's — billing: app/bills/**, lib/bills/**, tests/billing/** · money: app/expenses/**, app/funds/**, app/bank-review/**, lib/expenses/**, lib/funds/**, lib/bank-import/**, tests/money/** · docs-reports: app/documents/**, app/reports/**, app/dashboard/**, lib/documents/**, lib/reports/**, lib/storage.ts, tests/docs-reports/**
+  an unmerged lane's — money: app/expenses/**, app/funds/**, app/bank-review/**, lib/expenses/**, lib/funds/**, lib/bank-import/**, tests/money/** · docs-reports: app/documents/**, app/reports/**, app/dashboard/**, lib/documents/**, lib/reports/**, lib/storage.ts, tests/docs-reports/**
   unowned — root config (package.json, pnpm-*.yaml, tsconfig, next/eslint/tailwind/postcss config, *.md), .github/workflows, .claude/worktrees, app/api/health, lib/health.ts, lib/ai.ts, lib/webhooks.ts, tests/*.test.mjs
 
 Frozen contracts — build and test against these; they will not move:
-  app-shell (session) — `lib/auth/session.ts`: `Session = { userId; email; role: 'admin'|'staff'; personId: number|null }`, `requireSession()`; login helper `tests/journeys/helpers.ts`
-  cases (tblcase rows) — `lib/db/types.ts` `tblcase` Row; fixture `tests/foundation/fixtures/rows.ts` (case 90001)
-  schema (tblactivity, tblbillingnames, profiles) — `lib/db/types.ts`; fixtures `tests/foundation/fixtures/rows.ts` (actid 1: KJS 2.000 unbilled; actid 2: JON 1.500 billed; personid 1 = KJS, 2 = JON)
-  unbilled := `actbilled = false and actbillid is null` (migration 0002, check `tblactivity_billed_pair`)
+  app-shell (session) — `lib/auth/session.ts`: `Session = { userId; email; role: 'admin'|'staff'; personId: number|null }`, `requireSession('admin')` throws `ForbiddenError` for staff; login helper `tests/journeys/helpers.ts`
+  time (unbilled tblactivity rows) — `lib/db/types.ts` `tblactivity` Row; fixture `tests/foundation/fixtures/rows.ts` (actid 1: KJS 2.000 unbilled; actid 2: JON 1.500 billed, no billid); unbilled := `actbilled = false and actbillid is null`; check `actbillid is null or actbilled` (migration 0002)
+  cases (tblcase rows) — `lib/db/types.ts` `tblcase` Row (`caseatty` → `tblattorney.attylastname`, `billingalert`, `billingcc`); fixture case 90001
+  schema (tblbills) — `lib/db/types.ts` `tblbills` Row incl. `billtype` (check: blank, timesheet, depoprep, depo, trial, retainer) and `supersedesbillid`; fixture billid 1 on 90001
 
 Test against the fixture, not the producing lane. Do not wait for it to exist.
 
 ## Global rules
 
-- Server-action pattern from `app/cases/[id]/actions.ts`: `"use server"`, `requireSession()`, a lib function taking `Db`, errors back through the query string, `revalidatePath`, `redirect(...)`. Pages are server components; only the timer and the header indicator are client components.
-- Admin and staff are identical here except: admin may edit or delete any unbilled row and view any person's week (`?who=`). Staff act only on rows whose `actwho` equals their own `personId`.
-- A login with `personId` null cannot enter, edit, or delete time. Show "Your login isn't linked to a person — an admin can set it on /users" in place of the form; refuse the POST server-side.
-- Never write `actbilled` or `actbillid`. A row with `actbilled=true` or `actbillid` set is read-only on every screen in this lane, and the refusal lives in the write statement's filter, never only in a prior select.
-- No migrations, no schema or type changes. Legacy lowercase table and column names. `acthrs` is `numeric(9,3)`: store hours as entered, 0 < hours ≤ 24, at most 3 decimals.
-- Dates are firm-local (America/New_York): default via `firmToday()` from `lib/cases/presets.ts`; a week is Monday–Sunday in that zone; `actdate` is handled as a date-only string, no local-time `Date` arithmetic.
-- Unit tests `tests/time/*.test.mjs` use the fake PostgREST proxy pattern from `tests/cases/create.test.mjs`. Browser checks `tests/time/*.live.test.mjs` follow `tests/cases/create.live.test.mjs`: skip cleanly without a dev server or `SUPABASE_SERVICE_ROLE_KEY`, invented case numbers 990000+, every inserted row removed in `after()` with the service role. A live test that needs a linked person sets `profiles.personid` on the E2E login with the service role in `before()` and restores the prior value in `after()`.
+- Server-action pattern from `app/time/actions.ts`: `"use server"`, `requireSession(...)`, parse FormData, a `lib/bills` function taking `Db` that throws a typed error with `.code`, errors back via `?error=<code>`, `revalidatePath` + `redirect` on success. Pages are server components.
+- Every write action calls `requireSession('admin')`. Staff read every billing screen and change nothing; admin-only controls are not rendered for staff.
+- `billnotice` strings use the legacy spelling exactly: `1st`, `2nd`, `Final`, `Partial Payment`, `Deadbeat`, `Paid`, `Carried Over`, `Cancelled`, `Refund`, `Credit`, `Settled`. "Open" (unpaid) = {1st, 2nd, Final, Partial Payment, Deadbeat}, defined once in `lib/bills/rules.ts` and imported everywhere.
+- Never write `tblcase.numunpaidbills`, `billpaiddate`, or a `Paid` / `Partial Payment` status — money lane. Never hard-delete a bill except the rollback of a bill inserted in the same request.
+- No transactions over PostgREST: a multi-row write guards its `update` with the expected current values in the filter, checks the returned row count, and compensates on mismatch. The guard lives in the write statement, never only in a prior select.
+- Legacy bills (`billtype` null, `billhours` 0, any legacy status) render on every screen without error.
+- No migrations, no schema or type changes. No PDF, email, or rate math.
+- Dates are firm-local (America/New_York) via `firmToday()` from `lib/cases/presets.ts`; bill dates are date-only strings, no local-time `Date` arithmetic.
+- Unit tests `tests/billing/*.test.mjs` use the fake PostgREST proxy pattern from `tests/cases/create.test.mjs`. Browser checks `tests/billing/*.live.test.mjs` follow `tests/time/*.live.test.mjs`: skip cleanly without a dev server or `SUPABASE_SERVICE_ROLE_KEY`, invented case numbers 990000+, every inserted row removed in `after()` with the service role. Fixtures use invented data only.
+- Existing passing tests remain passing, including the cases and time suites.
 - Copy `.env.local` into each worktree before running live tests.
-- At merge the Reviewer adds `tests/time/*.test.mjs` to the `test` script in `package.json` (unowned), as the cases merge did.
-- Fuller context: `CLAUDE.md`, `MAP.md`, `LEGACY.md` (timesheets section), `CLIENT.md`.
+- At merge the Reviewer adds `tests/billing/*.test.mjs` to the `test` script in `package.json` (unowned), as the time merge did.
+- Fuller context: `CLAUDE.md`, `MAP.md`, `LEGACY.md` (tblBills section), `CLIENT.md`.
 
 ## Not yet specified
 
-- Whether the migrated `tblactivity` rows are real time or stale (LEGACY.md: tblActivity use unconfirmed; billing ran from Excel). Ask Kris. If stale, a one-shot go-live runbook step clears them — migration lane, not here — revisit after item 5 shows them on a real case
-- Rounding for timed entries: nearest 0.125 h with a 0.125 floor is used here; confirm with Kris against the workbooks' eighth-hour convention (`tests/migration/load.test.mjs` shows 0.125 in legacy rows) — revisit after item 4
+- Whether Kris wants notice-due reminders beyond the `/bills` due badge (email, dashboard) — revisit after item 6 is in his hands; the dashboard is docs-reports' lane
 
 ## Out of scope
 
-- Importing the NAS Excel timesheet history into `tblactivity` — migration lane; MAP.md amended 2026-09-12; needs Kris's workbook samples
-- Rates, `billingfactor` math, fees — deferred with billing output (MAP.md, 2026-09-08)
-- Marking rows billed, assigning `actbillid` — billing lane
-- Multi-row grid entry and inline cell editing — the edit page was chosen; polish after real use
-- Server-side timer state — needs a schema amendment; a browser-local timer covers one machine per person
-- Hours-by-person or by-period reports — docs-reports lane
+- Bill PDF rendering and email delivery, including sending to `billingcc` — deferred add-on; client bills from another service (MAP.md)
+- Rate card and rate math — deferred with billing output; balance is typed in
+- Marking bills Paid / Partial Payment and setting `billpaiddate` — money lane (funds received against bills)
+- Writing `tblcase.numunpaidbills` — legacy denormalized counter; the app computes unpaid counts live
+- UI for `billreports` and `billpriority` — unused in the workflow Kris described; columns stay as loaded
+- Backfilling `actbillid` on legacy billed rows — FOUNDATION.md rules it out; legacy rows keep `actbilled=true`, `actbillid` null
 
 ---
 
-- task: Time entry form and insert. `app/time/page.tsx` (server component) renders
-    `app/time/entry-form.tsx` with fields labelled exactly "Case" (typed case
-    number; `?case=` pre-fills it), "Date" (`<input type="date">`, default
-    `firmToday(new Date())`), "Hours" (`<input type="number" step="0.125"
-    min="0.125" max="24">`, up to 3 decimals accepted), "Description"; submit
-    button "Add entry". Server action `addEntry` in `app/time/actions.ts` calls
-    `insertEntry(db, session, input)` in `lib/time/entries.ts`: validates that the
-    case exists (one select on `tblcase.caseid`), hours parse to 0 < h ≤ 24 with at
-    most 3 decimals, description non-empty; inserts `tblactivity`
-    `{ actcaseid, actdate, actdescription, acthrs, actwho: session.personId }` and
-    redirects to `/time?added=1`, where the page shows "Entry added". Errors come
-    back through `?error=<code>` and render inline above the form with the typed
-    values kept. A session with `personId` null gets the not-linked message in
-    place of the form.
+- task: Bill rules — `lib/bills/rules.ts`, pure functions every billing screen
+    imports. Exports the open-status set and `isOpen(notice)`; `nextNotice(notice)`
+    (1st → 2nd → Final → null; anything else → null); the close-as set
+    {Cancelled, Carried Over, Deadbeat, Settled}; the start-status set {1st,
+    Credit, Refund}; `billFileName(caseId, attyLastName, billdate, n)` →
+    `Bill<caseid> <last name> <yyyy mm dd>-<n>`; `lastNoticeDate(bill)` =
+    `billfinalnoticedate ?? billsecondnoticedate ?? billdate`;
+    `daysSinceNotice(bill, today)`; `isDue(bill, today)` = open and
+    `daysSinceNotice ≥ BILL_DUE_DAYS` (30).
   guardrails:
-    - `actwho` comes from the session, never from a form field
-    - Hours are stored as entered; the server never rounds
-    - Exactly one control labelled "Case" and one labelled "Hours" on `/time` (journey 03 uses `getByLabel`)
+    - No DB access and no clock reads — `today` is always a parameter
+    - Date math on `yyyy-mm-dd` strings only; never a local-time `Date`
   done when:
-    - A linked staff login submitting case 90001, hours 1.5, "Reviewed file" sees "Entry added", and a `tblactivity` row exists with that login's `personId` as `actwho`, `actbilled=false`, `actbillid` null (live test; row removed in `after()`)
-    - Case 999999, hours 0, hours 25, hours 1.0625, and an empty description are each refused with a visible message and insert nothing (fake-client tests; the case check is a select on `tblcase`)
-    - A login with `personId` null sees the not-linked message and no form, and a direct call of the action from it inserts nothing
+    - `isOpen` is true for exactly 1st, 2nd, Final, Partial Payment, Deadbeat, and false for Paid, Cancelled, Carried Over, Credit, Refund, Settled, and `First`
+    - `nextNotice` maps '1st'→'2nd', '2nd'→'Final', 'Final'→null, 'Paid'→null
+    - `billFileName(2788, 'Flood', '2026-08-14', 1)` returns `Bill2788 Flood 2026 08 14-1`
+    - `isDue`: a 1st bill dated 30 days before `today` is due, 29 days is not; a Final bill counts from `billfinalnoticedate`; results identical under `TZ=UTC` and `TZ=America/New_York`
   status: done
 
-- task: Week view on `/time` under the form, plus the admin unbilled-by-case
-    section. `lib/time/week.ts`: `weekBounds(anchor)` returns the Monday and
-    Sunday date strings of the week containing `anchor` (America/New_York;
-    `?week=YYYY-MM-DD` may be any day of the week; default this week);
-    `listWeek(db, personId, monday)` returns that person's rows joined to
-    `tblcase` (`caseid`, `casetitle`), ordered by date then `actid`. The page
-    groups rows by day with a per-day subtotal and a week total, "Previous week" /
-    "Next week" links (±7 days), and per row: date (linking to `/time/<actid>`),
-    case # + title, description, hours to 3 decimals, and a "billed" marker when
-    `actbilled` or `actbillid` is set. Admin only: a "Person" select of
-    `tblbillingnames` initials driving `?who=<personid>`, and above the week an
-    "Unbilled hours by case" table from `unbilledByCase(db)` in
-    `lib/time/unbilled.ts` (case #, title, sum of unbilled `acthrs`; cases at 0
-    omitted; ordered by case #; each row linking to `/cases/<id>`).
+- task: Bill page with edit-in-place — `app/bills/[id]/page.tsx` shows every
+    `tblbills` field for bill N, its case (linked to `/cases/<id>`), the
+    `tblactivity` rows with `actbillid = N` (date, who, description, hours), and
+    revision links ("Revises #M" when `supersedesbillid` is set; "Revised by #K"
+    when another bill supersedes it). Admins get an edit form for `billdate`,
+    `billtype`, `billbalance` (negative allowed), `billestimate`,
+    `billcomments`, `billfilename`; the action lives in `app/bills/actions.ts`,
+    the write in `lib/bills/`. Unknown id → `notFound()`.
   guardrails:
-    - Week bounds are computed on date strings in America/New_York; no local-time `Date` arithmetic that shifts with the server's TZ
-    - Staff see only rows where `actwho` equals their own `personId`; `?who=` is ignored for staff
-    - Read-only: this item writes nothing
+    - The edit never writes `billnotice`, `billsecondnoticedate`, `billfinalnoticedate`, `billpaiddate`, `billhours`, `billcaseid`, or any `tblactivity` row
+    - History comes from the existing `audit_log` trigger; no history table or column of this lane's own
   done when:
-    - With fake rows for person 1 across two weeks, the week containing 2026-01-15 shows only that person's rows in that Mon–Sun span, grouped by day, with day subtotals and the week total equal to a hand sum; `?week=` on a Sunday and on the following Monday yield different weeks; prev/next links move exactly 7 days
-    - `weekBounds` returns the same Monday under `TZ=UTC` and `TZ=America/New_York` for the same anchor
-    - Admin `?who=2` shows JON's fixture row; staff `?who=2` still shows only their own rows; the admin unbilled-by-case table lists case 90001 at 2.000 and omits a case whose rows are all billed
-    - Existing passing tests remain passing
+    - A legacy-style bill (`billtype` null, `billhours` 0, `billnotice` 'Paid') renders its balance, status, and an em-dash for type
+    - An admin changes balance 875.00 → 900.00 and comments; after reload both show the new values, and `billnotice` and `billhours` are unchanged in the row
+    - A staff login sees no edit form; the edit action posted as staff is refused and the row is unchanged
+    - A bill with two attached activity rows lists both with their hours
   status: done
-  parallel-group: a
+  ui: true
 
-- task: Edit and delete at `/time/[id]`. `app/time/[id]/page.tsx` loads the row.
-    Unbilled and (own, or admin): reuse `app/time/entry-form.tsx` pre-filled, with
-    a "Save" button and a separate "Delete" button (a plain form POST, no browser
-    confirm dialog). Billed: the same fields rendered read-only with "Billed on
-    bill <actbillid>" (or "Billed" when only `actbilled` is set) and no buttons.
-    Another person's row for staff: "Not found". Actions `updateEntry` /
-    `deleteEntry` in `app/time/actions.ts` call `updateEntry(db, session, actid,
-    input)` / `deleteEntry(db, session, actid)` in `lib/time/entries.ts`: same
-    validation as insert; the UPDATE/DELETE statement itself filters
-    `actid = ? and actbilled = false and actbillid is null`, plus `actwho =
-    personId` unless admin; zero rows affected → "This entry can't be changed"
-    and nothing written. Update writes only changed columns (diff as
-    `lib/cases/record.ts` does). Success redirects to
-    `/time?week=<that row's date>&saved=1` ("Entry saved") or `&deleted=1`
-    ("Entry deleted").
+- task: Create bill — `/bills/new?case=<id>` (`app/bills/new/page.tsx`,
+    create action in `app/bills/actions.ts`, write in `lib/bills/create.ts`).
+    One form: `billtype` select (6 types); the case's unbilled `tblactivity`
+    rows as checkboxes (all checked when type is timesheet, none otherwise) with
+    an "Unbilled hours" total; Bill date (default `firmToday()`); "Balance"
+    (negative allowed); start status (1st default, Credit, Refund); estimate;
+    comments; button "Create bill". Save: insert the bill with `billhours` = sum
+    of checked rows' `acthrs` and `billfilename` = `billFileName(case, attorney
+    last name, billdate, n)` where n = count of that case's bills already dated
+    that day; then `update tblactivity set actbilled=true, actbillid=<new> where
+    actid in (<checked>) and actbilled=false and actbillid is null`. Returned
+    count ≠ checked count → revert rows now pointing at the new bill, delete it,
+    redirect `?error=stale` ("Some entries were billed meanwhile — reload and
+    try again"). Success → redirect `/bills/<new id>`.
   guardrails:
-    - Ownership and unbilled checks live in the write statement's filter (`.eq("actbilled", false).is("actbillid", null)`, and `.eq("actwho", personId)` for staff), never only in a prior select
-    - An edit never changes `actwho`; `actbilled` and `actbillid` are never written
-    - No browser confirm dialog on Delete
+    - Only the checked rows are ever updated; a row already billed is never re-pointed to another bill
+    - A failed save leaves no new bill and no changed `tblactivity` row
+    - Hours are never typed — `billhours` always equals the checked rows' sum
   done when:
-    - Editing an own unbilled row's hours and description persists and the week view shows the new values; a fake-client test asserts the update and delete chains carry the `actbilled=false` and `actbillid is null` filters
-    - Editing or deleting fixture row 2 (billed) is refused: the page shows it read-only with no Save or Delete, and a direct call of either action reports "This entry can't be changed" with the row unchanged
-    - A staff call of `updateEntry` or `deleteEntry` against another person's unbilled row is refused and the row is unchanged; the same call as admin succeeds
-    - Deleting an own unbilled row removes it from `tblactivity` and shows "Entry deleted"
+    - Timesheet bill on a case with unbilled rows of 1.500 h and 0.500 h, balance 450.00: the bill has `billhours` 2.000, `billnotice` '1st', `billfilename` `Bill<case> <atty last> <yyyy mm dd>-0`; both rows are `actbilled=true, actbillid=<new>`, and the case's unbilled hours read 0.000
+    - A retainer bill saved with nothing checked has `billhours` 0 and changes no `tblactivity` row
+    - Reliability: when one checked row is billed elsewhere after the form loads, the save redirects with `error=stale`, no new bill row exists, and the other checked row is still unbilled
+    - The create action posted as staff is refused and no `tblbills` row is inserted
   status: done
-  parallel-group: a
+  ui: true
 
-- task: Start/stop timer on `/time`. Client component `app/time/timer.tsx`
-    rendered above the entry form. "Start timer" reads the form's Case field
-    (refuses with "Enter a case number first" when empty), stores
-    `{ caseId, startedAt, description }` under one `localStorage` key
-    (`ta.timer`), and shows a ticking elapsed `h:mm:ss` with a "Stop" button and a
-    description text input for the draft. One timer at a time: while the key
-    exists, Start is refused with "Stop the running timer first". Stop computes
-    hours = max(0.125, round(elapsed_hours / 0.125) × 0.125), fills the form's
-    Hours, Date (`firmToday`), Case, and Description, and shows "Discard".
-    Submitting the form (item 1's action) clears the key on the `?added=1` render;
-    Discard clears it without inserting. The clock is injectable (`now` prop,
-    default `Date.now`) so rounding and ticking are unit-testable; a reload
-    mid-run reads the key and keeps ticking from the stored `startedAt`.
-    `?case=<id>` (from the case page) pre-fills the form's Case field, so Start
-    works immediately.
+- task: Notice actions on `/bills/[id]` — **Advance** (1st → 2nd stamps
+    `billsecondnoticedate`; 2nd → Final stamps `billfinalnoticedate`; date =
+    `firmToday()`) and **Close as** (Cancelled / Carried Over / Deadbeat /
+    Settled). Each update filters on the bill's expected current `billnotice`,
+    so a stale or duplicate submit changes nothing and returns `?error=stale`.
+    Buttons render only for admins and only when the move is allowed by
+    `lib/bills/rules.ts`.
   guardrails:
-    - Timer state never reaches the database until the entry form is submitted
-    - Rounding happens only on Stop, client-side; the server stores what the form sends
-    - No second control labelled "Case" or "Hours"; the timer reuses the form's fields
+    - Never writes `billpaiddate`, 'Paid', or 'Partial Payment'
+    - Never overwrites an already-stamped notice date
+    - A closed bill (not open) is never changed by either action
   done when:
-    - With an injected clock, Stop fills Hours with 0.125 after 3 s, 0.125 after 7 min, 0.625 after 40 min, and 2.125 after 2 h 4 min
-    - Reloading `/time` mid-run shows the timer still running from the stored start and Start is refused; after Stop then Add entry the row exists with the rounded hours and the key is gone; Discard clears the key and inserts nothing
-    - Visiting `/time?case=90001` pre-fills Case with 90001 and Start begins a timer for that case
+    - Advancing a 1st bill sets '2nd' and `billsecondnoticedate` = today; advancing again sets 'Final' and `billfinalnoticedate` = today with the second-notice date unchanged; a Final bill shows no Advance button
+    - Close as Cancelled on a 2nd bill sets 'Cancelled' and leaves both notice dates unchanged; both actions are refused on a Paid bill and the row is unchanged
+    - Reliability: two concurrent Advance submits on the same 1st bill leave it at '2nd', not 'Final'
+    - Reliability: an Advance at 23:30 America/New_York with the server on `TZ=UTC` stamps the New York date
+  status: done
+  ui: true
+
+- task: Revise — a "Revise" button on `/bills/[id]` for an open bill that no
+    other bill supersedes (`lib/bills/revise.ts`). Creates B′ with
+    `supersedesbillid = B`, copying `billcaseid`, `billtype`, `billhours`,
+    `billbalance`, `billestimate`, `billcomments`; `billdate` = today,
+    `billnotice` '1st', new `billfilename`. Then moves B's activity rows (guarded
+    `where actbillid = B`), then sets B to 'Cancelled' (guarded on B's current
+    status). Any step failing → move rows back to B, delete B′, `?error=stale`.
+    Success → redirect `/bills/<B′>`.
+  guardrails:
+    - B is never deleted, and no field of B other than `billnotice` changes
+    - Rows move only from B to B′ — no other bill's rows are touched
+  done when:
+    - Revising open bill B with two attached rows creates B′ with B's type, hours, and balance and status '1st'; both rows now have `actbillid = B′`; B is 'Cancelled' with every other field unchanged
+    - B's page shows "Revised by #B′" linking to B′, and B′'s page shows "Revises #B"
+    - Revising B a second time is refused and inserts no bill
+    - The case's unbilled hours are the same before and after the revise
+  status: done
+  ui: true
+
+- task: `/bills` list — `app/bills/page.tsx`, readable by staff. Open bills
+    only, grouped by stage in order 1st, 2nd, Final, Partial Payment, Deadbeat.
+    Each row: case number (linked to the case), filename (linked to the bill),
+    bill date, balance, "N days" since `lastNoticeDate`, and a **due** badge
+    when `isDue`. Within a group, most days first. One query filtered to open
+    statuses, joined to `tblcase` for the case number — no per-row fetch.
+  guardrails:
+    - Read-only page — no write action on it
+  done when:
+    - With seeded bills in 1st, 2nd, Final, Paid, and Cancelled, exactly the three open ones show, under their stage headings in order
+    - A 1st bill 45 days old shows "45 days" and a due badge and sorts above a 10-day-old 1st bill with no badge
+    - A staff login can open `/bills` and sees the list
+    - Median of 5 renders of `/bills` stays under 1 s with 5,000 bills seeded, 100 of them open
   status: done
 
-- task: Time panel on the case page (wiring, cases). `app/cases/[id]/time-panel.tsx`
-    (server component) with `listCaseTime(db, caseId)` and `unbilledHours(rows)`
-    in `lib/time/case.ts`. Rendered in the slot grid of `app/cases/[id]/page.tsx`
-    as a fourth panel headed "Time" beside Bills / Funds received / Expenses:
-    rows newest first (date, initials from `tblbillingnames`, hours to 3
-    decimals, description, a "billed" marker when `actbilled` or `actbillid` is
-    set), a line "Unbilled hours: N.NNN" summing rows where `actbilled=false and
-    actbillid is null`, and links "Add entry" and "Start timer", both to
-    `/time?case=<caseid>`. Empty case: "No time entries" and a total of 0.000.
+- task: Recipient alert — when the bill's case has `tblcase.billingalert`
+    true, `/bills/new` and `/bills/[id]` show a banner "Bill recipient alert —
+    this case bills a different party". Whenever `billingcc` is non-empty, a
+    "CC: <billingcc>" line shows (with or without the alert). Shared component
+    in `app/bills/`.
   guardrails:
-    - Adds a panel only; the case form, the service-auths panel, and the three placeholder slots are unchanged
-    - Reads only; no action is added to the case page
-    - Do not add a second element matching `/bills/i` (journey 01's known ambiguity)
+    - Display only — never blocks or changes a save
+    - Never writes `billingalert` or `billingcc` (cases lane owns them)
   done when:
-    - `/cases/90001` shows a "Time" panel with "KJS 2.000 Site inspection" (no billed marker), "JON 1.500 Photo review" (billed), and "Unbilled hours: 2.000" (fake-client test on the panel's data, plus a live check)
-    - "Add entry" on the panel opens `/time?case=90001` with Case pre-filled, and an entry added there appears at the top of the panel and raises the unbilled total by its hours
-    - Journey 02 stays green, journey 01 still fails only at its known `/bills/i` ambiguity, and `tests/cases/*.test.mjs` remain passing
+    - A case with `billingalert` true and `billingcc` 'a@x.test, b@x.test' shows the banner and both addresses on `/bills/new?case=<id>` and on that case's bill page
+    - A case with `billingalert` false shows no banner; with a non-empty `billingcc` it still shows the CC line
+  status: done
+
+- task: Wire bills into the case page — replace `<Slot title="Bills" />` at
+    `app/cases/[id]/page.tsx:194` with a billing-owned `BillsPanel`
+    (`app/bills/bills-panel.tsx`, data from `lib/bills/`). It lists every bill
+    on the case newest first — date, type, balance, `billnotice`, linked to
+    `/bills/<id>` — plus `data-testid="unpaid-bill-count"` (count of open
+    bills, live), and the latest open bill's `billsecondnoticedate` /
+    `billfinalnoticedate` under `data-testid="second-notice-date"` /
+    `"final-notice-date"` (empty when unset or none open). Admins see a "New
+    bill" link to `/bills/new?case=<id>`.
+  guardrails:
+    - In `app/cases/[id]/page.tsx` only the Slot line and one import change
+    - Panel copy never contains the word "billed" — journey 03 matches `/billed/i` on this page
+    - The panel's heading keeps "Bills" (journey 01 expects it)
+  done when:
+    - The case page now renders `BillsPanel`; a case with three bills (one legacy: `billtype` null, `billhours` 0, 'Paid') lists all three newest first, each with balance, status, and a link to its bill page
+    - With bills in 1st, Deadbeat, and Paid and `tblcase.numunpaidbills` = 5, `unpaid-bill-count` shows 2
+    - After creating a bill through `/bills/new`, the case page shows its balance — journey 03 passes through its `450.00` assertion
+    - A staff login sees the panel without the "New bill" link
+  status: done
+  ui: true
   after: cases
-  status: done
 
-- task: Running-timer indicator in the header, and the E2E staff seed (wiring,
-    app-shell). `app/time/running-indicator.tsx` (client component) reads the
-    `ta.timer` localStorage key in an effect, renders nothing when it is absent,
-    else a link to `/time` reading "⏱ Case <caseId> · h:mm" that updates each
-    minute; imported into `Header` in `app/layout.tsx` next to the account link.
-    `tests/app-shell/seed-e2e.ts`: the staff profile upsert sets `personid: 1`
-    (KJS) so journey 03's staff login is a linked person.
+- task: Wire bills into time screens — where a `tblactivity` row has
+    `actbillid = N`, the case Time panel (`app/cases/[id]/time-panel.tsx`) and
+    the `/time` week view (`app/time/week-view.tsx`) keep the existing billed
+    marker and add a link "Bill #N" to `/bills/N`. Legacy billed rows
+    (`actbillid` null) keep the marker with no link.
   guardrails:
-    - `app/layout.tsx` session handling, nav sections, and fail-closed behaviour are unchanged; the indicator is an additional child only
-    - The indicator reads no server data and renders nothing on the server pass (no hydration mismatch)
-    - The seed change touches only the staff profile's `personid`
+    - Link text never matches `/bills/i` (journey 01 trap noted in `time-panel.tsx:7`)
+    - `data-testid="billed-marker"` and time's edit/delete rules are unchanged
   done when:
-    - With a timer running, `/cases/90001` and `/` both show "Case 90001" with the elapsed time in the header, linking to `/time`; with no timer the header is unchanged (live test)
-    - After `tests/app-shell/seed-e2e.ts` runs, the staff E2E profile has `personid = 1`, and journey 03 passes its `/time` steps through "Entry added" (its later `/bills` steps still fail; they belong to billing)
-    - `tests/app-shell/*.test.mjs` remain passing
-  after: app-shell
+    - On the case page, a row with `actbillid = N` shows "Bill #N" linking to `/bills/N`; a legacy billed row shows its billed marker and no link; an unbilled row shows neither
+    - In the `/time` week view, the logged-in person's row with `actbillid = N` shows the same "Bill #N" link
   status: done
+  after: time
 
 > **⚠️ AUTONOMOUS RUN — STOP HERE**

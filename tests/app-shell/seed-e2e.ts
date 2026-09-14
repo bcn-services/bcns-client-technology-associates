@@ -47,6 +47,14 @@ export function seedStaffE2e(admin: ReturnType<typeof createServerClient>, email
   return seedE2eUser(admin, email, password, STAFF_PERSONID);
 }
 
+/** The admin E2E account `login(page, 'admin')` in tests/journeys/helpers.ts signs in as. */
+export async function seedAdminE2e(admin: ReturnType<typeof createServerClient>, email: string, password: string) {
+  const seeded = await seedE2eUser(admin, email, password);
+  const { error } = await admin.from("profiles").update({ role: "admin" }).eq("id", seeded.id);
+  if (error) throw new Error(`${email}: admin role update failed: ${error.message}`);
+  return seeded;
+}
+
 export async function seedE2eUser(
   admin: ReturnType<typeof createServerClient>,
   email: string,
@@ -78,10 +86,14 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   loadEnvLocal();
   const email = process.env.E2E_EMAIL ?? "staff@example.test";
   const password = process.env.E2E_PASSWORD ?? "password";
+  const adminEmail = process.env.E2E_ADMIN_EMAIL ?? "admin@example.test";
+  const adminPassword = process.env.E2E_ADMIN_PASSWORD ?? "password";
   // No top-level await: package.json has no "type": "module", so this file transpiles to CJS.
   Promise.resolve()
     .then(() => seedStaffE2e(createServerClient(), email, password))
     .then(({ id, status }) => process.stdout.write(`${email} → staff (${status}) ${id}\n`))
+    .then(() => seedAdminE2e(createServerClient(), adminEmail, adminPassword))
+    .then(({ id, status }) => process.stdout.write(`${adminEmail} → admin (${status}) ${id}\n`))
     .catch((err: Error) => {
       process.stderr.write(`${err.message}\n`);
       process.exit(1);

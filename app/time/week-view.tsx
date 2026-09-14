@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { BillLink } from "@/app/bills/bill-link";
 import type { Session } from "@/lib/auth/session";
 import { createServerClient } from "@/lib/db/client";
 import type { Db } from "@/lib/time/entries";
@@ -81,7 +82,7 @@ export function WeekView({ monday, sunday, rows, admin, who, people = [], unbill
                     <td>{r.actcaseid} {r.tblcase?.casetitle ?? ""}</td>
                     <td>{r.actdescription}</td>
                     <td className="text-right">{fmtHours(thousandths(r.acthrs))}</td>
-                    <td>{isBilled(r) ? <span className="text-xs text-gray-600">billed</span> : null}</td>
+                    <td>{isBilled(r) ? <span className="text-xs text-gray-600">billed</span> : null} <BillLink billId={r.actbillid} /></td>
                   </tr>
                 ))}
                 <tr className="font-medium" data-testid="day-total">

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { BillLink } from "@/app/bills/bill-link";
 import { createServerClient } from "@/lib/db/client";
 import type { Db } from "@/lib/time/entries";
 import { listCaseTime, unbilledHours, type CaseTimeRow } from "@/lib/time/case";
@@ -34,6 +35,7 @@ export function TimePanelView({ caseId, rows }: { caseId: number; rows: CaseTime
                   <span className="tabular-nums">{fmtHours(thousandths(r.acthrs))}</span>{" "}
                   <span>{r.actdescription}</span>
                   {isBilled(r) && <>{" "}<span data-testid="billed-marker" className="rounded bg-slate-100 px-1 text-xs text-slate-600">billed</span></>}
+                  {" "}<BillLink billId={r.actbillid} />
                 </li>
               ))}
             </ul>
