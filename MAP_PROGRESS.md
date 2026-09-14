@@ -11,14 +11,13 @@ across rounds — never reset. Per-item detail lives in `progress/<lane>.md`.
 | app-shell | nate | lane/app-shell | done — 12/12 items (7 planned + 5 polish), merged 2026-09-10 (`464ab58`) |
 | cases | nate | lane/cases | done — 9/9 items, merged 2026-09-11 (`298b6ac`, PR #4) |
 | time | nate | lane/time | done — 6/6 items + 3 click-through fixes, merged 2026-09-12 (`9b8d68f`, PR #9) |
-| billing | nate | — | not started — no LANE.md yet |
+| billing | nate | lane/billing | done — 9/9 items + suite/seed fixes, merged 2026-09-13 (`c663304`, PR #11; journeys amendment PR #12) |
 | money | nate | — | not started — no LANE.md yet |
 | docs-reports | nate | — | not started — no LANE.md yet |
 
-**Journeys:** 1 of 6 green (2026-09-12, after time). 01 passes. 02 fails on a strict
-`getByText(/firm/i)` (`02-inquiry-to-case.spec.ts:25` — header "Firms" link + case "Firm" heading) —
-protected-path amendment. 03 passes the `/time` entry and fails at `/bills/new` (billing lane). 04–06 fail
-on screens later lanes build (funds, bank import, dashboard). Progress reading, not a merge gate.
+**Journeys:** 3 of 6 green (2026-09-13, after billing). 01, 02, 03 pass. 02 can time out at "Inquiry
+created" when 4 workers share a cold dev server; alone it passes. 04–06 fail on screens later lanes
+build (funds, bank import, dashboard). Progress reading, not a merge gate.
 
 **Amendments this round**
 
