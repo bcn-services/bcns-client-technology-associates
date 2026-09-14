@@ -114,3 +114,22 @@ test("edit on /funds/[id]?saved=1 (same-URL redirect): form re-renders server-no
   assert.equal(payee, "QA Edited Payee", "form re-rendered server payee");
   assert.equal(await page.getByRole("status").filter({ hasText: "Funds recorded" }).count(), 1);
 });
+
+test("amount error then fix + resubmit on the same /funds/new → form carries resubmitted values, save lands", { skip }, async () => {
+  const before = (await rowsFor(CASE)).length;
+  await submit({ amount: "45.001" });
+  await page.waitForURL(/\/funds\/new\?error=amount/);
+  await page.getByRole("alert").filter({ hasText: "Amount must be" }).waitFor();
+  assert.equal(await page.getByLabel(/^Case/).inputValue(), String(CASE), "case survives the error redirect");
+  await page.getByLabel(/^Amount/).fill("77.10");
+  await page.getByLabel(/^Payee/).fill("QA Resubmit Payee");
+  await page.getByRole("button", { name: "Record funds" }).click();
+  await page.waitForURL(/\/funds\/\d+\?saved=1/);
+  await page.getByText("Funds recorded").waitFor();
+  const rows = await rowsFor(CASE);
+  assert.equal(rows.length, before + 1, "exactly one new row");
+  const row = rows.find((r) => r.fndspayee === "QA Resubmit Payee");
+  assert.equal(Number(row.fndspmt).toFixed(2), "77.10", "resubmitted amount saved");
+  assert.equal(await page.getByLabel(/^Amount/).inputValue(), "77.10", "saved page shows resubmitted amount");
+  assert.equal(await page.getByLabel(/^Payee/).inputValue(), "QA Resubmit Payee", "saved page shows resubmitted payee");
+});
