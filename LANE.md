@@ -1,253 +1,287 @@
-# Technology Associates — Billing Lane
+# Technology Associates — Money Lane
 
 ## Objective
 
-Kris records every bill in the app instead of Access: each bill sits on a case
-with a type, pulls its hours from the case's unbilled time, takes its balance
-from the billing service, and moves through 1st → 2nd → Final notice while
-unpaid — so every case shows what has been billed and what is still owed.
+Kris records every dollar in and out of the firm in the app instead of Access +
+the BoA spreadsheet macro — firm-wide and case expenses under live (non-retired)
+types, checks received against bills that mark them paid, card/bank exports
+reviewed into the ledger, bounced checks reversed in one action — so each case's
+ledger and each bank account's cleared view are right without the spreadsheet.
 
 Lane done when:
-- Journey 03 passes end to end on the merged branch (after the `/billed/i`
+- Journeys 04 and 05 pass end to end on the merged branch (after the journey
   amendment below)
-- Creating a timesheet bill on case 90001 takes the case page's "Unbilled
-  hours" to 0.000, and every `tblactivity` row pulled in carries that bill's
-  `billid` with `actbilled=true`
-- The case page lists every bill on the case, legacy bills included, with its
-  notice status; `data-testid="unpaid-bill-count"` is computed live from the
-  bills, never read from `tblcase.numunpaidbills`
-- Advancing an open bill 1st → 2nd → Final stamps each notice's date, and
-  `/bills` lists open bills grouped by notice stage
+- Recording funds that cover a bill's balance marks it paid, drops the case's
+  live unpaid count, and leaves 2nd/Final notice dates empty
+- Importing the same BoA export twice adds no new `bank_transactions` or
+  `tblexpenses` rows
+- Reversing a bounced check returns its bill to unpaid and both the original and
+  the reversal row remain on record
 
 ## Status
 
-Branch `lane/billing` off `integration` (`59c6cd4`). Migration, app-shell,
-cases, and time are merged. `/bills` is already in the nav
-(`lib/auth/sections.ts`); the case page holds a `<Slot title="Bills" />`
-placeholder (`app/cases/[id]/page.tsx:194`). Journey 03
-(`tests/journeys/03-time-to-bill.spec.ts`) fixes `/bills/new?case=<id>`: text
-"Unbilled hours", a "Balance" field, a "Create bill" button. Nothing under
-`app/bills`, `lib/bills`, or `tests/billing` exists.
+Branch `lane/money` off `integration` (`685d0d3`). Migration, app-shell, cases,
+time, and billing are merged. Nav already lists `/expenses`, `/funds`,
+`/bank-review` (`lib/auth/sections.ts`); the case page holds
+`<Slot title="Funds received" />` and `<Slot title="Expenses" />`
+(`app/cases/[id]/page.tsx:196-197`). `lib/bills/notice.ts` deliberately never
+writes `Paid` / `Partial Payment` / `billpaiddate` — this lane does.
+`tblfundsrcvd` has no bill column (case only). Nothing under `app/expenses`,
+`app/funds`, `app/bank-review`, `lib/expenses`, `lib/funds`, `lib/bank-import`,
+or `tests/money` exists. The hosted DB holds only foundation fixture rows.
 
-Lane: billing — bill records tagged with one of 6 types, hours pulled from unbilled activity rows (merged multi-person), balance entered from the client's billing service, notice sequence dates, threshold alert, revisions as versions — no PDF, no email, no rate math
+Lane: money — expense ledger with soft-retired types, funds received against bills, bank/card export review inbox, cleared-flag + bank-account views, bounced-check reversal
 
 Owned — this lane's items live inside these paths:
-  app/bills/**, lib/bills/**, tests/billing/**
+  app/expenses/**, app/funds/**, app/bank-review/**, lib/expenses/**, lib/funds/**, lib/bank-import/**, tests/money/**
 
 Open — merged lanes. Wiring items may edit these; rebase onto `integration` first:
   migration: scripts/migrate/**, tests/migration/**
   app-shell: app/layout.tsx, app/page.tsx, app/globals.css, app/not-found.tsx, middleware.ts, app/(auth)/**, lib/auth/**, tests/app-shell/**
   cases: app/cases/**, app/firms/**, app/attorneys/**, app/clients/**, app/inquiries/**, lib/cases/**, lib/contacts/**, lib/inquiries/**, tests/cases/**
   time: app/time/**, lib/time/**, tests/time/**
+  billing: app/bills/**, lib/bills/**, tests/billing/**
 
 Stop and report if an item requires changing a path outside both lists:
   protected — supabase/migrations/**, lib/db/**, lib/auth/session.ts, lib/auth/client.ts, lib/env.ts, scripts/gen-db-types.mjs, tests/foundation/**, tests/journeys/**, playwright.config.ts, tsconfig.foundation.json
-  an unmerged lane's — money: app/expenses/**, app/funds/**, app/bank-review/**, lib/expenses/**, lib/funds/**, lib/bank-import/**, tests/money/** · docs-reports: app/documents/**, app/reports/**, app/dashboard/**, lib/documents/**, lib/reports/**, lib/storage.ts, tests/docs-reports/**
+  an unmerged lane's — docs-reports: app/documents/**, app/reports/**, app/dashboard/**, lib/documents/**, lib/reports/**, lib/storage.ts, tests/docs-reports/**
   unowned — root config (package.json, pnpm-*.yaml, tsconfig, next/eslint/tailwind/postcss config, *.md), .github/workflows, .claude/worktrees, app/api/health, lib/health.ts, lib/ai.ts, lib/webhooks.ts, tests/*.test.mjs
 
 Frozen contracts — build and test against these; they will not move:
-  app-shell (session) — `lib/auth/session.ts`: `Session = { userId; email; role: 'admin'|'staff'; personId: number|null }`, `requireSession('admin')` throws `ForbiddenError` for staff; login helper `tests/journeys/helpers.ts`
-  time (unbilled tblactivity rows) — `lib/db/types.ts` `tblactivity` Row; fixture `tests/foundation/fixtures/rows.ts` (actid 1: KJS 2.000 unbilled; actid 2: JON 1.500 billed, no billid); unbilled := `actbilled = false and actbillid is null`; check `actbillid is null or actbilled` (migration 0002)
-  cases (tblcase rows) — `lib/db/types.ts` `tblcase` Row (`caseatty` → `tblattorney.attylastname`, `billingalert`, `billingcc`); fixture case 90001
-  schema (tblbills) — `lib/db/types.ts` `tblbills` Row incl. `billtype` (check: blank, timesheet, depoprep, depo, trial, retainer) and `supersedesbillid`; fixture billid 1 on 90001
+  billing (tblbills rows) — `lib/db/types.ts` `tblbills` Row (`billnotice`, `billpaiddate`, `billsecondnoticedate`, `billfinalnoticedate`, `billbalance`); open set + `isOpen` in `lib/bills/rules.ts`; fixture billid 1 on 90001 (notice `First` — not open under the legacy spelling)
+  cases (tblcase rows) — `lib/db/types.ts` `tblcase` Row; fixture case 90001 in `tests/foundation/fixtures/rows.ts`
+  schema (money tables) — `lib/db/types.ts` `tblexpenses`, `tblexptype`, `tblfundsrcvd`, `bank_transactions` Rows; `bank_transactions` unique (bankaccount, postedon, amount, description) (migration 0004); BoA fixture `tests/journeys/fixtures/boa-export.csv` (`Date,Description,Amount`, negative = outflow)
 
 Test against the fixture, not the producing lane. Do not wait for it to exist.
 
 ## Global rules
 
-- Server-action pattern from `app/time/actions.ts`: `"use server"`, `requireSession(...)`, parse FormData, a `lib/bills` function taking `Db` that throws a typed error with `.code`, errors back via `?error=<code>`, `revalidatePath` + `redirect` on success. Pages are server components.
-- Every write action calls `requireSession('admin')`. Staff read every billing screen and change nothing; admin-only controls are not rendered for staff.
-- `billnotice` strings use the legacy spelling exactly: `1st`, `2nd`, `Final`, `Partial Payment`, `Deadbeat`, `Paid`, `Carried Over`, `Cancelled`, `Refund`, `Credit`, `Settled`. "Open" (unpaid) = {1st, 2nd, Final, Partial Payment, Deadbeat}, defined once in `lib/bills/rules.ts` and imported everywhere.
-- Never write `tblcase.numunpaidbills`, `billpaiddate`, or a `Paid` / `Partial Payment` status — money lane. Never hard-delete a bill except the rollback of a bill inserted in the same request.
-- No transactions over PostgREST: a multi-row write guards its `update` with the expected current values in the filter, checks the returned row count, and compensates on mismatch. The guard lives in the write statement, never only in a prior select.
-- Legacy bills (`billtype` null, `billhours` 0, any legacy status) render on every screen without error.
-- No migrations, no schema or type changes. No PDF, email, or rate math.
-- Dates are firm-local (America/New_York) via `firmToday()` from `lib/cases/presets.ts`; bill dates are date-only strings, no local-time `Date` arithmetic.
-- Unit tests `tests/billing/*.test.mjs` use the fake PostgREST proxy pattern from `tests/cases/create.test.mjs`. Browser checks `tests/billing/*.live.test.mjs` follow `tests/time/*.live.test.mjs`: skip cleanly without a dev server or `SUPABASE_SERVICE_ROLE_KEY`, invented case numbers 990000+, every inserted row removed in `after()` with the service role. Fixtures use invented data only.
-- Existing passing tests remain passing, including the cases and time suites.
+- Server-action pattern from `app/time/actions.ts`: `"use server"`, `requireSession(...)`, parse FormData, a `lib/<domain>` function taking `Db` that throws a typed error with `.code`, errors back via `?error=<code>`, `revalidatePath` + `redirect` on success. Pages are server components.
+- Staff may create and edit expenses and funds and work the review inbox. Admin only (`requireSession('admin')`, `ForbiddenError` → `?error=forbidden`): mark paid, partial payment, bounced-check reversal, expense-type add/retire. Admin-only controls are not rendered for staff.
+- Never hard-delete a `tblexpenses`, `tblfundsrcvd`, or `tblexptype` row, and ship no delete UI. Corrections are edits (the `audit_log` trigger records them); a bounced check is a reversal.
+- `billnotice` strings use the legacy spelling exactly; the open set is imported from `lib/bills/rules.ts`, never redefined. Marking paid never touches `billsecondnoticedate` / `billfinalnoticedate`. Never write `tblcase.numunpaidbills`.
+- Money is parsed and compared as fixed 2-decimal values (integer cents or decimal strings), never float arithmetic.
+- No transactions over PostgREST: a multi-row write guards its `update` with the expected current values in the filter, checks the returned row count, and compensates on mismatch — the `guardedUpdate` pattern in `lib/bills/notice.ts`. The guard lives in the write statement, never only in a prior select.
+- Dates are firm-local via `firmToday()` from `lib/cases/presets.ts`; `today` is injected into lib functions, never `new Date()` inline; dates are `yyyy-mm-dd` strings.
+- Branch defaults to `Stratford` on every money form (`fndsbranch`, `expbranch`).
+- Only `tblexptype.active = true` types are offered anywhere; legacy `null` counts as retired.
+- No migrations, no schema or type changes, no new npm dependency.
+- Unit tests `tests/money/*.test.mjs` use the fake PostgREST proxy pattern from `tests/cases/create.test.mjs`. Browser/live checks `tests/money/*.live.test.mjs` follow `tests/time/*.live.test.mjs`: skip cleanly without a dev server or `SUPABASE_SERVICE_ROLE_KEY`, invented case numbers 990900+, every inserted row removed in `after()` with the service role. Fixtures use invented data only.
+- Existing passing tests remain passing, including the cases, time, and billing suites.
 - Copy `.env.local` into each worktree before running live tests.
-- At merge the Reviewer adds `tests/billing/*.test.mjs` to the `test` script in `package.json` (unowned), as the time merge did.
-- Fuller context: `CLAUDE.md`, `MAP.md`, `LEGACY.md` (tblBills section), `CLIENT.md`.
+- At merge the Reviewer adds `tests/money/*.test.mjs` to the `test` script in `package.json` (unowned), as the time and billing merges did.
+- Fuller context: `CLAUDE.md`, `MAP.md`, `LEGACY.md` (tblExpenses / tblExpType / tblFundsRcvd), `CLIENT.md`, quote §Money in/out.
+
+## Amendment requests (outside this lane — human approves)
+
+- `tests/journeys/04-funds-to-paid.spec.ts` (protected) — create its own open `1st` bill on case 90001 in `beforeAll` and remove it in `afterAll`, as journey 03 does. The fixture bill's `First` notice isn't open, so the case starts at 0 unpaid and there is nothing to mark paid; a seeded bill would stay Paid after one run.
+- `tests/journeys/05-bank-import-to-ledger.spec.ts` (protected) — create an active "Filing Fee" type and a retired type in `beforeAll`; remove its `bank_transactions` and `tblexpenses` rows in `afterAll`. Dedupe means a rerun otherwise finds no transaction to review.
 
 ## Not yet specified
 
-- Whether Kris wants notice-due reminders beyond the `/bills` due badge (email, dashboard) — revisit after item 6 is in his hands; the dashboard is docs-reports' lane
+- The legacy convention for `expchecknum` on card rows — this lane writes `0` ("no check"); verify against the real `.bak` before go-live
+- Which legacy `tblexptype` rows have `active` null (treated as retired) — verify against the real `.bak`; reactivate by admin page if a live type is hidden
 
 ## Out of scope
 
-- Bill PDF rendering and email delivery, including sending to `billingcc` — deferred add-on; client bills from another service (MAP.md)
-- Rate card and rate math — deferred with billing output; balance is typed in
-- Marking bills Paid / Partial Payment and setting `billpaiddate` — money lane (funds received against bills)
-- Writing `tblcase.numunpaidbills` — legacy denormalized counter; the app computes unpaid counts live
-- UI for `billreports` and `billpriority` — unused in the workflow Kris described; columns stay as loaded
-- Backfilling `actbillid` on legacy billed rows — FOUNDATION.md rules it out; legacy rows keep `actbilled=true`, `actbillid` null
+- P&L, YearlyExpense, accountant export — `/reports` is docs-reports' lane
+- Scanned check / bill images (`fndssafilename`, `fndsbillfilename` files) — docs-reports owns Storage; this lane stores numbers and names only
+- A funds → bill link column (`fndsbillid`) — legacy never linked them; an additive migration later if Kris needs "which check paid this bill"
+- Summing funds against a bill balance — no link column; paid / partial is an explicit admin action
+- Card-export credits (payments to the card, refunds) — skipped by the importer, counted in its report; refunds entered by hand
+- A live bank connection — file export only (quote)
+- AI transaction categorization — AI off for v1 (CLIENT.md); the pre-sort is a frequency match
+- Bill PDF / email — deferred add-on (MAP.md)
 
 ---
 
-- task: Bill rules — `lib/bills/rules.ts`, pure functions every billing screen
-    imports. Exports the open-status set and `isOpen(notice)`; `nextNotice(notice)`
-    (1st → 2nd → Final → null; anything else → null); the close-as set
-    {Cancelled, Carried Over, Deadbeat, Settled}; the start-status set {1st,
-    Credit, Refund}; `billFileName(caseId, attyLastName, billdate, n)` →
-    `Bill<caseid> <last name> <yyyy mm dd>-<n>`; `lastNoticeDate(bill)` =
-    `billfinalnoticedate ?? billsecondnoticedate ?? billdate`;
-    `daysSinceNotice(bill, today)`; `isDue(bill, today)` = open and
-    `daysSinceNotice ≥ BILL_DUE_DAYS` (30).
+- task: Expense types — `lib/expenses/types.ts` exports `listActiveTypes(db)`
+    (active = true, ordered by name), `addType(db, name)` (inserts active = true),
+    `retireType(db, id)` (sets active = false) and `reactivateType(db, id)`.
+    Admin page `app/expenses/types/page.tsx` lists all types with a retired
+    marker and add / retire / reactivate controls; actions in
+    `app/expenses/actions.ts`. Every later money form's type select reads
+    `listActiveTypes`.
   guardrails:
-    - No DB access and no clock reads — `today` is always a parameter
-    - Date math on `yyyy-mm-dd` strings only; never a local-time `Date`
+    - Retire is a flag flip; no code path deletes a type or rewrites an expense's `exptype`
   done when:
-    - `isOpen` is true for exactly 1st, 2nd, Final, Partial Payment, Deadbeat, and false for Paid, Cancelled, Carried Over, Credit, Refund, Settled, and `First`
-    - `nextNotice` maps '1st'→'2nd', '2nd'→'Final', 'Final'→null, 'Paid'→null
-    - `billFileName(2788, 'Flood', '2026-08-14', 1)` returns `Bill2788 Flood 2026 08 14-1`
-    - `isDue`: a 1st bill dated 30 days before `today` is due, 29 days is not; a Final bill counts from `billfinalnoticedate`; results identical under `TZ=UTC` and `TZ=America/New_York`
-  status: done
+    - Retiring a type sets `active=false`; the row still exists and every expense carrying it keeps its `exptype`
+    - `listActiveTypes` returns only `active = true` types — a retired type and a legacy `active` null type are both absent
+    - A staff user posting add or retire gets `?error=forbidden` and the table is unchanged; an admin's add creates an active row
+  status: not started
 
-- task: Bill page with edit-in-place — `app/bills/[id]/page.tsx` shows every
-    `tblbills` field for bill N, its case (linked to `/cases/<id>`), the
-    `tblactivity` rows with `actbillid = N` (date, who, description, hours), and
-    revision links ("Revises #M" when `supersedesbillid` is set; "Revised by #K"
-    when another bill supersedes it). Admins get an edit form for `billdate`,
-    `billtype`, `billbalance` (negative allowed), `billestimate`,
-    `billcomments`, `billfilename`; the action lives in `app/bills/actions.ts`,
-    the write in `lib/bills/`. Unknown id → `notFound()`.
+- task: Expense entry and edit — `app/expenses/new/page.tsx` and
+    `app/expenses/[id]/page.tsx` share one form over all `tblexpenses` columns:
+    date (default `firmToday()`), description, check number (required integer),
+    type (active only), branch (default Stratford), amount, reason, initials,
+    case (optional; `?case=` prefills it), bill (optional), cleared flag, date
+    cleared, bank account, clearing notes, scanned check number, not-counted-in-
+    profit amount. Writes in `lib/expenses/save.ts`. Unknown id → `notFound()`.
   guardrails:
-    - The edit never writes `billnotice`, `billsecondnoticedate`, `billfinalnoticedate`, `billpaiddate`, `billhours`, `billcaseid`, or any `tblactivity` row
-    - History comes from the existing `audit_log` trigger; no history table or column of this lane's own
+    - A case id that doesn't exist in `tblcase` is rejected before insert, never written as a dangling FK
+    - Editing never changes `expid`
   done when:
-    - A legacy-style bill (`billtype` null, `billhours` 0, `billnotice` 'Paid') renders its balance, status, and an em-dash for type
-    - An admin changes balance 875.00 → 900.00 and comments; after reload both show the new values, and `billnotice` and `billhours` are unchanged in the row
-    - A staff login sees no edit form; the edit action posted as staff is refused and the row is unchanged
-    - A bill with two attached activity rows lists both with their hours
-  status: done
+    - Saving `/expenses/new` with no case creates a `tblexpenses` row with `expcaseid` null (a firm-wide expense)
+    - Saving with case 999999999 (nonexistent) shows a case field error and writes no row
+    - Editing an expense's amount 45.00 → 50.00 persists 50.00, and `audit_log` holds an UPDATE for that `expid` with old 45.00 and new 50.00
   ui: true
+  status: not started
+  parallel-group: a
 
-- task: Create bill — `/bills/new?case=<id>` (`app/bills/new/page.tsx`,
-    create action in `app/bills/actions.ts`, write in `lib/bills/create.ts`).
-    One form: `billtype` select (6 types); the case's unbilled `tblactivity`
-    rows as checkboxes (all checked when type is timesheet, none otherwise) with
-    an "Unbilled hours" total; Bill date (default `firmToday()`); "Balance"
-    (negative allowed); start status (1st default, Credit, Refund); estimate;
-    comments; button "Create bill". Save: insert the bill with `billhours` = sum
-    of checked rows' `acthrs` and `billfilename` = `billFileName(case, attorney
-    last name, billdate, n)` where n = count of that case's bills already dated
-    that day; then `update tblactivity set actbilled=true, actbillid=<new> where
-    actid in (<checked>) and actbilled=false and actbillid is null`. Returned
-    count ≠ checked count → revert rows now pointing at the new bill, delete it,
-    redirect `?error=stale` ("Some entries were billed meanwhile — reload and
-    try again"). Success → redirect `/bills/<new id>`.
+- task: Funds entry, list, edit — `app/funds/new/page.tsx` form: case (required;
+    `?case=` prefills), amount, date (default `firmToday()`), payee, source,
+    type, branch (default Stratford), bank account, description, comment,
+    cleared flag, date cleared, clearing notes. Save redirects to
+    `app/funds/[id]/page.tsx`, which shows "Funds recorded" after a save and all
+    fields with an edit form. `app/funds/page.tsx` lists recent funds (date,
+    case, payee, amount), newest first. Writes in `lib/funds/save.ts`.
   guardrails:
-    - Only the checked rows are ever updated; a row already billed is never re-pointed to another bill
-    - A failed save leaves no new bill and no changed `tblactivity` row
-    - Hours are never typed — `billhours` always equals the checked rows' sum
+    - Amounts are validated as at most 2 decimals; `fndspmt` is never written from a float
   done when:
-    - Timesheet bill on a case with unbilled rows of 1.500 h and 0.500 h, balance 450.00: the bill has `billhours` 2.000, `billnotice` '1st', `billfilename` `Bill<case> <atty last> <yyyy mm dd>-0`; both rows are `actbilled=true, actbillid=<new>`, and the case's unbilled hours read 0.000
-    - A retainer bill saved with nothing checked has `billhours` 0 and changes no `tblactivity` row
-    - Reliability: when one checked row is billed elsewhere after the form loads, the save redirects with `error=stale`, no new bill row exists, and the other checked row is still unbilled
-    - The create action posted as staff is refused and no `tblbills` row is inserted
-  status: done
+    - Submitting `/funds/new` with case 990901 and amount 450.00 creates a `tblfundsrcvd` row (`fndspmt` 450.00, `fndsbranch` Stratford) and lands on a page showing "Funds recorded"
+    - Amount `45.001` or `abc` shows an amount field error and writes no row
+    - A nonexistent case id shows a case field error and writes no row
   ui: true
+  status: not started
+  parallel-group: a
 
-- task: Notice actions on `/bills/[id]` — **Advance** (1st → 2nd stamps
-    `billsecondnoticedate`; 2nd → Final stamps `billfinalnoticedate`; date =
-    `firmToday()`) and **Close as** (Cancelled / Carried Over / Deadbeat /
-    Settled). Each update filters on the bill's expected current `billnotice`,
-    so a stale or duplicate submit changes nothing and returns `?error=stale`.
-    Buttons render only for admins and only when the move is allowed by
-    `lib/bills/rules.ts`.
+- task: Expense list — `app/expenses/page.tsx` with `?case=` and `?month=yyyy-mm`
+    filters (default: current month); columns date, type name, description,
+    check number, amount, cleared; a total row. Query in `lib/expenses/list.ts`,
+    joining type names in one query, not per row.
   guardrails:
-    - Never writes `billpaiddate`, 'Paid', or 'Partial Payment'
-    - Never overwrites an already-stamped notice date
-    - A closed bill (not open) is never changed by either action
+    - Read-only — no write from this page
   done when:
-    - Advancing a 1st bill sets '2nd' and `billsecondnoticedate` = today; advancing again sets 'Final' and `billfinalnoticedate` = today with the second-notice date unchanged; a Final bill shows no Advance button
-    - Close as Cancelled on a 2nd bill sets 'Cancelled' and leaves both notice dates unchanged; both actions are refused on a Paid bill and the row is unchanged
-    - Reliability: two concurrent Advance submits on the same 1st bill leave it at '2nd', not 'Final'
-    - Reliability: an Advance at 23:30 America/New_York with the server on `TZ=UTC` stamps the New York date
-  status: done
+    - `/expenses?case=990901` lists only that case's expenses, shows the type name (not the id), and a total equal to the sum of their amounts
+    - `/expenses?month=2026-01` lists every expense dated in January 2026, firm-wide (no case) rows included
+    - Median of 5 loads of `/expenses?month=2026-01` stays under 1s with 5,000 expense rows seeded
+  status: not started
+
+- task: Mark bill paid / partial payment — on `app/funds/[id]/page.tsx`, for
+    admins: a bill select over the funds row's case's open bills (oldest
+    first, oldest preselected; `?bill=` preselects a given bill) and two
+    buttons. "Mark bill paid" sets `billnotice='Paid'` and `billpaiddate` = the
+    funds row's `fndsdate`. "Record partial payment" sets
+    `billnotice='Partial Payment'`. Write in `lib/funds/pay.ts`, guarded on the
+    bill's current notice (`guardedUpdate` pattern). No open bills → the
+    controls are replaced by "No open bills on this case".
+  guardrails:
+    - Only open bills (per `lib/bills/rules.ts`) are offered or accepted
+    - Never writes `billsecondnoticedate`, `billfinalnoticedate`, `billbalance`, or any `tblcase` column
+  done when:
+    - "Mark bill paid" on an open `1st` bill sets `billnotice` 'Paid' and `billpaiddate` = the funds date, leaves 2nd/Final notice dates as they were, and the case page's `unpaid-bill-count` drops by 1
+    - The paid bill no longer appears on `/bills`
+    - "Record partial payment" sets 'Partial Payment' and the case's `unpaid-bill-count` is unchanged
+    - A bill whose notice changed after the page loaded is not written; the page shows a stale-bill error
   ui: true
+  status: not started
 
-- task: Revise — a "Revise" button on `/bills/[id]` for an open bill that no
-    other bill supersedes (`lib/bills/revise.ts`). Creates B′ with
-    `supersedesbillid = B`, copying `billcaseid`, `billtype`, `billhours`,
-    `billbalance`, `billestimate`, `billcomments`; `billdate` = today,
-    `billnotice` '1st', new `billfilename`. Then moves B's activity rows (guarded
-    `where actbillid = B`), then sets B to 'Cancelled' (guarded on B's current
-    status). Any step failing → move rows back to B, delete B′, `?error=stale`.
-    Success → redirect `/bills/<B′>`.
+- task: Bounced-check reversal — admin action "Reverse bounced check" on
+    `app/funds/[id]/page.tsx` for a positive, not-yet-reversed funds row. It
+    inserts a reversal row (same case, date `firmToday()`, `fndspmt` = −original,
+    `fndstype='Bounced'`, `fndscomment` naming the original `fndsid`, other
+    fields copied) and, when the user picks one of the case's Paid bills,
+    reopens it: notice `Final` if `billfinalnoticedate` is set, else `2nd` if
+    `billsecondnoticedate` is set, else `1st`; `billpaiddate` cleared. Write in
+    `lib/funds/reverse.ts`; reopen rule a pure function there.
   guardrails:
-    - B is never deleted, and no field of B other than `billnotice` changes
-    - Rows move only from B to B′ — no other bill's rows are touched
+    - The original funds row is never modified
+    - A reversal row can itself never be reversed
+    - Once-only must hold under two concurrent submits with no schema change — no guard that lives only in a prior select
   done when:
-    - Revising open bill B with two attached rows creates B′ with B's type, hours, and balance and status '1st'; both rows now have `actbillid = B′`; B is 'Cancelled' with every other field unchanged
-    - B's page shows "Revised by #B′" linking to B′, and B′'s page shows "Revises #B"
-    - Revising B a second time is refused and inserts no bill
-    - The case's unbilled hours are the same before and after the revise
-  status: done
+    - Reversing a 450.00 check creates one −450.00 row with `fndstype` 'Bounced' whose comment names the original `fndsid`; the original row is byte-for-byte unchanged
+    - The picked Paid bill returns to `Final` when its final date is set, `2nd` when only its second date is set, `1st` when neither, with `billpaiddate` null
+    - Two concurrent reversal submits for the same check leave exactly one reversal row
+    - The case's `unpaid-bill-count` rises by 1 after a reversal that reopens a bill
+  caution: true
+  status: not started
+
+- task: BoA export upload — `lib/bank-import/parse.ts` parses the BoA CSV
+    (`Date,Description,Amount`; quoted fields may contain commas; negative =
+    outflow) into rows or a list of line-numbered errors. `lib/bank-import/import.ts`
+    inserts outflows into `bank_transactions` with the chosen account, skipping
+    rows the unique key already holds and skipping credits (amount > 0).
+    `app/bank-review/page.tsx` gets the upload form: file input labelled
+    "Upload CSV", account field prefilled "Bank of America"; result line
+    "N transactions imported, M already imported, K credits skipped".
+  guardrails:
+    - Any parse error inserts nothing from that file (all-or-nothing)
+    - Import never writes `tblexpenses` or `tblfundsrcvd`
+  done when:
+    - Uploading `tests/journeys/fixtures/boa-export.csv` inserts 2 `bank_transactions` rows with amounts −45.00 and −75.00 and `bankaccount` = the form value
+    - Uploading the same file again inserts 0 rows and reports "2 already imported"
+    - A file whose line 3 has a bad date reports an error naming line 3 and inserts no rows
+    - A description `"SMITH, JONES LLP"` parses as one field; a +100.00 row is not inserted and counts as a skipped credit
   ui: true
+  status: not started
 
-- task: `/bills` list — `app/bills/page.tsx`, readable by staff. Open bills
-    only, grouped by stage in order 1st, 2nd, Final, Partial Payment, Deadbeat.
-    Each row: case number (linked to the case), filename (linked to the bill),
-    bill date, balance, "N days" since `lastNoticeDate`, and a **due** badge
-    when `isDue`. Within a group, most days first. One query filtered to open
-    statuses, joined to `tblcase` for the case number — no per-row fetch.
+- task: Review inbox and confirm — `app/bank-review/page.tsx` lists
+    `bank_transactions` with `expid` and `fndsid` both null, oldest first, under
+    a "Transactions to review" heading. Per row: case (optional), expense type
+    (active only, prefilled by the suggestion), description (prefilled), and a
+    Confirm button. Confirm creates a `tblexpenses` row (`expdate` = posted date,
+    `expamount` = absolute amount, `expchecknum` 0, `expbranch` Stratford,
+    `expclearedbank` true, `expdatecleared` = posted date, `expbankaccount` = the
+    import's account) and links it through `bank_transactions.expid`, then shows
+    "Cleared". `lib/bank-import/suggest.ts` is a pure function: the type used
+    most often on past expenses whose normalized description (lowercase,
+    collapsed whitespace, digits stripped) matches; none when no match.
   guardrails:
-    - Read-only page — no write action on it
+    - Nothing reaches `tblexpenses` without a Confirm click
+    - A concurrent double confirm must not leave a second cleared expense in the ledger — the insert-then-link ordering is the known hazard; a compensating removal of this request's own just-inserted row is the only permitted delete
   done when:
-    - With seeded bills in 1st, 2nd, Final, Paid, and Cancelled, exactly the three open ones show, under their stage headings in order
-    - A 1st bill 45 days old shows "45 days" and a due badge and sorts above a 10-day-old 1st bill with no badge
-    - A staff login can open `/bills` and sees the list
-    - Median of 5 renders of `/bills` stays under 1 s with 5,000 bills seeded, 100 of them open
-  status: done
-
-- task: Recipient alert — when the bill's case has `tblcase.billingalert`
-    true, `/bills/new` and `/bills/[id]` show a banner "Bill recipient alert —
-    this case bills a different party". Whenever `billingcc` is non-empty, a
-    "CC: <billingcc>" line shows (with or without the alert). Shared component
-    in `app/bills/`.
-  guardrails:
-    - Display only — never blocks or changes a save
-    - Never writes `billingalert` or `billingcc` (cases lane owns them)
-  done when:
-    - A case with `billingalert` true and `billingcc` 'a@x.test, b@x.test' shows the banner and both addresses on `/bills/new?case=<id>` and on that case's bill page
-    - A case with `billingalert` false shows no banner; with a non-empty `billingcc` it still shows the CC line
-  status: done
-
-- task: Wire bills into the case page — replace `<Slot title="Bills" />` at
-    `app/cases/[id]/page.tsx:194` with a billing-owned `BillsPanel`
-    (`app/bills/bills-panel.tsx`, data from `lib/bills/`). It lists every bill
-    on the case newest first — date, type, balance, `billnotice`, linked to
-    `/bills/<id>` — plus `data-testid="unpaid-bill-count"` (count of open
-    bills, live), and the latest open bill's `billsecondnoticedate` /
-    `billfinalnoticedate` under `data-testid="second-notice-date"` /
-    `"final-notice-date"` (empty when unset or none open). Admins see a "New
-    bill" link to `/bills/new?case=<id>`.
-  guardrails:
-    - In `app/cases/[id]/page.tsx` only the Slot line and one import change
-    - Panel copy never contains the word "billed" — journey 03 matches `/billed/i` on this page
-    - The panel's heading keeps "Bills" (journey 01 expects it)
-  done when:
-    - The case page now renders `BillsPanel`; a case with three bills (one legacy: `billtype` null, `billhours` 0, 'Paid') lists all three newest first, each with balance, status, and a link to its bill page
-    - With bills in 1st, Deadbeat, and Paid and `tblcase.numunpaidbills` = 5, `unpaid-bill-count` shows 2
-    - After creating a bill through `/bills/new`, the case page shows its balance — journey 03 passes through its `450.00` assertion
-    - A staff login sees the panel without the "New bill" link
-  status: done
+    - Confirming a row creates one `tblexpenses` row with `expclearedbank` true, `expdatecleared` = posted date, `expbankaccount` = the import account, sets that transaction's `expid`, and the row leaves the inbox showing "Cleared"
+    - Two concurrent confirms of the same transaction leave exactly one `tblexpenses` row for it
+    - With past expenses "COURT FILING FEE" ×3 as Filing Fee and ×1 as Case Material, a new "Court Filing Fee 0042" row is prefilled Filing Fee; an unmatched description has no preselected type
+    - The type select contains no retired type
+  caution: true
   ui: true
+  status: not started
+
+- task: Clearing view by bank account — `app/bank-review/accounts/page.tsx`:
+    account select over the distinct `expbankaccount` / `fndsbankaccount`
+    values; lists that account's uncleared expenses and funds (date, kind,
+    description/payee, amount); select rows, enter a cleared date and optional
+    note, "Mark cleared" sets `expclearedbank`/`fndsclearedbank` true,
+    `expdatecleared`/`fndsdatecleared`, and the clearing notes. Replaces Access
+    `ClearedExpensesAndIncome`. Logic in `lib/bank-import/clearing.ts`.
+  guardrails:
+    - Only rows on the selected account are ever updated
+  done when:
+    - `/bank-review/accounts?account=X` lists only uncleared expenses and funds whose bank account is X
+    - "Mark cleared" with date 2026-02-01 on two selected rows sets cleared true and date 2026-02-01 on exactly those rows, and they leave the list
+    - A row on account Y submitted with account X selected is not updated
+  ui: true
+  status: not started
+
+- task: Case page money panels (wiring, cases) — replace
+    `<Slot title="Funds received" />` and `<Slot title="Expenses" />` in
+    `app/cases/[id]/page.tsx` with panels built in this lane
+    (`app/funds/case-panel.tsx`, `app/expenses/case-panel.tsx`): each lists the
+    case's rows (date, type/payee, amount, cleared) with a total and an "Add"
+    link to `/funds/new?case=<id>` / `/expenses/new?case=<id>`.
+  guardrails:
+    - The case page's other panels, fields, and badges do not change; this item only replaces the two slots
+  done when:
+    - `/cases/990901` shows its funds rows and total under "Funds received" and its expenses and total under "Expenses"
+    - The panels' Add links open the forms with the case prefilled
+    - Existing cases, billing, and journeys 01–03 tests remain passing
   after: cases
+  status: not started
 
-- task: Wire bills into time screens — where a `tblactivity` row has
-    `actbillid = N`, the case Time panel (`app/cases/[id]/time-panel.tsx`) and
-    the `/time` week view (`app/time/week-view.tsx`) keep the existing billed
-    marker and add a link "Bill #N" to `/bills/N`. Legacy billed rows
-    (`actbillid` null) keep the marker with no link.
+- task: Payment on the bills panel (wiring, billing) — in
+    `app/bills/bills-panel.tsx`, a Paid bill shows its `billpaiddate`, and each
+    open bill gets a "Record payment" link to `/funds/new?case=<id>&bill=<billid>`;
+    `/funds/new` carries `bill` through to `/funds/[id]` so the pay select
+    preselects that bill.
   guardrails:
-    - Link text never matches `/bills/i` (journey 01 trap noted in `time-panel.tsx:7`)
-    - `data-testid="billed-marker"` and time's edit/delete rules are unchanged
+    - `unpaid-bill-count`, `second-notice-date`, `final-notice-date` keep their test ids and meaning
   done when:
-    - On the case page, a row with `actbillid = N` shows "Bill #N" linking to `/bills/N`; a legacy billed row shows its billed marker and no link; an unbilled row shows neither
-    - In the `/time` week view, the logged-in person's row with `actbillid = N` shows the same "Bill #N" link
-  status: done
-  after: time
+    - A Paid bill on the case bills panel shows its paid date
+    - Clicking "Record payment" on bill N, saving funds, lands on the funds page with bill N preselected in the pay select
+    - Existing billing and journeys 01–03 tests remain passing
+  after: billing
+  ui: true
+  status: not started
 
 > **⚠️ AUTONOMOUS RUN — STOP HERE**
