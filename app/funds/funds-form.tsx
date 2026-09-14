@@ -12,7 +12,9 @@ function FieldError({ code, field }: { code?: string; field: string }) {
 
 /**
  * Plain server-rendered funds form, used by /funds/new and /funds/[id].
- * Callers pass a fresh `key` per render (Next 14: a same-URL action redirect never resets uncontrolled inputs).
+ * Callers wrap it in a host element with a fresh `key` per render: Next 14 keys every page segment as `__PAGE__`
+ * (search params ignored), so an action redirect back to the same page reuses the uncontrolled inputs. A key on
+ * this server component itself is dropped from the RSC payload and does nothing.
  */
 export function FundsForm({ values, error, action, submitLabel }: {
   values: FundsValues;

@@ -21,7 +21,10 @@ export default async function NewFundsPage({ searchParams }: { searchParams: Par
     <main className="mx-auto max-w-4xl space-y-4 px-4 py-6">
       <p className="text-sm"><Link href="/funds" className="text-slate-700 underline">← Funds</Link></p>
       <h1 className="text-xl font-semibold">Record funds</h1>
-      <FundsForm key={crypto.randomUUID()} values={values} error={error || undefined} action={createFundsAction} submitLabel="Record funds" />
+      {/* Key on a host element: a key on a server component (FundsForm) is dropped from the RSC payload. */}
+      <div key={crypto.randomUUID()}>
+        <FundsForm values={values} error={error || undefined} action={createFundsAction} submitLabel="Record funds" />
+      </div>
     </main>
   );
 }

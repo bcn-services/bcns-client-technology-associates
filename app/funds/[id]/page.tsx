@@ -40,8 +40,9 @@ export default async function FundsPage({ params, searchParams }: { params: { id
       <p className="text-sm">
         Case <Link href={`/cases/${row.fndscaseid}`} className="text-slate-700 underline">{row.fndscaseid}</Link>
       </p>
-      <section aria-label="Edit funds">
-        <FundsForm key={crypto.randomUUID()} values={values} error={error || undefined} action={updateFundsAction.bind(null, row.fndsid)} submitLabel="Save" />
+      {/* Key on a host element: a key on a server component (FundsForm) is dropped from the RSC payload. */}
+      <section aria-label="Edit funds" key={crypto.randomUUID()}>
+        <FundsForm values={values} error={error || undefined} action={updateFundsAction.bind(null, row.fndsid)} submitLabel="Save" />
       </section>
     </main>
   );
