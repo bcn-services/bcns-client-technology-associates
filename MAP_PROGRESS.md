@@ -39,3 +39,8 @@ on screens later lanes build (funds, bank import, dashboard). Progress reading, 
   `getByText(/billed/i)` becomes ambiguous once the case page shows "Unbilled hours"
   and per-row billed markers — protected-path amendment for the billing lane, scope
   it to the bill panel.
+- 2026-09-13 — `tests/journeys/**` (PR #12, `amend/journey-03`, on `integration`: 03
+  needs billing, which main lacks). `login(page,'admin')` now signs in as
+  `E2E_ADMIN_EMAIL` (seeded by `seed-e2e.ts`); it was the staff account. 03 awaits
+  the create-bill redirect, asserts `billed-marker`, and cleans its rows off case
+  90001. 02 asserts the Firm/Attorney/Client headings, not `getByText(/firm/i)`.
