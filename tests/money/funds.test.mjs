@@ -95,6 +95,34 @@ test("create: ForbiddenError from the session → ?error=forbidden, no DB call",
   assert.match(d.redirected, /error=forbidden/);
 });
 
+for (const [amount, want] of [["1234567.10", "1234567.10"], ["0.10", "0.10"], ["19.90", "19.90"]]) {
+  test(`create: no-float write — amount ${amount} → fndspmt exactly the string "${want}"`, async () => {
+    const db = okDb();
+    await runCreateFunds(form({ amount }), deps(db));
+    const w = writes(db);
+    assert.equal(w.length, 1);
+    assert.strictEqual(w[0][1].fndspmt, want);
+  });
+}
+
+test("create: case-exists select on tblcase runs before the insert", async () => {
+  const db = okDb();
+  await runCreateFunds(form(), deps(db));
+  const iCase = db.calls.findIndex((c) => c[0] === "from" && c[1] === "tblcase");
+  const iIns = db.calls.findIndex((c) => c[0] === "insert");
+  assert.ok(iCase >= 0 && iCase < iIns, "tblcase lookup precedes insert");
+  assert.ok(db.calls.some((c) => c[0] === "eq" && c[1] === "caseid" && c[2] === 990901));
+});
+
+test("list: /funds query orders fndsdate desc, then fndsid desc (newest first)", async () => {
+  const { listRecentFunds } = await import("../../lib/funds/save.ts");
+  const db = fakeDb(() => ({ data: [{ fndsid: 2 }, { fndsid: 1 }], error: null }));
+  const rows = await listRecentFunds(db);
+  const orders = db.calls.filter((c) => c[0] === "order").map((c) => [c[1], c[2]?.ascending]);
+  assert.deepEqual(orders, [["fndsdate", false], ["fndsid", false]]);
+  assert.deepEqual(rows.map((r) => r.fndsid), [2, 1]);
+});
+
 test("update: writes one filtered update → /funds/5?saved=1; zero rows → notfound", async () => {
   const db = fakeDb((calls) => (lastFrom(calls) === "tblcase" ? { data: { caseid: 990901 }, error: null } : { data: [{ fndsid: 5 }], error: null }));
   const d = deps(db);
