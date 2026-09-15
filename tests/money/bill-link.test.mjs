@@ -141,6 +141,21 @@ test("compensation is guarded by the value it wrote: F re-pointed before the und
   assert.equal(f(db, 3).fndsbillid, 11);
 });
 
+test("QA: bill write returns an error → link undone (F unlinked), bill unchanged, failed", async () => {
+  const db = fakeDb(tables());
+  const before = snap(db.tables);
+  const errDb = { ...db, from(t) {
+    const q = db.from(t);
+    if (t === "tblbills") { const upd = q.update; q.update = (p) => { upd(p); q.then = (res) => Promise.resolve({ data: null, error: { message: "boom" } }).then(res); return q; }; }
+    return q;
+  } };
+  const d = deps(errDb);
+  const err = console.error; console.error = () => {};
+  try { await runPayBill(1, form("11:Partial Payment", "paid"), d); } finally { console.error = err; }
+  assert.equal(d.redirected, "/funds/1?payerror=failed");
+  assert.deepEqual(db.tables, before, "F back to unlinked; H keeps its link; bills unchanged");
+});
+
 test("bill on another case → bill, refused before either write", async () => {
   const db = fakeDb(tables());
   const before = snap(db.tables);
