@@ -48,7 +48,7 @@ function world() {
     billpaiddate: null, billsecondnoticedate: null, billfinalnoticedate: null, ...extra,
   });
   return fakeDb({
-    tblfundsrcvd: [{ fndsid: 7, fndscaseid: 990900, fndsdate: FUNDS_DATE }],
+    tblfundsrcvd: [{ fndsid: 7, fndscaseid: 990900, fndsdate: FUNDS_DATE, fndsbillid: null }],
     tblbills: [
       bill(11, 990900, "1st", { billsecondnoticedate: "2026-07-01" }),
       bill(12, 990900, "2nd"),
@@ -75,12 +75,12 @@ function deps(db, role = "admin") {
 }
 const snapshot = (db) => JSON.parse(JSON.stringify(db.tables));
 const billRow = (db, id) => db.tables.tblbills.find((b) => b.billid === id);
-const updates = (db) => db.calls.filter((c) => c[0] === "update");
-/** Every table except bill 11 is exactly as before. */
+const updates = (db) => db.calls.filter((c) => c[0] === "update" && !("fndsbillid" in c[1]));
+/** Every table except bill 11 (and funds 7's link to it) is exactly as before. */
 function onlyBill11Changed(db, before) {
   const after = snapshot(db);
   assert.deepEqual(after.tblcase, before.tblcase, "tblcase untouched");
-  assert.deepEqual(after.tblfundsrcvd, before.tblfundsrcvd, "funds untouched");
+  assert.deepEqual(after.tblfundsrcvd, before.tblfundsrcvd.map((f) => (f.fndsid === 7 ? { ...f, fndsbillid: 11 } : f)), "funds: only the link");
   for (const b of after.tblbills.filter((x) => x.billid !== 11)) assert.deepEqual(b, before.tblbills.find((x) => x.billid === b.billid), `bill ${b.billid} untouched`);
 }
 
@@ -136,12 +136,12 @@ for (const notice of ["Paid", "Cancelled", "First"]) {
   });
 }
 
-test("bill on another case (14) → stale, nothing written", async () => {
+test("bill on another case (14) → bill (case checked before either write), nothing written", async () => {
   const db = world();
   const before = snapshot(db);
   const d = deps(db);
   await runPayBill(7, form("14:1st", "paid"), d);
-  assert.equal(d.redirected, "/funds/7?payerror=stale");
+  assert.equal(d.redirected, "/funds/7?payerror=bill");
   assert.deepEqual(snapshot(db), before);
 });
 

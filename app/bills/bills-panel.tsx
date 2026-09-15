@@ -5,6 +5,7 @@ import type { Db } from "@/lib/time/entries";
 import { listCaseBills, type CaseBillRow } from "@/lib/bills/case";
 import { fmtMoney } from "@/lib/bills/edit";
 import { isOpen } from "@/lib/bills/rules";
+import { listBillChecks, type BillCheck } from "@/lib/funds/case";
 
 // Case-page selector traps: exactly one heading matching /bills/i (journey 01); no text matching /billed/i
 // (journey 03 reads that from the time panel); no buttons, no labelled inputs (tests/cases). Reads only.
@@ -14,11 +15,12 @@ export async function BillsPanel({ caseId, db, session }: { caseId: number; db?:
   const s = session ?? (await requireSession());
   const d = db ?? (createServerClient() as unknown as Db);
   const bills = await listCaseBills(d, caseId).catch((e) => { console.error("case bills read:", e); return null; });
-  return <BillsPanelView caseId={caseId} bills={bills} admin={s.role === "admin"} />;
+  const checks = bills ? await listBillChecks(d, bills.map((b) => b.billid)).catch((e) => { console.error("bill checks read:", e); return null; }) : [];
+  return <BillsPanelView caseId={caseId} bills={bills} admin={s.role === "admin"} checks={checks} />;
 }
 
 /** `bills` must be newest first (listCaseBills order): the first open one is the latest open bill. */
-export function BillsPanelView({ caseId, bills, admin }: { caseId: number; bills: CaseBillRow[] | null; admin: boolean }) {
+export function BillsPanelView({ caseId, bills, admin, checks = [] }: { caseId: number; bills: CaseBillRow[] | null; admin: boolean; checks?: BillCheck[] | null }) {
   const open = bills?.filter((b) => isOpen(b.billnotice)) ?? [];
   const latest = open[0];
   return (
@@ -49,6 +51,18 @@ export function BillsPanelView({ caseId, bills, admin }: { caseId: number; bills
                 ))}
               </tbody>
             </table>
+          )}
+          {/* Checks applied to each bill (reversal rows included), outside the case-bill rows so each row keeps one link. */}
+          {checks == null ? (
+            <p className="text-sm text-red-700">Applied checks could not be loaded.</p>
+          ) : checks.length > 0 && (
+            <ul aria-label="Applied checks" data-testid="bill-checks" className="text-sm">
+              {bills.flatMap((b) => checks.filter((c) => c.fndsbillid === b.billid).map((c) => (
+                <li key={c.fndsid} data-testid="bill-check" data-billid={b.billid}>
+                  Bill {b.billid} ({b.billdate}): <Link href={`/funds/${c.fndsid}`} className="underline">{c.fndsdate} · ${c.amount}</Link>
+                </li>
+              )))}
+            </ul>
           )}
           {/* Outside the case-bill rows: each row keeps exactly one link, to its own bill page. */}
           {open.length > 0 && (

@@ -5,10 +5,10 @@ LANE.md wins for scope, this file wins for state.
 
 ## Current position
 
-- **Status:** dev-team-auto run complete (2026-09-14): 11 items done, 1 blocked; merged into `lane/money` and opened as a PR into `integration`. The acceptance check found 3 of 4 lane criteria met, and the fourth (journeys 04/05) waits on the amendment.
-- **Next:** Link a check to the bill it paid, once the migration is approved and applied
-- **Blockers:** journeys 04/05 amendments and the funds → bill link migration (protected) await human approval. The /expenses load-time check (under 1 second) now runs 1.0–1.3 seconds on the dev server and needs a decision.
-- **Last updated:** 2026-09-14
+- **Status:** all 12 items done. Items 1–11 merged to `integration` (PR #13); the check → bill link, migration 0008 and the journeys 04/05 fix go up as a second PR. Journeys 01–05 pass.
+- **Next:** docs-reports lane
+- **Blockers:** none. The /expenses load-time check (under 1 second) runs 1.0–1.3 seconds on a loaded dev server; decide at the hand-test round.
+- **Last updated:** 2026-09-15
 
 ## Money lane (2026-09-14)
 
@@ -25,4 +25,4 @@ LANE.md wins for scope, this file wins for state.
 | Clearing view by bank account | done — Kris can pick a bank account, see its uncleared expenses and funds, and mark selected ones cleared with a date and note; rows on other accounts are never touched. (2026-09-14) |
 | Case page money panels | done — Each case page now shows the case's funds received and expenses with exact totals (bounced-check reversals included) and Add links that open the forms with the case filled in. (2026-09-14) |
 | Payment on the bills panel | done — A paid bill on the case page shows its paid date, and each open bill has a "Record payment" link that ends on the funds page with that bill ready to mark paid. (2026-09-14) |
-| Link a check to the bill it paid | blocked — added at Nate's request: it needs a new database column to record which check paid which bill, and that needs his sign-off before it can be built. (2026-09-14) |
+| Link a check to the bill it paid | done — Marking a bill paid or recording a partial payment from a check now links that check to the bill: the check page shows "Applied to bill N", the case bills panel lists every check applied to each bill, and a bounced-check reversal carries the link. (2026-09-15) |

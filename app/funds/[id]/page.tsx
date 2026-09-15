@@ -4,7 +4,7 @@ import { createServerClient } from "@/lib/db/client";
 import type { Db } from "@/lib/time/entries";
 import { FUNDS_FIELDS, fundsErrorMessage, loadFunds, rowValues, type FundsValues } from "@/lib/funds/save";
 import { openBillsOldestFirst, preselectBill, billOption, payErrorMessage } from "@/lib/funds/pay";
-import { findReversal, isReversal, reversalComment, reverseErrorMessage } from "@/lib/funds/reverse";
+import { findReversal, isReversal, reopenPreselect, reversalComment, reverseErrorMessage } from "@/lib/funds/reverse";
 import { listCaseBills } from "@/lib/bills/case";
 import { payBillAction, reverseFundsAction, updateFundsAction } from "../actions";
 import { FundsForm } from "../funds-form";
@@ -37,7 +37,8 @@ export default async function FundsPage({ params, searchParams }: { params: { id
     );
   }
   const isAdmin = session.role === "admin";
-  const bills = isAdmin && !isReversal(row) && row.fndscaseid != null ? await openBillsOldestFirst(db, row.fndscaseid) : [];
+  const linked = row.fndsbillid ?? null;
+  const bills = isAdmin && linked == null && !isReversal(row) && row.fndscaseid != null ? await openBillsOldestFirst(db, row.fndscaseid) : [];
   const picked = preselectBill(bills, first(searchParams.bill));
   const payError = first(searchParams.payerror);
   const paid = first(searchParams.paid);
@@ -47,6 +48,10 @@ export default async function FundsPage({ params, searchParams }: { params: { id
   const paidBills = isAdmin && !reversal && !reversedBy && row.fndscaseid != null
     ? (await listCaseBills(db, row.fndscaseid)).filter((b) => b.billnotice === "Paid") : [];
   const reverseError = first(searchParams.reverseerror);
+  // Once linked, this line replaces the pay select (admins) and is the only bill-payment output (staff, reversal rows).
+  const applied = linked != null && (
+    <p data-testid="applied-bill" className="text-sm text-slate-700">Applied to bill <Link href={`/bills/${linked}`} className="underline">{linked}</Link></p>
+  );
   const values = error ? (Object.fromEntries(FUNDS_FIELDS.map((k) => [k, first(searchParams[k])])) as FundsValues) : rowValues(row);
   return (
     <main className="mx-auto max-w-4xl space-y-4 px-4 py-6">
@@ -67,13 +72,13 @@ export default async function FundsPage({ params, searchParams }: { params: { id
           <FundsForm values={values} error={error || undefined} action={updateFundsAction.bind(null, row.fndsid)} submitLabel="Save" />
         </section>
       )}
-      {isAdmin && !reversal && (
+      {isAdmin && !reversal ? (
         // Key on a host element so a same-URL redirect re-renders the select with the fresh open bills.
         <section aria-label="Bill payment" key={crypto.randomUUID()} className="space-y-2 border-t pt-4">
           <h2 className="font-semibold">Bill payment</h2>
           {payError && <p role="alert" data-testid="pay-error" className="text-sm text-red-700">{payErrorMessage(payError)}</p>}
           {paid && !payError && <p role="status" data-testid="pay-saved" className="text-sm text-green-800">Bill #{paid} updated</p>}
-          {bills.length === 0 ? (
+          {applied || (bills.length === 0 ? (
             <p data-testid="no-open-bills" className="text-sm text-slate-700">No open bills on this case</p>
           ) : (
             <form action={payBillAction.bind(null, row.fndsid)} className="flex flex-wrap items-end gap-2">
@@ -86,9 +91,9 @@ export default async function FundsPage({ params, searchParams }: { params: { id
               <button name="kind" value="paid" className="rounded bg-slate-800 px-3 py-1 text-sm text-white">Mark bill paid</button>
               <button name="kind" value="partial" className="rounded border px-3 py-1 text-sm">Record partial payment</button>
             </form>
-          )}
+          ))}
         </section>
-      )}
+      ) : applied}
       {reversedBy && (
         <p data-testid="reversed-by" className="text-sm text-slate-700">
           Reversed by <Link href={`/funds/${reversedBy.fndsid}`} className="underline">#{reversedBy.fndsid}</Link> ({reversalComment(row.fndsid)})
@@ -102,7 +107,7 @@ export default async function FundsPage({ params, searchParams }: { params: { id
           {!reversal && !reversedBy && (
             <form action={reverseFundsAction.bind(null, row.fndsid)} className="flex flex-wrap items-end gap-2">
               <label htmlFor="reverse-bill" className="text-sm">Reopen bill</label>
-              <select id="reverse-bill" name="bill" defaultValue="" className="rounded border px-2 py-1 text-sm">
+              <select id="reverse-bill" name="bill" defaultValue={reopenPreselect(paidBills, linked)} className="rounded border px-2 py-1 text-sm">
                 <option value="">No bill</option>
                 {paidBills.map((b) => (
                   <option key={b.billid} value={String(b.billid)}>#{b.billid} · {b.billdate} · Paid · ${String(b.billbalance)}</option>

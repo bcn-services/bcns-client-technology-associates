@@ -6,7 +6,10 @@
  * exists; run* also refuses it explicitly before any write.
  * Order: reversal insert first, then the optional bill reopen — a reopened bill never exists without its reversal.
  * Residual: if the bill write loses a race after the insert, the reversal stands and the bill stays Paid (?reverseerror=billstale).
- * The original funds row is only ever read.
+ * The original funds row is only ever read. The reversal row carries the original's bill link (fndsbillid).
+ * ponytail: link copied from the pre-insert read — a pay that links the original between that read and the insert
+ * leaves the reversal row unlinked (display-only: missing from the bill's check list; amounts correct). Upgrade to a
+ * guarded post-insert patch (`fndsid = -F and fndsbillid is null`, from a fresh read of F) if it is ever seen.
  */
 import type { Session } from "../auth/session";
 import type { Db } from "../time/entries";
@@ -52,12 +55,16 @@ export function negateMoney(v: number | string): string | null {
 type Orig = {
   fndsid: number; fndscaseid: number | null; fndspmt: number | string; fndstype: string | null;
   fndspayee: string | null; fndssource: string | null; fndsdesc: string | null; fndsbranch: string;
-  fndssafilename: string | null; fndsbillfilename: string | null; fndsbankaccount: string | null;
+  fndssafilename: string | null; fndsbillfilename: string | null; fndsbankaccount: string | null; fndsbillid?: number | null;
 };
-const ORIG_COLS = "fndsid, fndscaseid, fndspmt, fndstype, fndspayee, fndssource, fndsdesc, fndsbranch, fndssafilename, fndsbillfilename, fndsbankaccount";
+const ORIG_COLS = "fndsid, fndscaseid, fndspmt, fndstype, fndspayee, fndssource, fndsdesc, fndsbranch, fndssafilename, fndsbillfilename, fndsbankaccount, fndsbillid";
 
 /** A reversal row, by any of its markers — never offered the control, never accepted by run*. */
 export const isReversal = (r: Pick<Orig, "fndsid" | "fndspmt" | "fndstype">) => r.fndsid < 0 || r.fndstype === BOUNCED || negateMoney(r.fndspmt) === null;
+
+/** Reopen-select preselect: the row's linked bill when it is among the Paid choices, else "" (No bill). */
+export const reopenPreselect = (paid: { billid: number }[], fndsbillid: number | null | undefined): string =>
+  fndsbillid != null && paid.some((b) => b.billid === fndsbillid) ? String(fndsbillid) : "";
 
 /** The reversal row for an original, if any (the page uses this to hide the control). */
 export async function findReversal(db: Db, fndsid: number): Promise<{ fndsid: number } | null> {
@@ -96,6 +103,7 @@ export async function reverseFunds(db: Db, fndsid: number, billid: number, today
     fndscomment: reversalComment(fndsid),
     fndspayee: orig.fndspayee, fndssource: orig.fndssource, fndsdesc: orig.fndsdesc, fndsbranch: orig.fndsbranch,
     fndssafilename: orig.fndssafilename, fndsbillfilename: orig.fndsbillfilename, fndsbankaccount: orig.fndsbankaccount,
+    fndsbillid: orig.fndsbillid ?? null,
     // The reversal has not cleared the bank yet: cleared fields start fresh rather than copied.
     fndsclearedbank: false, fndsdatecleared: null, fndsclearingnotes: null,
   }).select("fndsid").single();

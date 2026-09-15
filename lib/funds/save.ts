@@ -19,6 +19,7 @@ const MESSAGES: Record<string, string> = {
   date: "Date must be a valid date.",
   datecleared: "Date cleared must be a valid date (or blank).",
   notfound: "That funds record no longer exists.",
+  linkedcase: "This check is applied to a bill; its case can't be changed.",
   forbidden: "You can't record funds.",
 };
 export const fundsErrorMessage = (code: string): string => MESSAGES[code] ?? "Save failed; nothing was recorded.";
@@ -37,8 +38,9 @@ export type FundsRow = {
   fndspayee: string | null; fndssource: string | null; fndsdesc: string | null; fndsbranch: string;
   fndscomment: string | null; fndstype: string | null; fndsclearedbank: boolean | null;
   fndsdatecleared: string | null; fndsbankaccount: string | null; fndsclearingnotes: string | null;
+  fndsbillid?: number | null; // written only by lib/funds/pay.ts — never by create/update
 };
-const COLS = "fndsid, fndscaseid, fndsdate, fndspmt, fndspayee, fndssource, fndsdesc, fndsbranch, fndscomment, fndstype, fndsclearedbank, fndsdatecleared, fndsbankaccount, fndsclearingnotes";
+const COLS = "fndsid, fndscaseid, fndsdate, fndspmt, fndspayee, fndssource, fndsdesc, fndsbranch, fndscomment, fndstype, fndsclearedbank, fndsdatecleared, fndsbankaccount, fndsclearingnotes, fndsbillid";
 
 const isDate = (s: string) => {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
@@ -93,9 +95,15 @@ export async function createFunds(db: Db, get: (k: string) => string): Promise<n
 export async function updateFunds(db: Db, fndsid: number, get: (k: string) => string): Promise<void> {
   const row = parseFunds(get);
   await requireCase(db, row.fndscaseid);
-  const { data, error } = await db.from("tblfundsrcvd").update(row).eq("fndsid", fndsid).select("fndsid");
+  const cur = await loadFunds(db, fndsid);
+  if (!cur) throw new FundsError("notfound");
+  const moving = cur.fndscaseid !== row.fndscaseid;
+  if (moving && cur.fndsbillid != null) throw new FundsError("linkedcase");
+  let q = db.from("tblfundsrcvd").update(row).eq("fndsid", fndsid);
+  if (moving) q = q.is("fndsbillid", null); // a pay linking it meanwhile wins; the move is refused
+  const { data, error } = await q.select("fndsid");
   if (error) throw new Error(`tblfundsrcvd update: ${error.message}`);
-  if (!data?.length) throw new FundsError("notfound");
+  if (!data?.length) throw new FundsError(moving ? "linkedcase" : "notfound");
 }
 
 export async function loadFunds(db: Db, fndsid: number): Promise<FundsRow | null> {

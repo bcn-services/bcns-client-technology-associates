@@ -49,7 +49,7 @@ function fakeDb(tables, { insertGate } = {}) {
 const funds = (fndsid, fndspmt, extra = {}) => ({
   fndsid, fndscaseid: 990910, fndsdate: "2026-08-02", fndspmt, fndspayee: "Acme", fndssource: "Check 1001", fndsdesc: "retainer",
   fndsbranch: "Stratford", fndssafilename: null, fndsbillfilename: "b.pdf", fndscomment: "orig note", fndstype: "Check",
-  fndsclearedbank: true, fndsdatecleared: "2026-08-05", fndsbankaccount: "BoA", fndsclearingnotes: "ok", ...extra,
+  fndsclearedbank: true, fndsdatecleared: "2026-08-05", fndsbankaccount: "BoA", fndsclearingnotes: "ok", fndsbillid: null, ...extra,
 });
 const bill = (billid, billnotice, sec, fin, billcaseid = 990910) => ({
   billid, billcaseid, billnotice, billpaiddate: billnotice === "Paid" ? "2026-08-02" : null, billsecondnoticedate: sec, billfinalnoticedate: fin, billbalance: "450.00",
@@ -104,7 +104,7 @@ test("reverse 450.00, no bill: one -450.00 Bounced row with id -7, comment names
   assert.deepEqual(r[0], {
     fndsid: -7, fndscaseid: 990910, fndsdate: "2026-09-14", fndspmt: "-450.00", fndstype: "Bounced", fndscomment: "Reversal of fndsid 7",
     fndspayee: "Acme", fndssource: "Check 1001", fndsdesc: "retainer", fndsbranch: "Stratford", fndssafilename: null, fndsbillfilename: "b.pdf",
-    fndsbankaccount: "BoA", fndsclearedbank: false, fndsdatecleared: null, fndsclearingnotes: null,
+    fndsbankaccount: "BoA", fndsbillid: null, fndsclearedbank: false, fndsdatecleared: null, fndsclearingnotes: null,
   });
   assert.equal(reversalComment(7), "Reversal of fndsid 7");
   assert.deepEqual(db.tables.tblbills, before.tblbills, "no bill written");

@@ -55,8 +55,8 @@ test("one fixture row per table inserts in FK-safe order", () => {
 });
 
 test("26 FKs exist, all NOT VALID, and reject a new orphan", () => {
-  assert.equal(one("select count(*) from pg_constraint where contype='f' and connamespace='public'::regnamespace and conrelid::regclass::text like 'tbl%' and conname not in ('tblbills_supersedesbillid_fkey','tblactivity_actbillid_fkey')"), "26");
-  assert.equal(one("select count(*) from pg_constraint where contype='f' and convalidated and conrelid::regclass::text like 'tbl%' and conname not in ('tblbills_supersedesbillid_fkey','tblactivity_actbillid_fkey')"), "0");
+  assert.equal(one("select count(*) from pg_constraint where contype='f' and connamespace='public'::regnamespace and conrelid::regclass::text like 'tbl%' and conname not in ('tblbills_supersedesbillid_fkey','tblactivity_actbillid_fkey','tblfundsrcvd_fndsbillid_fkey')"), "26");
+  assert.equal(one("select count(*) from pg_constraint where contype='f' and convalidated and conrelid::regclass::text like 'tbl%' and conname not in ('tblbills_supersedesbillid_fkey','tblactivity_actbillid_fkey','tblfundsrcvd_fndsbillid_fkey')"), "0");
   const err = errorOf(insertSql("tblexpenses", { expcaseid: 1, expdate: "2026-01-01", expdscr: "orphan", expchecknum: 0, expamount: 1 }));
   assert.match(err ?? "", /foreign key/);
 });
