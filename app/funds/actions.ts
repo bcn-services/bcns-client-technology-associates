@@ -6,6 +6,7 @@ import { requireSession } from "@/lib/auth/session";
 import { createServerClient } from "@/lib/db/client";
 import type { Db } from "@/lib/time/entries";
 import { runCreateFunds, runUpdateFunds } from "@/lib/funds/save";
+import { runPayBill } from "@/lib/funds/pay";
 
 // Staff and admin may record/edit funds; the session check lives inside the run* body (lib/funds/save.ts).
 const deps = () => ({
@@ -21,4 +22,9 @@ export async function createFundsAction(formData: FormData): Promise<void> {
 
 export async function updateFundsAction(fndsid: number, formData: FormData): Promise<void> {
   await runUpdateFunds(fndsid, formData, deps());
+}
+
+// Admin only: requireSession("admin") throws ForbiddenError for staff; runPayBill also checks the role itself.
+export async function payBillAction(fndsid: number, formData: FormData): Promise<void> {
+  await runPayBill(fndsid, formData, { ...deps(), session: () => requireSession("admin") });
 }
