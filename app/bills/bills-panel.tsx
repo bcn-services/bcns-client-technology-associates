@@ -44,11 +44,19 @@ export function BillsPanelView({ caseId, bills, admin }: { caseId: number; bills
                     <td className="py-1"><Link href={`/bills/${b.billid}`} className="underline">{b.billdate}</Link></td>
                     <td>{b.billtype ?? ""}</td>
                     <td className="text-right tabular-nums">{fmtMoney(b.billbalance)}</td>
-                    <td className="pl-3">{b.billnotice}</td>
+                    <td className="pl-3">{b.billnotice}{b.billnotice === "Paid" && b.billpaiddate ? <span data-testid="bill-paid-date"> {b.billpaiddate}</span> : null}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
+          )}
+          {/* Outside the case-bill rows: each row keeps exactly one link, to its own bill page. */}
+          {open.length > 0 && (
+            <ul className="text-sm">
+              {open.map((b) => (
+                <li key={b.billid}><Link href={`/funds/new?case=${caseId}&bill=${b.billid}`} className="underline">Record payment ({b.billdate})</Link></li>
+              ))}
+            </ul>
           )}
           <dl className="grid grid-cols-[auto_1fr] gap-x-2 text-sm">
             <dt className="text-slate-500">Unpaid</dt><dd data-testid="unpaid-bill-count" className="font-medium">{open.length}</dd>
