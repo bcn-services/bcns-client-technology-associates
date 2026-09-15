@@ -158,13 +158,18 @@ const reader = (formData: FormData) => (k: string) => (typeof formData.get(k) ==
 const echo = (code: string, get: (k: string) => string) =>
   new URLSearchParams([["error", code], ...FUNDS_FIELDS.map((k) => [k, get(k)] as [string, string])]).toString();
 
+/** `bill` (/funds/new → /funds/[id] preselect) passes only as a plain positive integer; anything else is dropped. */
+export const billParam = (raw: string): string | undefined => (/^[1-9]\d{0,8}$/.test(raw) ? raw : undefined);
+
 /** /funds/new action body. Success → /funds/<id>?saved=1; refusal → /funds/new?error=<code>&<fields>. */
 export async function runCreateFunds(formData: FormData, deps: FundsDeps): Promise<void> {
   const get = reader(formData);
   let id = 0;
   const code = await attempt("createFunds", deps, async () => { id = await createFunds(deps.db(), get); });
   deps.revalidatePath("/funds");
-  deps.redirect(code ? `/funds/new?${echo(code, get)}` : `/funds/${id}?saved=1`);
+  const bill = billParam(get("bill").trim());
+  const tail = bill ? `&bill=${bill}` : "";
+  deps.redirect(code ? `/funds/new?${echo(code, get)}${tail}` : `/funds/${id}?saved=1${tail}`);
 }
 
 /** /funds/[id] edit action body. Success → /funds/<id>?saved=1; refusal → /funds/<id>?error=<code>&<fields>. */

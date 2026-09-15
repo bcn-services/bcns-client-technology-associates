@@ -1,7 +1,7 @@
 // Shared stateful fake of the PostgREST subset money code uses. Filters (eq / is / not-is-null / in) are applied to
 // EVERY row, so an unfiltered update/delete hits every row and a dropped-filter mutant goes red against a decoy.
 // `hook(op, table, tables)` is awaited before each statement runs — tests use it to interleave concurrent requests.
-const ID = { tblexpenses: "expid", bank_transactions: "id", tblexptype: "exptypeid", tblcase: "caseid", tblbills: "billid" };
+const ID = { tblexpenses: "expid", bank_transactions: "id", tblexptype: "exptypeid", tblcase: "caseid", tblbills: "billid", tblfundsrcvd: "fndsid" };
 
 export function fakeDb(tables, { hook } = {}) {
   const calls = [];

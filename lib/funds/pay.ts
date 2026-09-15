@@ -29,6 +29,10 @@ export async function openBillsOldestFirst(db: Db, caseId: number): Promise<Case
   return (await listCaseBills(db, caseId)).filter((b) => isOpen(b.billnotice)).reverse();
 }
 
+/** `?bill=` preselect: only an exact-id match among `open` (this row's case, open only); anything else → oldest. */
+export const preselectBill = (open: CaseBillRow[], want: string): CaseBillRow | undefined =>
+  open.find((b) => String(b.billid) === want) ?? open[0];
+
 /** Select value: `<billid>:<notice at render time>` — the notice is the write's `expected` guard. */
 export const billOption = (b: Pick<CaseBillRow, "billid" | "billnotice">) => `${b.billid}:${b.billnotice}`;
 

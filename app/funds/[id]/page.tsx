@@ -3,7 +3,7 @@ import { requireSession } from "@/lib/auth/session";
 import { createServerClient } from "@/lib/db/client";
 import type { Db } from "@/lib/time/entries";
 import { FUNDS_FIELDS, fundsErrorMessage, loadFunds, rowValues, type FundsValues } from "@/lib/funds/save";
-import { openBillsOldestFirst, billOption, payErrorMessage } from "@/lib/funds/pay";
+import { openBillsOldestFirst, preselectBill, billOption, payErrorMessage } from "@/lib/funds/pay";
 import { findReversal, isReversal, reversalComment, reverseErrorMessage } from "@/lib/funds/reverse";
 import { listCaseBills } from "@/lib/bills/case";
 import { payBillAction, reverseFundsAction, updateFundsAction } from "../actions";
@@ -38,8 +38,7 @@ export default async function FundsPage({ params, searchParams }: { params: { id
   }
   const isAdmin = session.role === "admin";
   const bills = isAdmin && !isReversal(row) && row.fndscaseid != null ? await openBillsOldestFirst(db, row.fndscaseid) : [];
-  const want = first(searchParams.bill);
-  const picked = bills.find((b) => String(b.billid) === want) ?? bills[0];
+  const picked = preselectBill(bills, first(searchParams.bill));
   const payError = first(searchParams.payerror);
   const paid = first(searchParams.paid);
   const reversal = isReversal(row);

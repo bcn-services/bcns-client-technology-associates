@@ -16,11 +16,13 @@ function FieldError({ code, field }: { code?: string; field: string }) {
  * (search params ignored), so an action redirect back to the same page reuses the uncontrolled inputs. A key on
  * this server component itself is dropped from the RSC payload and does nothing.
  */
-export function FundsForm({ values, error, action, submitLabel }: {
+export function FundsForm({ values, error, action, submitLabel, bill }: {
   values: FundsValues;
   error?: string;
   action: (formData: FormData) => void | Promise<void>;
   submitLabel: string;
+  /** /funds/new only: the bill to preselect on the saved funds page; carried, never written to the funds row. */
+  bill?: string;
 }) {
   const text = (name: keyof FundsValues, label: string, extra: React.InputHTMLAttributes<HTMLInputElement> = {}) => (
     <label htmlFor={`f-${name}`} className="grid gap-1 text-sm">
@@ -32,6 +34,7 @@ export function FundsForm({ values, error, action, submitLabel }: {
   );
   return (
     <form action={action} className="max-w-3xl space-y-3">
+      {bill && <input type="hidden" name="bill" value={bill} />}
       {error && !FIELD_CODES.has(error) && <p role="alert" className="text-sm text-red-700">{fundsErrorMessage(error)}</p>}
       <div className="grid gap-3 sm:grid-cols-3">
         {text("case", "Case", { inputMode: "numeric", required: true })}
