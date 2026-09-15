@@ -76,6 +76,16 @@ Test against the fixture, not the producing lane. Do not wait for it to exist.
 
 - `tests/journeys/04-funds-to-paid.spec.ts` (protected) — create its own open `1st` bill on case 90001 in `beforeAll` and remove it in `afterAll`, as journey 03 does. The fixture bill's `First` notice isn't open, so the case starts at 0 unpaid and there is nothing to mark paid; a seeded bill would stay Paid after one run.
 - `tests/journeys/05-bank-import-to-ledger.spec.ts` (protected) — create an active "Filing Fee" type and a retired type in `beforeAll`; remove its `bank_transactions` and `tblexpenses` rows in `afterAll`. Dedupe means a rerun otherwise finds no transaction to review.
+- Funds → bill link (added 2026-09-14 at Nate's request: Kris wants to know which check paid which bill). The human applies the migration and regenerates types; then item "Link a check to the bill it paid" runs. Protected paths:
+  - `supabase/migrations/0008_funds_bill_link.sql` — additive, nullable, and legacy rows stay null:
+    ```sql
+    alter table tblfundsrcvd add column fndsbillid integer;
+    alter table tblfundsrcvd add constraint tblfundsrcvd_fndsbillid_fkey
+      foreign key (fndsbillid) references tblbills(billid);
+    create index tblfundsrcvd_fndsbillid_idx on tblfundsrcvd (fndsbillid);
+    ```
+  - `lib/db/types.ts` — regenerate with `pnpm db:types` so the `tblfundsrcvd` Row gains `fndsbillid: number | null`, and add that column to the "schema (money tables)" frozen contract above.
+  - Apply to the hosted project with `supabase db push`, which needs Nate's own terminal.
 
 ## Not yet specified
 
@@ -86,8 +96,8 @@ Test against the fixture, not the producing lane. Do not wait for it to exist.
 
 - P&L, YearlyExpense, accountant export — `/reports` is docs-reports' lane
 - Scanned check / bill images (`fndssafilename`, `fndsbillfilename` files) — docs-reports owns Storage; this lane stores numbers and names only
-- A funds → bill link column (`fndsbillid`) — legacy never linked them; an additive migration later if Kris needs "which check paid this bill"
-- Summing funds against a bill balance — no link column; paid / partial is an explicit admin action
+- Summing funds against a bill balance. The `fndsbillid` link (amendment above) records which check paid a bill; paid / partial stays an explicit admin action, never computed from linked amounts.
+- Linking legacy funds rows to bills. Legacy never linked them, so migrated rows keep `fndsbillid` null.
 - Card-export credits (payments to the card, refunds) — skipped by the importer, counted in its report; refunds entered by hand
 - A live bank connection — file export only (quote)
 - AI transaction categorization — AI off for v1 (CLIENT.md); the pre-sort is a frequency match
@@ -108,7 +118,7 @@ Test against the fixture, not the producing lane. Do not wait for it to exist.
     - Retiring a type sets `active=false`; the row still exists and every expense carrying it keeps its `exptype`
     - `listActiveTypes` returns only `active = true` types — a retired type and a legacy `active` null type are both absent
     - A staff user posting add or retire gets `?error=forbidden` and the table is unchanged; an admin's add creates an active row
-  status: not started
+  status: done
 
 - task: Expense entry and edit — `app/expenses/new/page.tsx` and
     `app/expenses/[id]/page.tsx` share one form over all `tblexpenses` columns:
@@ -125,7 +135,7 @@ Test against the fixture, not the producing lane. Do not wait for it to exist.
     - Saving with case 999999999 (nonexistent) shows a case field error and writes no row
     - Editing an expense's amount 45.00 → 50.00 persists 50.00, and `audit_log` holds an UPDATE for that `expid` with old 45.00 and new 50.00
   ui: true
-  status: not started
+  status: done
   parallel-group: a
 
 - task: Funds entry, list, edit — `app/funds/new/page.tsx` form: case (required;
@@ -142,7 +152,7 @@ Test against the fixture, not the producing lane. Do not wait for it to exist.
     - Amount `45.001` or `abc` shows an amount field error and writes no row
     - A nonexistent case id shows a case field error and writes no row
   ui: true
-  status: not started
+  status: done
   parallel-group: a
 
 - task: Expense list — `app/expenses/page.tsx` with `?case=` and `?month=yyyy-mm`
@@ -155,7 +165,7 @@ Test against the fixture, not the producing lane. Do not wait for it to exist.
     - `/expenses?case=990901` lists only that case's expenses, shows the type name (not the id), and a total equal to the sum of their amounts
     - `/expenses?month=2026-01` lists every expense dated in January 2026, firm-wide (no case) rows included
     - Median of 5 loads of `/expenses?month=2026-01` stays under 1s with 5,000 expense rows seeded
-  status: not started
+  status: done
 
 - task: Mark bill paid / partial payment — on `app/funds/[id]/page.tsx`, for
     admins: a bill select over the funds row's case's open bills (oldest
@@ -174,7 +184,7 @@ Test against the fixture, not the producing lane. Do not wait for it to exist.
     - "Record partial payment" sets 'Partial Payment' and the case's `unpaid-bill-count` is unchanged
     - A bill whose notice changed after the page loaded is not written; the page shows a stale-bill error
   ui: true
-  status: not started
+  status: done
 
 - task: Bounced-check reversal — admin action "Reverse bounced check" on
     `app/funds/[id]/page.tsx` for a positive, not-yet-reversed funds row. It
@@ -194,7 +204,7 @@ Test against the fixture, not the producing lane. Do not wait for it to exist.
     - Two concurrent reversal submits for the same check leave exactly one reversal row
     - The case's `unpaid-bill-count` rises by 1 after a reversal that reopens a bill
   caution: true
-  status: not started
+  status: done
 
 - task: BoA export upload — `lib/bank-import/parse.ts` parses the BoA CSV
     (`Date,Description,Amount`; quoted fields may contain commas; negative =
@@ -213,7 +223,7 @@ Test against the fixture, not the producing lane. Do not wait for it to exist.
     - A file whose line 3 has a bad date reports an error naming line 3 and inserts no rows
     - A description `"SMITH, JONES LLP"` parses as one field; a +100.00 row is not inserted and counts as a skipped credit
   ui: true
-  status: not started
+  status: done
 
 - task: Review inbox and confirm — `app/bank-review/page.tsx` lists
     `bank_transactions` with `expid` and `fndsid` both null, oldest first, under
@@ -236,7 +246,7 @@ Test against the fixture, not the producing lane. Do not wait for it to exist.
     - The type select contains no retired type
   caution: true
   ui: true
-  status: not started
+  status: done
 
 - task: Clearing view by bank account — `app/bank-review/accounts/page.tsx`:
     account select over the distinct `expbankaccount` / `fndsbankaccount`
@@ -252,7 +262,7 @@ Test against the fixture, not the producing lane. Do not wait for it to exist.
     - "Mark cleared" with date 2026-02-01 on two selected rows sets cleared true and date 2026-02-01 on exactly those rows, and they leave the list
     - A row on account Y submitted with account X selected is not updated
   ui: true
-  status: not started
+  status: done
 
 - task: Case page money panels (wiring, cases) — replace
     `<Slot title="Funds received" />` and `<Slot title="Expenses" />` in
@@ -267,7 +277,7 @@ Test against the fixture, not the producing lane. Do not wait for it to exist.
     - The panels' Add links open the forms with the case prefilled
     - Existing cases, billing, and journeys 01–03 tests remain passing
   after: cases
-  status: not started
+  status: done
 
 - task: Payment on the bills panel (wiring, billing) — in
     `app/bills/bills-panel.tsx`, a Paid bill shows its `billpaiddate`, and each
@@ -282,6 +292,32 @@ Test against the fixture, not the producing lane. Do not wait for it to exist.
     - Existing billing and journeys 01–03 tests remain passing
   after: billing
   ui: true
-  status: not started
+  status: done
+
+- task: Link a check to the bill it paid (added 2026-09-14; wiring, billing) —
+    needs the `fndsbillid` amendment applied first. When "Mark bill paid" or
+    "Record partial payment" runs on `/funds/[id]` (`lib/funds/pay.ts`), the
+    funds row's `fndsbillid` is set to that bill. `/funds/[id]` shows
+    "Applied to bill <billid>" with a link to the case's bill. The pay select
+    is replaced by that line once the row is linked; a linked row can still be
+    edited, and editing never changes `fndsbillid`. Reversing a linked check
+    (`lib/funds/reverse.ts`) preselects its linked bill in the reopen select,
+    and the reversal row carries the same `fndsbillid`. In
+    `app/bills/bills-panel.tsx`, each bill lists its linked checks (date,
+    amount, link to `/funds/<id>`), reversal rows included.
+  guardrails:
+    - A funds row links to at most one bill, and re-linking a linked row is refused; the link is written only by the pay action, never by funds edit
+    - Two writes and no transaction: the bill update and the funds link update are each guarded in their own filter (bill: expected notice; funds: `fndsbillid is null`), their row counts are checked, and a lost link write compensates the bill back to its prior notice and paid date. Never leave a Paid bill without its link, or a link on a bill that was not paid by that row.
+    - A bill's case and the funds row's case must match before either write
+    - The original row of a reversed check is still never modified by the reversal
+  done when:
+    - "Mark bill paid" with bill N on funds row F sets `billnotice` Paid on N and `fndsbillid` = N on F; `/funds/F` then shows "Applied to bill N", and N on the case bills panel lists F's date and amount
+    - "Record partial payment" links the same way, and a second check marking bill N paid is also linked, so N lists both checks
+    - Paying from an already-linked row is refused with an error, and neither the bill nor the row changes; two concurrent pay submits from one row leave exactly one link and exactly one bill update
+    - Reversing a linked check preselects its bill; the reversal row has the same `fndsbillid`, the original row is unchanged byte for byte, and the bill lists both rows
+  after: billing
+  caution: true
+  ui: true
+  status: blocked — needs amendment: supabase/migrations/0008_funds_bill_link.sql, lib/db/types.ts
 
 > **⚠️ AUTONOMOUS RUN — STOP HERE**
