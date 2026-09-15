@@ -2,8 +2,8 @@ import { requireSession } from "@/lib/auth/session";
 import { createServerClient } from "@/lib/db/client";
 import type { Db } from "@/lib/time/entries";
 import { DEFAULT_ACCOUNT, importErrorMessage, resultLine } from "@/lib/bank-import/import";
-import { confirmErrorMessage, listInbox, listPastTypes } from "@/lib/bank-import/confirm";
-import { suggestType } from "@/lib/bank-import/suggest";
+import { INBOX_LIMIT, confirmErrorMessage, listInbox, listPastTypes } from "@/lib/bank-import/confirm";
+import { buildTypeIndex, suggestFromIndex } from "@/lib/bank-import/suggest";
 import { listActiveTypes } from "@/lib/expenses/types";
 import { confirmTransactionAction, importBankAction } from "./actions";
 
@@ -28,7 +28,9 @@ export default async function BankReviewPage({ searchParams }: { searchParams: P
 
   const db = createServerClient() as unknown as Db;
   const [inbox, types, past] = await Promise.all([listInbox(db), listActiveTypes(db), listPastTypes(db)]);
-  const allowed = new Set(types.map((t) => t.exptypeid));
+  const typeIndex = buildTypeIndex(past, new Set(types.map((t) => t.exptypeid)));
+  // A refusal for a tx no longer in the inbox (double-click loser, deleted) shows at the top, not on a missing row.
+  const confirmTxShown = confirmTx != null && inbox.some((t) => t.id === confirmTx);
   const nonce = crypto.randomUUID();
 
   return (
@@ -59,10 +61,11 @@ export default async function BankReviewPage({ searchParams }: { searchParams: P
       <section aria-label="Transactions to review" className="space-y-2">
         <h2 className="font-semibold">Transactions to review</h2>
         {cleared != null && !confirmError && <p role="status" data-testid="confirm-result" className="text-sm text-green-800">Cleared — expense #{cleared}</p>}
-        {confirmError && confirmTx == null && <p role="alert" data-testid="confirm-error" className="text-sm text-red-700">{confirmErrorMessage(confirmError)}</p>}
+        {confirmError && !confirmTxShown && <p role="alert" data-testid="confirm-error" className="text-sm text-red-700">{confirmErrorMessage(confirmError)}</p>}
         {inbox.length === 0 && <p className="text-sm text-slate-600">Nothing to review.</p>}
+        {inbox.length >= INBOX_LIMIT && <p role="status" className="text-sm text-slate-600">Showing oldest {INBOX_LIMIT}.</p>}
         {inbox.map((t) => {
-          const suggested = suggestType(t.description, past, allowed);
+          const suggested = suggestFromIndex(t.description, typeIndex);
           const id = (f: string) => `${f}-${t.id}`;
           return (
             // Keyed plain <form> per render so a same-URL redirect resets its inputs to the prefills.

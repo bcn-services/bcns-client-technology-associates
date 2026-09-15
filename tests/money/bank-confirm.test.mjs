@@ -150,3 +150,51 @@ test("link DB error → own expense removed, ?confirmerror=failed", async () => 
   assert.equal(newExp(db).length, 0);
   assert.deepEqual(db.tables.tblexpenses.map((r) => r.expid), [501, 502]);
 });
+
+// Wraps db so one statement kind on one table returns a DB error instead of running.
+function failing(db, table, op) {
+  const from = db.from.bind(db);
+  db.from = (t) => {
+    const b = from(t);
+    if (t !== table) return b;
+    const orig = b[op];
+    b[op] = (...a) => { orig(...a); return { eq: async () => ({ data: null, error: { message: "boom" } }) }; };
+    return b;
+  };
+  return db;
+}
+
+test("interleaved double confirm, loser's compensating delete FAILS → its orphan is uncleared + unlinked; ledger has one cleared expense", async () => {
+  let inserts = 0, release;
+  const bothInserted = new Promise((r) => { release = r; });
+  const db = failing(fakeDb(world(), {
+    hook: async (op, table) => {
+      if (op === "insert" && table === "tblexpenses" && ++inserts === 2) release();
+      if (op === "update" && table === "bank_transactions") await bothInserted;
+    },
+  }), "tblexpenses", "delete");
+  const a = deps(db), b = deps(db);
+  const err = console.error; console.error = () => {};
+  try { await Promise.all([runConfirmTransaction(form(), a), runConfirmTransaction(form(), b)]); } finally { console.error = err; }
+  const rows = newExp(db);
+  assert.equal(rows.length, 2, "delete failed, orphan still present");
+  const cleared = rows.filter((r) => r.expclearedbank === true);
+  assert.equal(cleared.length, 1, "exactly one cleared new expense");
+  assert.equal(tx(db, 1).expid, cleared[0].expid, "the cleared one is the linked one");
+  const orphan = rows.find((r) => r !== cleared[0]);
+  assert.deepEqual([orphan.expclearedbank, orphan.expdatecleared], [false, null], "orphan uncleared");
+  assert.deepEqual({ ...cleared[0], expid: undefined }, { ...EXPECTED, expid: undefined });
+});
+
+test("winner's clear update fails → ?confirmerror=failed, row kept linked (not deleted), uncleared", async () => {
+  const db = failing(fakeDb(world()), "tblexpenses", "update");
+  const d = deps(db);
+  const err = console.error; console.error = () => {};
+  try { await runConfirmTransaction(form(), d); } finally { console.error = err; }
+  assert.equal(q(d.urls[0]).confirmerror, "failed");
+  const rows = newExp(db);
+  assert.equal(rows.length, 1, "linked row not deleted");
+  assert.equal(tx(db, 1).expid, rows[0].expid);
+  assert.equal(rows[0].expclearedbank, false);
+  assert.ok(!db.calls.some(([op]) => op === "delete"));
+});
