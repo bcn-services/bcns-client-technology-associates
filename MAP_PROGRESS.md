@@ -12,12 +12,11 @@ across rounds — never reset. Per-item detail lives in `progress/<lane>.md`.
 | cases | nate | lane/cases | done — 9/9 items, merged 2026-09-11 (`298b6ac`, PR #4) |
 | time | nate | lane/time | done — 6/6 items + 3 click-through fixes, merged 2026-09-12 (`9b8d68f`, PR #9) |
 | billing | nate | lane/billing | done — 9/9 items + suite/seed fixes, merged 2026-09-13 (`c663304`, PR #11; journeys amendment PR #12) |
-| money | nate | — | not started — no LANE.md yet |
+| money | nate | lane/money | done — 12/12 items (11 + check → bill link), merged 2026-09-15 (`075c477`, PR #13; `819ecef`, PR #14) |
 | docs-reports | nate | — | not started — no LANE.md yet |
 
-**Journeys:** 3 of 6 green (2026-09-13, after billing). 01, 02, 03 pass. 02 can time out at "Inquiry
-created" when 4 workers share a cold dev server; alone it passes. 04–06 fail on screens later lanes
-build (funds, bank import, dashboard). Progress reading, not a merge gate.
+**Journeys:** 5 of 6 green (2026-09-15, after money; `--workers=1`). 01–05 pass. 06 fails at the
+dashboard, which docs-reports builds. Progress reading, not a merge gate.
 
 **Amendments this round**
 
@@ -43,3 +42,8 @@ build (funds, bank import, dashboard). Progress reading, not a merge gate.
   `E2E_ADMIN_EMAIL` (seeded by `seed-e2e.ts`); it was the staff account. 03 awaits
   the create-bill redirect, asserts `billed-marker`, and cleans its rows off case
   90001. 02 asserts the Firm/Attorney/Client headings, not `getByText(/firm/i)`.
+- 2026-09-15 — money lane (PR #14, approved by Nate). `supabase/migrations/0008_funds_bill_link.sql`
+  adds nullable `tblfundsrcvd.fndsbillid` FK → `tblbills.billid`, applied to hosted and local
+  `ta_foundation`; `lib/db/types.ts` regenerated. Every cleanup now deletes funds before bills.
+  Journeys 04/05 are rerun-safe (own fixtures, 05 clicks Import). `tests/foundation/schema.test.mjs`
+  excludes the app-added FK from the legacy "26 NOT VALID" count.
