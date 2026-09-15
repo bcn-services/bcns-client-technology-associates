@@ -7,6 +7,7 @@ import { createServerClient } from "@/lib/db/client";
 import type { Db } from "@/lib/time/entries";
 import { runCreateFunds, runUpdateFunds } from "@/lib/funds/save";
 import { runPayBill } from "@/lib/funds/pay";
+import { runReverseFunds } from "@/lib/funds/reverse";
 
 // Staff and admin may record/edit funds; the session check lives inside the run* body (lib/funds/save.ts).
 const deps = () => ({
@@ -27,4 +28,9 @@ export async function updateFundsAction(fndsid: number, formData: FormData): Pro
 // Admin only: requireSession("admin") throws ForbiddenError for staff; runPayBill also checks the role itself.
 export async function payBillAction(fndsid: number, formData: FormData): Promise<void> {
   await runPayBill(fndsid, formData, { ...deps(), session: () => requireSession("admin") });
+}
+
+// Admin only, same double check as payBillAction (runReverseFunds re-checks the role).
+export async function reverseFundsAction(fndsid: number, formData: FormData): Promise<void> {
+  await runReverseFunds(fndsid, formData, { ...deps(), session: () => requireSession("admin"), now: () => new Date() });
 }
