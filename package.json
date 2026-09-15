@@ -9,7 +9,7 @@
     "start": "next start -p 3100",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "test": "tsx --test --test-concurrency=1 tests/ai-optin.test.mjs tests/qa-hosted-web.test.mjs tests/rls-forbidden-read.test.mjs tests/foundation/*.test.mjs tests/migration/*.test.mjs tests/app-shell/*.test.mjs tests/cases/*.test.mjs tests/time/*.test.mjs tests/billing/*.test.mjs",
+    "test": "tsx --test --test-concurrency=1 tests/ai-optin.test.mjs tests/qa-hosted-web.test.mjs tests/rls-forbidden-read.test.mjs tests/foundation/*.test.mjs tests/migration/*.test.mjs tests/app-shell/*.test.mjs tests/cases/*.test.mjs tests/time/*.test.mjs tests/billing/*.test.mjs tests/money/*.test.mjs",
     "clean": "rm -rf .next .turbo node_modules",
     "test:foundation": "tsx --test --test-concurrency=1 tests/foundation/*.test.mjs",
     "db:types": "node scripts/gen-db-types.mjs > lib/db/types.ts",
