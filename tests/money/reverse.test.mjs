@@ -4,6 +4,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { runReverseFunds, reopenNotice, negateMoney, reversalComment } from "../../lib/funds/reverse.ts";
+import { OPEN_NOTICES } from "../../lib/bills/rules.ts";
 
 const NOW = new Date("2026-09-14T15:00:00Z"); // firm-local 2026-09-14
 
@@ -57,7 +58,8 @@ function world(opts) {
   return fakeDb({
     tblfundsrcvd: [funds(7, 450), funds(8, 1234567.1)],
     tblbills: [bill(21, "Paid", null, null), bill(22, "Paid", "2026-06-01", null), bill(23, "Paid", "2026-06-01", "2026-07-01"),
-      bill(24, "1st", null, null), bill(25, "Paid", null, null, 990911)],
+      bill(24, "1st", null, null), bill(25, "Paid", null, null, 990911),
+      bill(26, "Paid", null, null)], // same case + same null dates as 21: only the billid filter tells them apart
     tblcase: [{ caseid: 990910, numunpaidbills: 0 }],
   }, opts);
 }
@@ -214,6 +216,40 @@ test("staff: forbidden, no DB call at all; ForbiddenError thrown by session is a
   await runReverseFunds(7, form(""), d2);
   assert.equal(d2.redirected, "/funds/7?reverseerror=forbidden");
   assert.deepEqual(db.tables, before);
+});
+
+test("reversal id is refused explicitly before any DB call (not left to the PK)", async () => {
+  const db = world();
+  await runReverseFunds(7, form(""), deps(db));
+  const n = db.calls.length;
+  const d = deps(db);
+  await runReverseFunds(-7, form("21"), d);
+  assert.equal(d.redirected, "/funds/-7?reverseerror=reversal");
+  assert.deepEqual(db.calls.slice(n), [], "no read and no insert attempted for a reversal id");
+});
+
+test("insert error other than 23505 (e.g. 23503 FK) → 'failed', never 'reversed'; bill untouched", async () => {
+  for (const code of ["23503", "57014"]) {
+    const db = world();
+    const base = db.from.bind(db);
+    db.from = (t) => {
+      const q = base(t);
+      return new Proxy(q, { get: (o, k) => (k === "insert" ? () => ({ select: () => ({ single: async () => ({ data: null, error: { code, message: "x" } }) }) }) : o[k]) });
+    };
+    const d = deps(db);
+    const err = console.error; console.error = () => {};
+    try { await runReverseFunds(7, form("21"), d); } finally { console.error = err; }
+    assert.equal(d.redirected, "/funds/7?reverseerror=failed", code);
+    assert.equal(br(db, 21).billnotice, "Paid");
+  }
+});
+
+test("unpaid-bill-count (OPEN_NOTICES over the case's bills) rises by 1 after a reopening reversal", async () => {
+  const db = world();
+  const unpaid = () => db.tables.tblbills.filter((b) => b.billcaseid === 990910 && OPEN_NOTICES.has(b.billnotice)).length;
+  const n = unpaid();
+  await runReverseFunds(7, form("23"), deps(db));
+  assert.equal(unpaid(), n + 1);
 });
 
 test("bad bill value / missing funds → typed refusal, nothing written", async () => {

@@ -68,7 +68,7 @@ export default async function FundsPage({ params, searchParams }: { params: { id
           <FundsForm values={values} error={error || undefined} action={updateFundsAction.bind(null, row.fndsid)} submitLabel="Save" />
         </section>
       )}
-      {isAdmin && (
+      {isAdmin && !reversal && (
         // Key on a host element so a same-URL redirect re-renders the select with the fresh open bills.
         <section aria-label="Bill payment" key={crypto.randomUUID()} className="space-y-2 border-t pt-4">
           <h2 className="font-semibold">Bill payment</h2>
