@@ -23,8 +23,8 @@ const FUNDS_DATE = "2026-08-02";
 let db, browser, staff, admin, adminId, fundsId, emptyFundsId;
 const ok = ({ data, error }) => { if (error) throw new Error(error.message); return data; };
 const cleanup = async () => {
+  ok(await db.from("tblfundsrcvd").delete().in("fndscaseid", CASES)); // before bills: fndsbillid → tblbills FK
   ok(await db.from("tblbills").delete().in("billcaseid", CASES));
-  ok(await db.from("tblfundsrcvd").delete().in("fndscaseid", CASES));
   ok(await db.from("tblcase").delete().in("caseid", CASES));
 };
 const addBill = async (o) => ok(await db.from("tblbills").insert({ billcaseid: CASE, billdate: "2026-08-14", billhours: 2, billbalance: 640, billtype: "timesheet", billnotice: "1st", ...o }).select("billid").single()).billid;
@@ -84,6 +84,8 @@ test("oldest open bill preselected; ?bill= preselects; Mark bill paid → Paid +
   assert.equal(b.billsecondnoticedate, "2026-07-15");
   assert.equal(b.billfinalnoticedate, null);
   assert.equal((await bill(older)).billnotice, "1st", "other bill untouched");
+  assert.equal(ok(await db.from("tblfundsrcvd").select("fndsbillid").eq("fndsid", fundsId).single()).fndsbillid, target, "funds row linked");
+  assert.equal((await admin.getByTestId("applied-bill").innerText()).trim(), `Applied to bill ${target}`);
   assert.equal(await unpaid(admin), before - 1);
   await admin.goto("/bills");
   assert.equal(await admin.locator(`a[href="/bills/${target}"]`).count(), 0, "paid bill gone from /bills");
@@ -92,8 +94,9 @@ test("oldest open bill preselected; ?bill= preselects; Mark bill paid → Paid +
 
 test("Record partial payment → 'Partial Payment', unpaid count unchanged", { skip }, async () => {
   const id = await addBill({ billdate: "2026-01-02" }); // oldest → preselected
+  const fid = await addFunds(CASE); // fundsId is linked by the first test
   const before = await unpaid(admin);
-  await admin.goto(`/funds/${fundsId}`);
+  await admin.goto(`/funds/${fid}`);
   assert.equal(await select(admin).inputValue(), `${id}:1st`);
   await admin.getByRole("button", { name: "Record partial payment" }).click();
   await admin.waitForURL(new RegExp(`\\?paid=${id}`));
@@ -105,7 +108,8 @@ test("Record partial payment → 'Partial Payment', unpaid count unchanged", { s
 
 test("notice changed after page load → not written, stale-bill error shown", { skip }, async () => {
   const id = await addBill({ billdate: "2026-08-20" });
-  await admin.goto(`/funds/${fundsId}?bill=${id}`);
+  const fid = await addFunds(CASE);
+  await admin.goto(`/funds/${fid}?bill=${id}`);
   assert.equal(await select(admin).inputValue(), `${id}:1st`);
   ok(await db.from("tblbills").update({ billnotice: "2nd", billsecondnoticedate: "2026-09-01" }).eq("billid", id));
   await admin.getByRole("button", { name: "Mark bill paid" }).click();
@@ -114,6 +118,7 @@ test("notice changed after page load → not written, stale-bill error shown", {
   const b = await bill(id);
   assert.equal(b.billnotice, "2nd");
   assert.equal(b.billpaiddate, null);
+  assert.equal(ok(await db.from("tblfundsrcvd").select("fndsbillid").eq("fndsid", fid).single()).fndsbillid, null, "link compensated");
 });
 
 test("no open bills → 'No open bills on this case', no pay buttons", { skip }, async () => {
@@ -132,10 +137,11 @@ test("staff: no Bill payment controls rendered", { skip }, async () => {
 
 test("staff POST through the real pay action (admin-rendered form, staff cookies) → forbidden, bill unchanged", { skip }, async () => {
   const id = await addBill({ billdate: "2026-08-22" });
+  const fid = await addFunds(CASE);
   const ctx = await browser.newContext({ baseURL: BASE });
   const page = await ctx.newPage();
   await ctx.addCookies(await admin.context().cookies());
-  await page.goto(`/funds/${fundsId}?bill=${id}`);
+  await page.goto(`/funds/${fid}?bill=${id}`);
   assert.equal(await select(page).inputValue(), `${id}:1st`);
   await ctx.clearCookies();
   await ctx.addCookies(await staff.context().cookies());

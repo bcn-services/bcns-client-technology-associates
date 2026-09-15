@@ -37,8 +37,9 @@ export type FundsRow = {
   fndspayee: string | null; fndssource: string | null; fndsdesc: string | null; fndsbranch: string;
   fndscomment: string | null; fndstype: string | null; fndsclearedbank: boolean | null;
   fndsdatecleared: string | null; fndsbankaccount: string | null; fndsclearingnotes: string | null;
+  fndsbillid?: number | null; // written only by lib/funds/pay.ts — never by create/update
 };
-const COLS = "fndsid, fndscaseid, fndsdate, fndspmt, fndspayee, fndssource, fndsdesc, fndsbranch, fndscomment, fndstype, fndsclearedbank, fndsdatecleared, fndsbankaccount, fndsclearingnotes";
+const COLS = "fndsid, fndscaseid, fndsdate, fndspmt, fndspayee, fndssource, fndsdesc, fndsbranch, fndscomment, fndstype, fndsclearedbank, fndsdatecleared, fndsbankaccount, fndsclearingnotes, fndsbillid";
 
 const isDate = (s: string) => {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;

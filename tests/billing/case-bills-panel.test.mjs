@@ -80,7 +80,8 @@ test("same-day tie: the higher billid lists first", async () => {
 test("1st + Deadbeat + Paid with tblcase.numunpaidbills = 5 → unpaid-bill-count 2; loader never reads tblcase or numunpaidbills", async () => {
   const { db, html } = await panel([bill(831, "1st", "2026-08-01"), bill(832, "Deadbeat", "2026-07-01"), bill(833, "Paid", "2026-06-01")]);
   assert.equal(testid(html, "unpaid-bill-count"), "2");
-  assert.deepEqual([...new Set(db.calls.map((c) => c[0]))], ["tblbills"]);
+  // tblfundsrcvd: the panel lists checks linked to each bill (money lane, fndsbillid). Never tblcase.
+  assert.deepEqual([...new Set(db.calls.map((c) => c[0]))].sort(), ["tblbills", "tblfundsrcvd"]);
   assert.doesNotMatch(JSON.stringify(db.calls), /numunpaidbills/);
 });
 

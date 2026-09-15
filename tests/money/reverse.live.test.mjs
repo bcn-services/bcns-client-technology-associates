@@ -25,8 +25,8 @@ const CASE = 990910, CONC = 990911, CASES = [CASE, CONC];
 let db, browser, staff, admin, adminId;
 const ok = ({ data, error }) => { if (error) throw new Error(error.message); return data; };
 const cleanup = async () => {
+  ok(await db.from("tblfundsrcvd").delete().in("fndscaseid", CASES)); // before bills: fndsbillid → tblbills FK
   ok(await db.from("tblbills").delete().in("billcaseid", CASES));
-  ok(await db.from("tblfundsrcvd").delete().in("fndscaseid", CASES));
   ok(await db.from("tblcase").delete().in("caseid", CASES));
 };
 const addBill = async (o) => ok(await db.from("tblbills").insert({ billcaseid: CASE, billdate: "2026-08-14", billhours: 2, billbalance: 450, billtype: "timesheet", billnotice: "Paid", billpaiddate: "2026-08-20", ...o }).select("billid").single()).billid;
