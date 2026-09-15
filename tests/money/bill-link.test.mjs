@@ -225,6 +225,7 @@ test("funds edit refuses a case change on a linked row (linkedcase); an unlinked
   await runUpdateFunds(3, editForm(990961), d);
   assert.match(d.redirected, /^\/funds\/3\?error=linkedcase&/);
   assert.deepEqual(db.tables, before);
+  assert.deepEqual(writes(db), [], "QA: a linked row's case move is refused before any write");
   d = deps(db);
   await runUpdateFunds(2, editForm(990961), d);
   assert.equal(d.redirected, "/funds/2?saved=1");
