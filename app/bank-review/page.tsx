@@ -36,6 +36,7 @@ export default async function BankReviewPage({ searchParams }: { searchParams: P
   return (
     <main className="mx-auto max-w-4xl space-y-4 px-4 py-6">
       <h1 className="text-xl font-semibold">Bank review</h1>
+      <p className="text-sm"><a href="/bank-review/accounts" className="underline">Clear by bank account</a></p>
       {/* Key on a host element: a same-URL redirect otherwise keeps the old file/account inputs. */}
       <section aria-label="Import bank export" key={`import-${nonce}`} className="space-y-2">
         <h2 className="font-semibold">Import bank export</h2>
