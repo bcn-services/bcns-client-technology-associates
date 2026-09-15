@@ -141,19 +141,54 @@ test("compensation is guarded by the value it wrote: F re-pointed before the und
   assert.equal(f(db, 3).fndsbillid, 11);
 });
 
-test("QA: bill write returns an error → link undone (F unlinked), bill unchanged, failed", async () => {
+// tblbills update returns an error; `apply` = the write committed before the error came back (ambiguous failure).
+const billErrDb = (db, apply) => ({ ...db, from(t) {
+  const q = db.from(t);
+  if (t === "tblbills") {
+    const upd = q.update, then = q.then;
+    q.update = (p) => {
+      upd(p);
+      const boom = { data: null, error: { message: "boom" } };
+      q.then = (res, rej) => (apply ? then(() => boom) : Promise.resolve(boom)).then(res, rej);
+      return q;
+    };
+  }
+  return q;
+} });
+const payQuiet = async (db, id, bill, kind = "paid") => {
+  const d = deps(db);
+  const err = console.error; console.error = () => {};
+  try { await runPayBill(id, form(bill, kind), d); } finally { console.error = err; }
+  return d;
+};
+
+test("QA: bill write returns an error (not applied) → link kept (never undone on an ambiguous error), bill unchanged, failed", async () => {
   const db = fakeDb(tables());
   const before = snap(db.tables);
-  const errDb = { ...db, from(t) {
-    const q = db.from(t);
-    if (t === "tblbills") { const upd = q.update; q.update = (p) => { upd(p); q.then = (res) => Promise.resolve({ data: null, error: { message: "boom" } }).then(res); return q; }; }
-    return q;
-  } };
-  const d = deps(errDb);
-  const err = console.error; console.error = () => {};
-  try { await runPayBill(1, form("11:Partial Payment", "paid"), d); } finally { console.error = err; }
+  const d = await payQuiet(billErrDb(db, false), 1, "11:Partial Payment");
   assert.equal(d.redirected, "/funds/1?payerror=failed");
-  assert.deepEqual(db.tables, before, "F back to unlinked; H keeps its link; bills unchanged");
+  assert.equal(f(db, 1).fndsbillid, 11, "link kept");
+  assert.deepEqual(db.tables.tblbills, before.tblbills);
+  assert.equal(db.calls.filter(([op, t]) => op === "update" && t === "tblfundsrcvd").length, 1, "no undo write");
+});
+
+test("bill write APPLIES then returns an error → link remains, bill Paid, failed (never a Paid bill without its link)", async () => {
+  const db = fakeDb(tables());
+  const d = await payQuiet(billErrDb(db, true), 1, "11:Partial Payment");
+  assert.equal(d.redirected, "/funds/1?payerror=failed");
+  assert.equal(b(db, 11).billnotice, "Paid");
+  assert.equal(f(db, 1).fndsbillid, 11);
+  assert.equal(f(db, 3).fndsbillid, 11);
+});
+
+test("row moved to another case between read and link write → linked; nothing written to F or the bill", async () => {
+  // Decoy for the link write's fndscaseid filter: F matches every other filter (id, unlinked) but not the case.
+  const db = fakeDb(tables(), { hook: async (op, t, tb) => { if (op === "update" && t === "tblfundsrcvd") tb.tblfundsrcvd[0].fndscaseid = 990961; } });
+  const d = deps(db);
+  await runPayBill(1, form("11:Partial Payment", "paid"), d);
+  assert.equal(d.redirected, "/funds/1?payerror=linked");
+  assert.equal(f(db, 1).fndsbillid, null);
+  assert.equal(b(db, 11).billnotice, "Partial Payment");
 });
 
 test("bill on another case → bill, refused before either write", async () => {
@@ -175,6 +210,31 @@ test("funds edit of a linked row never changes fndsbillid", async () => {
   assert.equal(d.redirected, "/funds/3?saved=1");
   assert.equal(f(db, 3).fndspmt, "500.00");
   assert.equal(f(db, 3).fndsbillid, 11);
+});
+
+const editForm = (caseId) => {
+  const fd = new FormData();
+  for (const [k, v] of Object.entries({ case: String(caseId), amount: "500.00", date: "2026-08-09", branch: "Stratford" })) fd.set(k, v);
+  return fd;
+};
+test("funds edit refuses a case change on a linked row (linkedcase); an unlinked row may move", async () => {
+  const cases = () => { const t = tables(); t.tblcase.push({ caseid: 990961 }); return t; };
+  let db = fakeDb(cases());
+  const before = snap(db.tables);
+  let d = deps(db);
+  await runUpdateFunds(3, editForm(990961), d);
+  assert.match(d.redirected, /^\/funds\/3\?error=linkedcase&/);
+  assert.deepEqual(db.tables, before);
+  d = deps(db);
+  await runUpdateFunds(2, editForm(990961), d);
+  assert.equal(d.redirected, "/funds/2?saved=1");
+  assert.equal(f(db, 2).fndscaseid, 990961);
+  // Linked by a pay between the edit's read and its write → the move loses.
+  db = fakeDb(cases(), { hook: async (op, t, tb) => { if (op === "update" && t === "tblfundsrcvd") tb.tblfundsrcvd[1].fndsbillid = 11; } });
+  d = deps(db);
+  await runUpdateFunds(2, editForm(990961), d);
+  assert.match(d.redirected, /error=linkedcase/);
+  assert.equal(f(db, 2).fndscaseid, CASE);
 });
 
 test("reversing a linked check: reopen preselects its bill; reversal row carries fndsbillid; original byte-identical", async () => {

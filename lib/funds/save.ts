@@ -19,6 +19,7 @@ const MESSAGES: Record<string, string> = {
   date: "Date must be a valid date.",
   datecleared: "Date cleared must be a valid date (or blank).",
   notfound: "That funds record no longer exists.",
+  linkedcase: "This check is applied to a bill; its case can't be changed.",
   forbidden: "You can't record funds.",
 };
 export const fundsErrorMessage = (code: string): string => MESSAGES[code] ?? "Save failed; nothing was recorded.";
@@ -94,9 +95,15 @@ export async function createFunds(db: Db, get: (k: string) => string): Promise<n
 export async function updateFunds(db: Db, fndsid: number, get: (k: string) => string): Promise<void> {
   const row = parseFunds(get);
   await requireCase(db, row.fndscaseid);
-  const { data, error } = await db.from("tblfundsrcvd").update(row).eq("fndsid", fndsid).select("fndsid");
+  const cur = await loadFunds(db, fndsid);
+  if (!cur) throw new FundsError("notfound");
+  const moving = cur.fndscaseid !== row.fndscaseid;
+  if (moving && cur.fndsbillid != null) throw new FundsError("linkedcase");
+  let q = db.from("tblfundsrcvd").update(row).eq("fndsid", fndsid);
+  if (moving) q = q.is("fndsbillid", null); // a pay linking it meanwhile wins; the move is refused
+  const { data, error } = await q.select("fndsid");
   if (error) throw new Error(`tblfundsrcvd update: ${error.message}`);
-  if (!data?.length) throw new FundsError("notfound");
+  if (!data?.length) throw new FundsError(moving ? "linkedcase" : "notfound");
 }
 
 export async function loadFunds(db: Db, fndsid: number): Promise<FundsRow | null> {

@@ -133,7 +133,10 @@ test("update: writes one filtered update → /funds/5?saved=1; zero rows → not
   assert.ok(db.calls.some((c) => c[0] === "eq" && c[1] === "fndsid" && c[2] === 5));
   assert.equal(d.redirected, "/funds/5?saved=1");
 
-  const gone = fakeDb((calls) => (lastFrom(calls) === "tblcase" ? { data: { caseid: 990901 }, error: null } : { data: [], error: null }));
+  // Pre-read finds the row (same case, unlinked); the update then matches zero rows (deleted meanwhile).
+  const isUpdate = (calls) => calls.slice(calls.findLastIndex((c) => c[0] === "from")).some((c) => c[0] === "update");
+  const gone = fakeDb((calls) => (lastFrom(calls) === "tblcase" ? { data: { caseid: 990901 }, error: null }
+    : isUpdate(calls) ? { data: [], error: null } : { data: { fndsid: 5, fndscaseid: 990901, fndsbillid: null }, error: null }));
   const d2 = deps(gone);
   await runUpdateFunds(5, form(), d2);
   assert.match(d2.redirected, /^\/funds\/5\?error=notfound/);

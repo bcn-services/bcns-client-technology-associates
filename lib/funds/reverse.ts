@@ -7,6 +7,9 @@
  * Order: reversal insert first, then the optional bill reopen — a reopened bill never exists without its reversal.
  * Residual: if the bill write loses a race after the insert, the reversal stands and the bill stays Paid (?reverseerror=billstale).
  * The original funds row is only ever read. The reversal row carries the original's bill link (fndsbillid).
+ * ponytail: link copied from the pre-insert read — a pay that links the original between that read and the insert
+ * leaves the reversal row unlinked (display-only: missing from the bill's check list; amounts correct). Upgrade to a
+ * guarded post-insert patch (`fndsid = -F and fndsbillid is null`, from a fresh read of F) if it is ever seen.
  */
 import type { Session } from "../auth/session";
 import type { Db } from "../time/entries";
