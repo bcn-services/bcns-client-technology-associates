@@ -50,7 +50,7 @@ Stop and report if an item requires changing a path outside both lists:
 Frozen contracts — build and test against these; they will not move:
   billing (tblbills rows) — `lib/db/types.ts` `tblbills` Row (`billnotice`, `billpaiddate`, `billsecondnoticedate`, `billfinalnoticedate`, `billbalance`); open set + `isOpen` in `lib/bills/rules.ts`; fixture billid 1 on 90001 (notice `First` — not open under the legacy spelling)
   cases (tblcase rows) — `lib/db/types.ts` `tblcase` Row; fixture case 90001 in `tests/foundation/fixtures/rows.ts`
-  schema (money tables) — `lib/db/types.ts` `tblexpenses`, `tblexptype`, `tblfundsrcvd`, `bank_transactions` Rows; `bank_transactions` unique (bankaccount, postedon, amount, description) (migration 0004); BoA fixture `tests/journeys/fixtures/boa-export.csv` (`Date,Description,Amount`, negative = outflow)
+  schema (money tables) — `lib/db/types.ts` `tblexpenses`, `tblexptype`, `tblfundsrcvd`, `bank_transactions` Rows; `tblfundsrcvd.fndsbillid` nullable FK → `tblbills.billid` (migration 0008, amendment applied 2026-09-15); `bank_transactions` unique (bankaccount, postedon, amount, description) (migration 0004); BoA fixture `tests/journeys/fixtures/boa-export.csv` (`Date,Description,Amount`, negative = outflow)
 
 Test against the fixture, not the producing lane. Do not wait for it to exist.
 
@@ -73,6 +73,8 @@ Test against the fixture, not the producing lane. Do not wait for it to exist.
 - Fuller context: `CLAUDE.md`, `MAP.md`, `LEGACY.md` (tblExpenses / tblExpType / tblFundsRcvd), `CLIENT.md`, quote §Money in/out.
 
 ## Amendment requests (outside this lane — human approves)
+
+All three approved by Nate and applied by the Reviewer on 2026-09-15: journeys 04/05 rewritten as below (05 also clicks Import and scopes its selectors to the filing-fee review row), migration 0008 pushed to the hosted project, `lib/db/types.ts` regenerated.
 
 - `tests/journeys/04-funds-to-paid.spec.ts` (protected) — create its own open `1st` bill on case 90001 in `beforeAll` and remove it in `afterAll`, as journey 03 does. The fixture bill's `First` notice isn't open, so the case starts at 0 unpaid and there is nothing to mark paid; a seeded bill would stay Paid after one run.
 - `tests/journeys/05-bank-import-to-ledger.spec.ts` (protected) — create an active "Filing Fee" type and a retired type in `beforeAll`; remove its `bank_transactions` and `tblexpenses` rows in `afterAll`. Dedupe means a rerun otherwise finds no transaction to review.
@@ -318,6 +320,6 @@ Test against the fixture, not the producing lane. Do not wait for it to exist.
   after: billing
   caution: true
   ui: true
-  status: blocked — needs amendment: supabase/migrations/0008_funds_bill_link.sql, lib/db/types.ts
+  status: not started
 
 > **⚠️ AUTONOMOUS RUN — STOP HERE**

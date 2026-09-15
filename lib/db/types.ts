@@ -610,6 +610,7 @@ export type Database = {
           fndsdatecleared: string | null
           fndsbankaccount: string | null
           fndsclearingnotes: string | null
+          fndsbillid: number | null
         }
         Insert: {
           fndsid?: number
@@ -628,6 +629,7 @@ export type Database = {
           fndsdatecleared?: string | null
           fndsbankaccount?: string | null
           fndsclearingnotes?: string | null
+          fndsbillid?: number | null
         }
         Update: {
           fndsid?: number
@@ -646,6 +648,7 @@ export type Database = {
           fndsdatecleared?: string | null
           fndsbankaccount?: string | null
           fndsclearingnotes?: string | null
+          fndsbillid?: number | null
         }
         Relationships: []
       }
