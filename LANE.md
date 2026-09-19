@@ -107,7 +107,7 @@ schema and VBA behaviour), `MAP.md` (lane map), `CLAUDE.md` (repo conventions).
     - A range spanning more than 1000 matching rows returns all of them, not 1000
     - Median of 5 runs, a full-year detail query returns in under 2s with 50,000 `tblexpenses` and 10,000 `tblfundsrcvd` rows seeded
     - Existing passing tests remain passing
-  status: not started
+  status: done — commit 8220ebe; perf verified against an in-memory fake (228ms at 50k/10k), NOT against the hosted DB (deliberately not seeded)
 
 - task: Build the month-matrix report engine in `lib/reports/matrix.ts` — given a
     year and a row dimension, return a 12-column grid plus a year total per row
