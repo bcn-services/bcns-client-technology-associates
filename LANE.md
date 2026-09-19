@@ -145,7 +145,7 @@ schema and VBA behaviour), `MAP.md` (lane map), `CLAUDE.md` (repo conventions).
     - As-of month 3 for 2025 returns three months and a year total of 59899.19 net, with no entry for April onward
     - Median of 5 runs, a full-year P&L returns in under 2s with 50,000 `tblexpenses` and 10,000 `tblfundsrcvd` rows seeded
     - Existing passing tests remain passing
-  status: not started
+  status: done — commit fb22e97 (2 attempts). Criteria 2, 3-structural, 4 (207ms vs 2000ms budget, in-memory fake only) and 5 verified by execution. Criteria 1 and 3's exact figures UNVERIFIABLE — no reachable database holds the client's 2025 data. OPEN DATA QUESTION: the engine treats `exp_notcountedinprofit` as a column separate from `expamount` (so a draw is a memo row, never netted out). If a real withdrawal row also carries an `expamount`, expenses are overstated and criterion 2 must be dropped. Needs the `.bak`.
 
 - task: Build the `/reports` page in `app/reports/` — a server component with
     labelled start-date and end-date inputs, a row of named preset buttons over
