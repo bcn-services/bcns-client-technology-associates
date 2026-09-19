@@ -169,7 +169,7 @@ schema and VBA behaviour), `MAP.md` (lane map), `CLAUDE.md` (repo conventions).
     - Figures shown on screen for a given range equal what the engine returns for that range, formatted to two decimals
     - Existing passing tests remain passing
   ui: true
-  status: not started
+  status: blocked — environment, not code. Commits f0948e0 (page) + d2ebff9 (tests). All criteria verified at unit level (58/58 own tests, full suite at baseline 986/771/0/215, `next build` green, eslint clean, auth wired the house way). The behavioral half of the gate — live smoke, browser QA, journey 06, and an independent re-proof of the 307-to-/login auth redirect — could not run: the main checkout's `node_modules` was emptied mid-run and is still empty. OPEN: `done when:` #1 (twelve month columns) and #3 (figures for the submitted range) are mutually unsatisfiable; resolved by pinning `asOfMonth: 12` and disclosing the rendered period in the panel caption. Needs an amendment if #3 is meant literally.
 
 - task: Add Excel export in `lib/reports/export.ts` and wire an export control on
     `/reports` — each report exports as a worksheet, and the "accountant export"
