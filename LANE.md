@@ -124,7 +124,7 @@ schema and VBA behaviour), `MAP.md` (lane map), `CLAUDE.md` (repo conventions).
     - Dimension `branch` returns one row per distinct branch in the range, and a branch with no rows in the range is absent rather than a zero row
     - Empty months are empty in the returned structure, and no cell anywhere contains the string "Null"
     - Existing passing tests remain passing
-  status: not started
+  status: done — commit 188c16e (3 attempts); the "26 rows for 2025" / "2025 expense data" parity clause is UNVERIFIED — no reachable database holds the client's legacy data (hosted Supabase has smoke rows only). The criterion's property was verified by execution instead.
 
 - task: Build the P&L summary engine in `lib/reports/pnl.ts` — income, expenses
     and net per month for a year plus a Total For Year column, and a separate
