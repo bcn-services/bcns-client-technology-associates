@@ -75,7 +75,7 @@ type Page = { data: any[] | null; count: number | null };
  * sequential `all()` of `lib/cases/presets.ts:17-28`. Chosen because a full-year report is the slow case
  * and its pages are independent: one exact count then N concurrent reads beats N serial round trips.
  */
-async function pageAll(build: (count: boolean) => any, label: string): Promise<any[]> {
+export async function pageAll(build: (count: boolean) => any, label: string): Promise<any[]> {
   const read = async (from: number, count: boolean): Promise<Page> => {
     const res = await build(count).range(from, from + PAGE - 1);
     if (res.error) throw new Error(`${label}: ${res.error.message}`);
