@@ -21,3 +21,6 @@ scripts/migrate/in/
 
 # Supabase CLI local state (project ref, versions)
 supabase/.temp/
+
+# Golden report expectations — real client figures, never committed
+tests/docs-reports/golden.local.json

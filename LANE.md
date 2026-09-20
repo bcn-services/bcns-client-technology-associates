@@ -7,7 +7,10 @@ app instead of the Access database, and a case's documents live with the case.
 
 Lane done when:
 - Journey 06 passes: `/dashboard` shows due/overdue/waiting/unpaid by priority, and P&L, Yearly Expense, and the accountant export all run for a date range
-- All six legacy report forms produce the same figures as the client's 2025 Access outputs for the same period
+- When the legacy data is loaded into a throwaway database, all six legacy report
+  forms produce the same figures as the client's 2025 Access outputs for the same
+  period. Gated on the legacy `.bak`: no reachable database holds the practice's
+  2025 data, so this criterion stays open until someone loads it.
 - Every report exports to Excel from the app, with no Access round-trip
 - A document uploaded against a case is visible and downloadable from that case's page by an authorized user
 
@@ -60,7 +63,9 @@ Test against the fixture, not the producing lane. Do not wait for it to exist.
 - Status strings come from the constants that already define them
   (`OPEN_NOTICES` etc. in `lib/bills/rules.ts`). Never re-derive the list.
 - Real client figures never enter a committed file. Golden expectations load
-  from a gitignored local file; the test self-skips when it is absent.
+  from a gitignored local file; the test self-skips when it is absent. That file
+  is `tests/docs-reports/golden.local.json` (gitignored). Until it exists, every
+  criterion below that names a 2025 figure is checked as a property, not a number.
 
 Fuller context: `CLIENT.md` (brief + config decisions), `LEGACY.md` (legacy
 schema and VBA behaviour), `MAP.md` (lane map), `CLAUDE.md` (repo conventions).
@@ -81,7 +86,6 @@ schema and VBA behaviour), `MAP.md` (lane map), `CLAUDE.md` (repo conventions).
 - Attaching documents to expenses, funds, inquiries, bills or service authorizations — `tblscanneddocument` keeps the FKs, this round wires only `caseid`
 - Deleting a document — a delete that orphans a storage object is its own item
 - Charts or trend analysis on the dashboard — v1 is counts and a work-status table
-- Adding `tests/docs-reports/*.test.mjs` to `package.json`'s `test` script — `package.json` is `unowned:`, so this is a Reviewer edit on `main` (amendment request)
 
 ---
 
@@ -107,7 +111,7 @@ schema and VBA behaviour), `MAP.md` (lane map), `CLAUDE.md` (repo conventions).
     - A range spanning more than 1000 matching rows returns all of them, not 1000
     - Median of 5 runs, a full-year detail query returns in under 2s with 50,000 `tblexpenses` and 10,000 `tblfundsrcvd` rows seeded
     - Existing passing tests remain passing
-  status: not started
+  status: done — commit 8220ebe; perf verified against an in-memory fake (228ms at 50k/10k), NOT against the hosted DB (deliberately not seeded)
 
 - task: Build the month-matrix report engine in `lib/reports/matrix.ts` — given a
     year and a row dimension, return a 12-column grid plus a year total per row
@@ -120,11 +124,11 @@ schema and VBA behaviour), `MAP.md` (lane map), `CLAUDE.md` (repo conventions).
     - A row dimension value present in the data always gets a row, including retired expense types
     - Read-only
   done when:
-    - With the 2025 expense data, dimension `exptype` returns rows whose year totals sum to the same grand total as the twelve month-column totals
+    - Dimension `exptype` returns rows whose year totals sum to the same grand total as the twelve month-column totals, and one row per expense type with activity in the year. With `tests/docs-reports/golden.local.json` present, the row count and figures also match its Yearly Expense expectations; the test self-skips when it is absent
     - Dimension `branch` returns one row per distinct branch in the range, and a branch with no rows in the range is absent rather than a zero row
     - Empty months are empty in the returned structure, and no cell anywhere contains the string "Null"
     - Existing passing tests remain passing
-  status: not started
+  status: done — commit 188c16e (3 attempts); the "26 rows for 2025" / "2025 expense data" parity clause is UNVERIFIED — no reachable database holds the client's legacy data (hosted Supabase has smoke rows only). The criterion's property was verified by execution instead.
 
 - task: Build the P&L summary engine in `lib/reports/pnl.ts` — income, expenses
     and net per month for a year plus a Total For Year column, and a separate
@@ -140,12 +144,12 @@ schema and VBA behaviour), `MAP.md` (lane map), `CLAUDE.md` (repo conventions).
     - An as-of month truncates the result; it never zero-fills the remaining months
     - Read-only
   done when:
-    - For 2025 the engine returns income 903401.91, expenses 585101.91, net 318300.00 and withdrawals 210000.00, to the cent
+    - The engine returns income, expenses, net and withdrawals per month plus a Total For Year column, with net equal to income minus expenses to the cent in every column and the year total equal to the sum of its months. With `tests/docs-reports/golden.local.json` present, the 2025 figures match its P&L expectations; the test self-skips when it is absent
     - The expenses total equals the year total the month-matrix engine returns for dimension `exptype` over the same year
-    - As-of month 3 for 2025 returns three months and a year total of 59899.19 net, with no entry for April onward
+    - As-of month 3 returns exactly three months with no entry for April onward, and its Total For Year column covers only those three months
     - Median of 5 runs, a full-year P&L returns in under 2s with 50,000 `tblexpenses` and 10,000 `tblfundsrcvd` rows seeded
     - Existing passing tests remain passing
-  status: not started
+  status: done — commit fb22e97 (2 attempts). Criteria 2, 3-structural, 4 (207ms vs 2000ms budget, in-memory fake only) and 5 verified by execution. Criteria 1 and 3's exact figures UNVERIFIABLE — no reachable database holds the client's 2025 data. OPEN DATA QUESTION: the engine treats `exp_notcountedinprofit` as a column separate from `expamount` (so a draw is a memo row, never netted out). If a real withdrawal row also carries an `expamount`, expenses are overstated and criterion 2 must be dropped. Needs the `.bak`.
 
 - task: Build the `/reports` page in `app/reports/` — a server component with
     labelled start-date and end-date inputs, a row of named preset buttons over
@@ -166,10 +170,10 @@ schema and VBA behaviour), `MAP.md` (lane map), `CLAUDE.md` (repo conventions).
   done when:
     - Filling both dates and clicking the P&L preset renders a non-empty `report-results` panel showing twelve month columns and a year total
     - Each of the six presets renders into the same `report-results` panel, replacing the previous result
-    - Figures shown on screen for a given range equal what the engine returns for that range, formatted to two decimals
+    - Figures shown for a preset equal what that preset's engine returns for the parameters the preset derives from the submitted range, formatted to two decimals, and the panel caption states the period actually rendered
     - Existing passing tests remain passing
   ui: true
-  status: not started
+  status: blocked — environment, not code. Commits f0948e0 (page) + d2ebff9 (tests). All criteria verified at unit level (58/58 own tests, full suite at baseline 986/771/0/215, `next build` green, eslint clean, auth wired the house way). The behavioral half of the gate — live smoke, browser QA, journey 06, and an independent re-proof of the 307-to-/login auth redirect — could not run: the worktree's `node_modules` was emptied mid-run. That is diagnosed and repaired (the symlinked `node_modules` plus `output: "standalone"` let `next build`'s file-trace copier write outside the project; both worktree symlinks are now real installs). The criteria contradiction is RESOLVED by the 2026-09-19 amendment: criterion 3 now reads against the parameters the preset derives, with the rendered period disclosed in the panel caption — which is what shipped. Remaining gate: the live browser check.
 
 - task: Add Excel export in `lib/reports/export.ts` and wire an export control on
     `/reports` — each report exports as a worksheet, and the "accountant export"
@@ -179,13 +183,26 @@ schema and VBA behaviour), `MAP.md` (lane map), `CLAUDE.md` (repo conventions).
     rollups. Use `exceljs`. Headers are readable labels, not the legacy Access
     field names (`FndsBranch`, `ExpDscr`) the old `.xls` dump carried.
   guardrails:
-    - Pin `exceljs` and any transitive dependency that trips pnpm's `minimumReleaseAge` in BOTH `package.json` overrides and `pnpm-workspace.yaml` — pnpm 9 reads one, pnpm 11 the other
+    - AMENDMENT (2026-09-19): this item may edit `package.json` and the generated
+      `pnpm-lock.yaml`, which MAP.md lists `unowned:`. Authorized for this item
+      only, for the two changes named in these guardrails. No other unowned path
+      is open, and MAP.md itself is not edited.
+    - Add `exceljs` as a plain `dependencies` entry in `package.json`. Do NOT edit
+      `pnpm-workspace.yaml`: this repo declares no `overrides` anywhere and
+      `minimumReleaseAge` is unset everywhere, so a pin there is dead config. The
+      previous guardrail asserting otherwise was factually wrong and is withdrawn
+    - Append `tests/docs-reports/*.test.mjs` to `package.json`'s `test` script.
+      That script names directories explicitly, so this lane's tests do not run
+      under `pnpm test` today and the gate below is vacuous without this line
+    - Run every tool through `pnpm exec`, never bare `npx` — with a broken
+      `node_modules`, `npx next` silently fetched Next 16 from the registry and
+      ran it against this Next 14 repo
     - Currency cells carry numeric values with a currency format, never pre-formatted strings
     - Export reads the same engine output the screen renders — it never re-queries with different parameters
   done when:
     - Clicking accountant export for a full year downloads one `.xlsx` containing 27 sheets, each named for its report and period
     - A single report's export opens with its figures matching the on-screen panel to the cent
-    - `pnpm build` and `pnpm test` pass with the new dependency installed
+    - `pnpm build` and `pnpm test` pass with the new dependency installed, and `pnpm test`'s reported test count rises above the 986 baseline — proving `tests/docs-reports/` now runs under it
     - Existing passing tests remain passing
   ui: true
   status: not started
