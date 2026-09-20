@@ -13,10 +13,17 @@ across rounds — never reset. Per-item detail lives in `progress/<lane>.md`.
 | time | nate | lane/time | done — 6/6 items + 3 click-through fixes, merged 2026-09-12 (`9b8d68f`, PR #9) |
 | billing | nate | lane/billing | done — 9/9 items + suite/seed fixes, merged 2026-09-13 (`c663304`, PR #11; journeys amendment PR #12) |
 | money | nate | lane/money | done — 12/12 items (11 + check → bill link), merged 2026-09-15 (`075c477`, PR #13; `819ecef`, PR #14) |
-| docs-reports | nate | — | not started — no LANE.md yet |
+| docs-reports | nate | lane/docs-reports | done — 8/8 items, merged 2026-09-20 (`4fa1973`, PR #15) |
 
-**Journeys:** 5 of 6 green (2026-09-15, after money; `--workers=1`). 01–05 pass. 06 fails at the
-dashboard, which docs-reports builds. Progress reading, not a merge gate.
+**Journeys:** 3 of 3 re-run green; 6 of 6 green if the three not re-run still hold.
+01, 02 and 06 re-run 2026-09-20 after docs-reports
+against a **local** Supabase stack with `--workers=1` — all three pass, and **06 passes for the
+first time**: the dashboard it waited on now exists. 03, 04 and 05 were last green 2026-09-15
+(`--workers=1`) and were **not re-run** — they `loadEnvFile('.env.local')` and INSERT/DELETE
+against the practice's hosted project, which needs a human decision before it happens again.
+`--workers=1` is required: `playwright.config.ts` sets `fullyParallel: false` but no worker
+count, so files still run concurrently and collide on the shared database. A multi-worker run
+reports 02–05 as failures that serialize away. Progress reading, not a merge gate.
 
 **Amendments this round**
 
