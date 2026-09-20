@@ -26,6 +26,26 @@ LANE.md wins for scope, this file wins for state.
 | Supabase Storage adapter | skipped — below stop marker |
 | `/documents` and case documents panel | skipped — below stop marker |
 
+## Run summary — autonomous session, 2026-09-19
+
+All six items above the stop marker are done. The suite went from 986 tests to
+1074, with 859 passing and none failing; the extra tests are this lane's own,
+which until today were never run by the shared test command at all.
+
+Two things need a decision before the lane merges, and neither is unfinished
+code:
+
+- The end-to-end test for the dashboard looks for the word "due", which now
+  matches both the Due tile and the Overdue tile, so it fails on an ambiguity
+  rather than on a fault. The fix is one word, in a file this lane is not
+  allowed to edit.
+- Two of the four dashboard tiles link to a page that lists more rows than the
+  tile counts, because no page showing just those rows exists yet. Either the
+  plan's wording changes, or someone builds those two filtered pages in the
+  lanes that own them.
+
+Items 7 and 8, the document storage work, were deliberately not started.
+
 ## Notes for the human
 
 - **The dependency wipe is solved, not just repaired.** The installed
