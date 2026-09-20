@@ -48,7 +48,19 @@ Items 7 and 8, the document storage work, were deliberately not started.
 
 ## Notes for the human
 
-- **The dependency wipe is solved, not just repaired.** The installed
+- **A second way the dependencies get wiped, still open.** This one is not in
+  the project — it is on Nate's machine. Two different versions of the package
+  installer are reachable, 9 and 11. The project file asks for 11, but the one
+  the shell finds first is 9. The main copy of the project was last installed
+  by 9, so when version 11 ran, it judged the folder stale and tried to delete
+  and rebuild the whole thing. It stopped only because nothing was there to
+  answer its yes-or-no question. Run by hand in a terminal, that question does
+  get asked, and one careless yes wipes the folder. The main copy has now been
+  reinstalled with version 11 so both agree, but the shell still finds 9 first.
+  Choosing which one wins is a change to Nate's machine, outside this project,
+  so it is left for him.
+
+- **The first dependency wipe is solved, not just repaired.** The installed
   dependencies were emptied twice in one afternoon. The cause was this
   worktree's dependency folder being a shortcut to the main copy rather than a
   real folder: the build's packaging step followed the shortcut out of the
