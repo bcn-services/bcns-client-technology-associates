@@ -229,10 +229,23 @@ export default async function ReportsPage({ searchParams }: { searchParams: Para
       </form>
 
       <section data-testid="report-results" className="space-y-3 rounded border border-slate-200 bg-white p-4">
-        <h2 className="text-lg font-semibold">
-          {preset ? preset.label : "Results"}
-          {ready && preset ? ` — ${preset.period(range)}` : ""}
-        </h2>
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <h2 className="text-lg font-semibold">
+            {preset ? preset.label : "Results"}
+            {ready && preset ? ` — ${preset.period(range)}` : ""}
+          </h2>
+          {ready && preset && (
+            // Plain link, not a fetch: the browser's own download handling is what saves the .xlsx.
+            <a
+              data-testid="report-export"
+              data-print="hide"
+              href={`/reports/export?start=${encodeURIComponent(range.start)}&end=${encodeURIComponent(range.end)}&preset=${encodeURIComponent(preset.key)}`}
+              className="rounded border border-slate-300 px-3 py-1 text-sm hover:bg-slate-100"
+            >
+              Export to Excel
+            </a>
+          )}
+        </div>
         {preset?.note && <p className="text-sm text-slate-600">{preset.note}</p>}
         {result ? <Results result={result} /> : <p className="text-sm text-slate-600">{problem}</p>}
       </section>

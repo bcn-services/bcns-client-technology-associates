@@ -76,8 +76,7 @@ export const PRESETS: Preset[] = [
     engine: "pnl",
     params: (r) => ({ year: yearOf(r), asOfMonth: 12 }),
     period: year,
-    // ponytail: the workbook itself is the next lane item; this row shows the P&L the workbook will carry.
-    note: "Preview only — the downloadable workbook arrives in the next step.",
+    note: "The P&L below previews the year. Export to Excel downloads the full January hand-over: twelve monthly income sheets, twelve monthly expense sheets, and the Yearly Income, Yearly Expense and P&L rollups.",
   },
 ];
 
