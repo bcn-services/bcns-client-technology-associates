@@ -37,6 +37,21 @@ Stop and report if an item requires changing a path outside both lists:
   an unmerged lane's — none; every lane in MAP.md is `done` on `integration`
   unowned — root config (package.json, pnpm-*.yaml, tsconfig, next/eslint config, *.md), .github/workflows, .claude/worktrees, app/api/health, lib/health.ts, lib/ai.ts, lib/webhooks.ts, tests/*.test.mjs, remote sync + backup, bill PDF generation + email
 
+  AMENDMENT (2026-09-19) — narrow protected-path grant, item 6 only: this lane may
+  change the single assertion `page.getByText(/due/i)` to `page.getByText(/^due$/i)`
+  in `tests/journeys/06-dashboard-reports.spec.ts`, and nothing else in
+  `tests/journeys/**`. Reason: item 6 is required to render BOTH a `Due` and an
+  `Overdue` tile, so `/due/i` resolves to 2 elements and Playwright raises a
+  strict-mode violation; `/^due$/i` resolves to 1. Verified by rendering the page.
+  Precedent: the billing lane's journeys amendment (PR #12). `playwright.config.ts`
+  and every other protected path stay closed.
+
+  AMENDMENT (2026-09-19) — narrow unowned grant, item 7 only: `supabase/config.toml`
+  and `supabase/.gitignore` may be created, to stand up a LOCAL Supabase stack for
+  testing. `supabase/migrations/**` stays protected and frozen — no migration is
+  added, edited or run against any hosted project. No other unowned path opens, and
+  MAP.md is not edited.
+
 Frozen contracts — build and test against these; they will not move:
   cases, time, billing, money — generated row types in `lib/db/types.ts`
     (`Database["public"]["Tables"][...]`) via the `Tables<T>` helper in
@@ -220,7 +235,14 @@ schema and VBA behaviour), `MAP.md` (lane map), `CLAUDE.md` (repo conventions).
     - Read-only
   done when:
     - `/dashboard` renders text matching due, overdue, waiting and unpaid, and journey 06's dashboard assertions pass
-    - Each tile's count equals the number of rows the list page it links to displays
+    - AMENDMENT (2026-09-19): each tile's count is derived from the same rule as
+      the page it links to, and the tile links to the page that lists those rows.
+      Where no narrower page exists yet the link may point at a superset page —
+      `due` links to `/bills` and `overdue` to the work-status list, both of which
+      list more rows than the tile counts. The count stays exact; the destination
+      is the closest page this lane can reach. Building a due-only or overdue-only
+      view belongs to `app/bills/**` / `app/cases/**`, merged lanes this one does
+      not own. The previous wording was unsatisfiable from inside this lane.
     - The work-status table is ordered by priority and excludes cases whose `casestatpriority` contains a 9, matching `workStatus()`
     - Existing passing tests remain passing
   after: billing
