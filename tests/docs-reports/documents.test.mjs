@@ -174,6 +174,9 @@ test("live: upload against a case creates one row and the bytes come back identi
   const bytes = new TextEncoder().encode(`live doc ${process.pid} é ✓`);
   const token = `t-${process.pid}-${Date.now()}`;
   const { id, key } = await createCaseDocument(db, getStorageAdapter(), SESSION, caseId, { name: "live.txt", type: "text/plain", bytes }, "2026-02-01", token);
+  // Sweep both halves whatever happens below: a leftover object under this prefix
+  // breaks any later test that counts objects there.
+  try {
 
   const rows = await db.from("tblscanneddocument").select("id, caseid, filename, description").eq("filename", key);
   assert.equal(rows.error, null);
@@ -194,7 +197,32 @@ test("live: upload against a case creates one row and the bytes come back identi
   const list = await listCaseDocuments(db, SESSION, caseId);
   assert.ok(list.some((r) => r.id === id));
   assert.ok(list.every((r) => r.caseid === caseId));
-  await db.from("tblscanneddocument").delete().eq("id", id);
+  } finally {
+    await db.from("tblscanneddocument").delete().eq("id", id);
+    await db.storage.from("case-documents").remove([key]);
+  }
+});
+
+// A missing BUCKET and a missing OBJECT both come back from createSignedUrl as
+// {"statusCode":"404","code":"NoSuchKey","message":"Object not found"}. Only the
+// object case may become a 404 "not available on this case"; a bucket the app
+// cannot see is a configuration fault (503), never a wrong answer about the case.
+test("live: a missing bucket is a storage fault, a missing key is a missing object", { skip: live }, async () => {
+  const { getStorageAdapter, StorageObjectNotFoundError } = await import("../../lib/storage.ts");
+  const realFetch = globalThis.fetch;
+  let missingBucket;
+  globalThis.fetch = (u, o) => realFetch(String(u).replace("/case-documents", "/no-such-bucket-qa"), o);
+  try {
+    missingBucket = await getStorageAdapter().getSignedUrl("cases/90001/x", 60).then(() => null, (e) => e);
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+  assert.ok(missingBucket, "a nonexistent bucket must not sign a URL");
+  assert.equal(missingBucket.name, "StorageOperationError", `got ${missingBucket.name}: ${missingBucket.message}`);
+  assert.ok(!(missingBucket instanceof StorageObjectNotFoundError), "a missing bucket must not read as a missing document");
+
+  const missingKey = await getStorageAdapter().getSignedUrl(`cases/90001/no-such-object-${process.pid}`, 60).then(() => null, (e) => e);
+  assert.ok(missingKey instanceof StorageObjectNotFoundError, `missing key in the real bucket must stay a missing object, got ${missingKey?.name}`);
 });
 
 test("live: a forged case scope never widens access to a real document", { skip: live }, async () => {

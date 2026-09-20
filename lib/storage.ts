@@ -41,11 +41,14 @@ export class StorageOperationError extends Error {
 
 /**
  * Supabase returns errors as values; only NoSuchKey becomes the defined
- * not-found error. `statusCode` is NOT a safe discriminator: storage answers
- * 404 for a missing BUCKET too (`{"statusCode":"404","code":"NoSuchBucket"}`),
- * and a misconfigured bucket is "storage is broken", not "this document does
- * not exist". Any shape without `code: "NoSuchKey"` — including an unknown
- * one — falls through to StorageOperationError.
+ * not-found error. Neither `statusCode` NOR `code` is a safe discriminator on
+ * its own: storage answers 404 for a missing BUCKET too, as `code:"NoSuchBucket"`
+ * from `upload` but as the byte-identical `{"statusCode":"404","code":"NoSuchKey",
+ * "message":"Object not found"}` from `createSignedUrl` — so on the sign path the
+ * code alone cannot tell a missing bucket from a missing object. Callers that can
+ * hit that shape must go through `toNotFoundOrFault`, which confirms the bucket.
+ * Any shape without `code: "NoSuchKey"` — including an unknown one — falls
+ * through to StorageOperationError.
  */
 function toError(key: string, err: unknown, fallbackCause = "unknown storage error"): Error {
   const e = err as { message?: string; code?: string } | null;
@@ -66,13 +69,31 @@ const LIST_PAGE_SIZE = 100;
  * keyless template runs with file features disabled, not crashing).
  */
 export function getStorageAdapter(): StorageAdapter | null {
+  let storage: ReturnType<typeof createServerClient>["storage"];
   let bucket: ReturnType<ReturnType<typeof createServerClient>["storage"]["from"]>;
   try {
-    bucket = createServerClient().storage.from(STORAGE_BUCKET);
+    storage = createServerClient().storage;
+    bucket = storage.from(STORAGE_BUCKET);
   } catch (e) {
     if (e instanceof DbNotConfiguredError) return null;
     throw e;
   }
+
+  /**
+   * Resolve a NoSuchKey-shaped failure that could equally be a missing bucket by
+   * asking the backend whether the bucket exists. Runs only on the error path.
+   * Fails toward "storage fault": only a clean bucket record downgrades to
+   * StorageObjectNotFoundError, so a misconfigured or unreachable bucket can never
+   * be reported to a user as "this document does not exist".
+   */
+  async function toNotFoundOrFault(key: string, err: unknown, fallbackCause?: string): Promise<Error> {
+    const mapped = toError(key, err, fallbackCause);
+    if (!(mapped instanceof StorageObjectNotFoundError)) return mapped;
+    const { data, error } = await storage.getBucket(STORAGE_BUCKET);
+    if (error || !data) return new StorageOperationError(key, `bucket ${STORAGE_BUCKET} unavailable: ${error?.message ?? "no bucket record"}`);
+    return mapped;
+  }
+
   return {
     async putFile(key: string, bytes: Uint8Array, contentType: string): Promise<void> {
       // ponytail: upsert makes a retry idempotent, but reusing a docId overwrites the
@@ -83,7 +104,7 @@ export function getStorageAdapter(): StorageAdapter | null {
     async getSignedUrl(key: string, expiresInSeconds: number): Promise<string> {
       const ttl = Math.min(expiresInSeconds, MAX_SIGNED_URL_SECONDS);
       const { data, error } = await bucket.createSignedUrl(key, ttl);
-      if (error || !data) throw toError(key, error, "createSignedUrl returned no data");
+      if (error || !data) throw await toNotFoundOrFault(key, error, "createSignedUrl returned no data");
       return data.signedUrl;
     },
     async listKeys(prefix: string): Promise<string[]> {
