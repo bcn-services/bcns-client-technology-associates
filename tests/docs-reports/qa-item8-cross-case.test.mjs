@@ -12,7 +12,8 @@ const live =
 
 const SESSION = { userId: "qa1", email: "staff@example.test", role: "staff", personId: 1 };
 const CASE_A = 90001;
-const CASE_B = 90002;
+// NOT 90002: tests/docs-reports/storage-adapter.test.mjs asserts an exact object count under `cases/90002`.
+const CASE_B = 90003;
 
 test("live: two real cases — neither case can reach the other's document by id, key or list", { skip: live }, async () => {
   const { createCaseDocument, listCaseDocuments, listAllDocuments, loadDocument, documentDownloadUrl, DocumentError } =
@@ -79,6 +80,10 @@ test("live: two real cases — neither case can reach the other's document by id
     assert.equal(all.find((r) => r.id === a.id)?.caseid, CASE_A);
     assert.equal(all.find((r) => r.id === b.id)?.caseid, CASE_B);
   } finally {
+    // The feature deliberately does not sweep objects; the test must, or it pollutes the bucket.
+    const { createClient } = await import("@supabase/supabase-js");
+    const raw = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
+    await raw.storage.from("case-documents").remove([a, b].filter(Boolean).map((x) => x.key));
     for (const x of [a, b]) if (x) await db.from("tblscanneddocument").delete().eq("id", x.id);
     await db.from("tblcase").delete().eq("caseid", CASE_B);
   }
