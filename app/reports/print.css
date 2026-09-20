@@ -1,0 +1,14 @@
+/* Browser print of /reports is the archive copy: the app chrome and the controls drop out, the results panel stays. */
+@media print {
+  header,
+  [data-print="hide"] {
+    display: none !important;
+  }
+  body {
+    background: #fff;
+  }
+  [data-testid="report-results"] {
+    border: 0;
+    padding: 0;
+  }
+}
