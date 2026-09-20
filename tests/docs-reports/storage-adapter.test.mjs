@@ -81,3 +81,67 @@ test("live: listKeys returns prefixed keys that getSignedUrl accepts", { skip },
   const signed = await a.getSignedUrl(keys[keys.indexOf(key)], 60);
   assert.equal((await fetch(signed)).status, 200);
 });
+
+// --- attempt-2 review findings -------------------------------------------------
+
+// A misconfigured bucket must read as "storage is broken", not "this document does not
+// exist". Supabase answers 404 for a missing bucket too, so statusCode cannot discriminate.
+// The local stack only emits NoSuchBucket on upload (createSignedUrl answers NoSuchKey for
+// a bad bucket), so this drives putFile, with fetch rewriting the bucket segment of the URL.
+test("live: a missing BUCKET is StorageOperationError, never StorageObjectNotFoundError", { skip }, async () => {
+  const realFetch = globalThis.fetch;
+  let sawRewrite = false;
+  globalThis.fetch = (input, init) => {
+    const href = typeof input === "string" ? input : input.url ?? String(input);
+    const rewritten = href.replace(`/${STORAGE_BUCKET}/`, "/no-such-bucket-attempt2/");
+    if (rewritten !== href) sawRewrite = true;
+    return realFetch(rewritten, init);
+  };
+  try {
+    const a = getStorageAdapter();
+    const err = await a.putFile(key, BYTES, "application/octet-stream").then(() => null, (e) => e);
+    assert.ok(sawRewrite, "fetch rewrite never fired — the test did not reach a bad bucket");
+    assert.ok(err, "expected an error from a nonexistent bucket");
+    assert.equal(err.name, "StorageOperationError", `got ${err.name}: ${err.message}`);
+    assert.ok(!(err instanceof StorageObjectNotFoundError), "a missing bucket must not read as a missing object");
+    assert.match(err.message, /Bucket not found/);
+    console.log("missing bucket ->", err.name + ": " + err.message);
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+});
+
+// A page of list() is capped, so a case with more documents than one page silently
+// returned a short list. Every document on a legal case file must come back.
+test("live: listKeys pages past the list() page cap — 105 objects all come back", { skip }, async () => {
+  const a = getStorageAdapter();
+  const PAGED_CASE = 90002;
+  const prefix = `cases/${PAGED_CASE}`;
+  const names = Array.from({ length: 105 }, (_, i) => `${prefix}/${DOC_ID}-${String(i).padStart(3, "0")}`);
+  const { createClient } = await import("@supabase/supabase-js");
+  const raw = createClient(url, process.env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
+  try {
+    for (const n of names) await a.putFile(n, BYTES, "application/octet-stream");
+    const keys = await a.listKeys(prefix);
+    assert.equal(keys.length, names.length, `expected ${names.length} keys, got ${keys.length}`);
+    assert.deepEqual([...keys].sort(), [...names].sort());
+    // every returned key is still a full, signable key
+    assert.equal((await fetch(await a.getSignedUrl(keys[0], 60))).status, 200);
+  } finally {
+    const { error } = await raw.storage.from(STORAGE_BUCKET).remove(names);
+    assert.equal(error, null, `cleanup failed: ${error?.message}`);
+  }
+});
+
+// A caller-chosen TTL is clamped here — this adapter is the one place that bounds
+// the lifetime of every signed URL it hands out, for every future caller.
+test("live: an oversized caller TTL is clamped to the 15-minute ceiling", { skip }, async () => {
+  const a = getStorageAdapter();
+  await a.putFile(key, BYTES, "application/octet-stream");
+  const signed = await a.getSignedUrl(key, 86_400);
+  const token = new URL(signed).searchParams.get("token");
+  const claims = JSON.parse(Buffer.from(token.split(".")[1], "base64url").toString());
+  const lifetime = claims.exp - Math.floor(Date.now() / 1000);
+  assert.ok(lifetime <= 900, `signed URL lifetime ${lifetime}s exceeds the 900s ceiling`);
+  console.log("clamped TTL ->", lifetime, "s for a requested 86400s");
+});

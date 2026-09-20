@@ -39,12 +39,27 @@ export class StorageOperationError extends Error {
   }
 }
 
-/** Supabase returns errors as values; NoSuchKey/404 becomes the defined not-found error. */
-function toError(key: string, err: unknown): Error {
-  const e = err as { message?: string; statusCode?: string; code?: string } | null;
-  if (e?.code === "NoSuchKey" || e?.statusCode === "404") return new StorageObjectNotFoundError(key);
-  return new StorageOperationError(key, e?.message ?? String(err));
+/**
+ * Supabase returns errors as values; only NoSuchKey becomes the defined
+ * not-found error. `statusCode` is NOT a safe discriminator: storage answers
+ * 404 for a missing BUCKET too (`{"statusCode":"404","code":"NoSuchBucket"}`),
+ * and a misconfigured bucket is "storage is broken", not "this document does
+ * not exist". Any shape without `code: "NoSuchKey"` — including an unknown
+ * one — falls through to StorageOperationError.
+ */
+function toError(key: string, err: unknown, fallbackCause = "unknown storage error"): Error {
+  const e = err as { message?: string; code?: string } | null;
+  if (e?.code === "NoSuchKey") return new StorageObjectNotFoundError(key);
+  return new StorageOperationError(key, e?.message ?? (err == null ? fallbackCause : String(err)));
 }
+
+/** Upper bound on a caller-chosen signed-URL lifetime. A module constant, not an
+ *  env var: lib/env.ts is the only process.env reader and this seam is frozen. */
+const MAX_SIGNED_URL_SECONDS = 900;
+
+/** Supabase `list()` returns at most one page; walk every page so a case with
+ *  more than a page of documents never returns a silently short list. */
+const LIST_PAGE_SIZE = 100;
 
 /**
  * Resolve the configured adapter, or null when storage is unconfigured (the
@@ -60,21 +75,29 @@ export function getStorageAdapter(): StorageAdapter | null {
   }
   return {
     async putFile(key: string, bytes: Uint8Array, contentType: string): Promise<void> {
+      // ponytail: upsert makes a retry idempotent, but reusing a docId overwrites the
+      // prior bytes irrecoverably — move to write-once keys when versioning is specified.
       const { error } = await bucket.upload(key, bytes, { contentType, upsert: true });
       if (error) throw toError(key, error);
     },
     async getSignedUrl(key: string, expiresInSeconds: number): Promise<string> {
-      const { data, error } = await bucket.createSignedUrl(key, expiresInSeconds);
-      if (error || !data) throw toError(key, error);
+      const ttl = Math.min(expiresInSeconds, MAX_SIGNED_URL_SECONDS);
+      const { data, error } = await bucket.createSignedUrl(key, ttl);
+      if (error || !data) throw toError(key, error, "createSignedUrl returned no data");
       return data.signedUrl;
     },
     async listKeys(prefix: string): Promise<string[]> {
-      const { data, error } = await bucket.list(prefix);
-      if (error || !data) throw toError(prefix, error);
       const base = prefix.replace(/\/+$/, "");
-      // list() names are relative to the prefix, and folders come back with a null id;
-      // drop those so every returned key is one getSignedUrl can actually sign.
-      return data.filter((e) => e.id !== null).map((e) => (base ? `${base}/${e.name}` : e.name));
+      const keys: string[] = [];
+      for (let offset = 0; ; offset += LIST_PAGE_SIZE) {
+        const { data, error } = await bucket.list(prefix, { limit: LIST_PAGE_SIZE, offset });
+        if (error || !data) throw toError(prefix, error, "list returned no data");
+        // list() names are relative to the prefix, and folders come back with a null id;
+        // drop those so every returned key is one getSignedUrl can actually sign.
+        for (const e of data) if (e.id !== null) keys.push(base ? `${base}/${e.name}` : e.name);
+        // Offset still advances by the RAW page length, filtered entries included.
+        if (data.length < LIST_PAGE_SIZE) return keys;
+      }
     },
   };
 }
