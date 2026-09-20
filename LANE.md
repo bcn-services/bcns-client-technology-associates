@@ -205,7 +205,7 @@ schema and VBA behaviour), `MAP.md` (lane map), `CLAUDE.md` (repo conventions).
     - `pnpm build` and `pnpm test` pass with the new dependency installed, and `pnpm test`'s reported test count rises above the 986 baseline — proving `tests/docs-reports/` now runs under it
     - Existing passing tests remain passing
   ui: true
-  status: not started
+  status: done — commits 6b20aa7 (build) + 2d69efb (QA tests), 1 attempt. Criteria 1 and 2 verified by execution: `accountantPlan(2025)` yields exactly 27 uniquely-named sheets, longest 31 chars (Excel's cap) with no illegal characters, and QA proved "same engine output as the screen" by tracing every fake-Db call and deep-equalling `buildWorkbook`'s trace against `runPreset`'s — zero re-query. Criterion 3 verified: `pnpm test` 986 -> 1056 tests, 771 -> 841 pass, 0 fail, skip unchanged at 215, so `tests/docs-reports/` genuinely runs now; `pnpm build` exit 0 with `/reports/export` listed dynamic. CAVEAT, same standing one: headless run, live-Supabase-only, so the route's auth gate, its `content-disposition` header and the actual click are unexercised at runtime. NOTE: sheet names sit at Excel's 31-char limit exactly — a longer preset label would truncate and collide across months; abbreviate rather than slice.
 
 - task: Build `/dashboard` in `app/dashboard/` — the legacy Work Status Sheet plus
     a header of counts. Four count tiles labelled due, overdue, waiting and
