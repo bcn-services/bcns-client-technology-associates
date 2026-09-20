@@ -5,12 +5,16 @@ LANE.md wins for scope, this file wins for state.
 
 ## Current position
 
-- **Status:** all 6 items above the stop marker are done. Two plan criteria are unmet and need a human decision; both are plan defects outside this lane's ownership, not unfinished code. The toolchain that blocked it is diagnosed and repaired, and the plan itself was amended on 2026-09-19 to fix four defects in its own criteria. Run paused at Nate's request after item 4. Autonomous run in progress on `auto/docs-reports`, forked from `lane/docs-reports`.
-- **Next:** decide the two open questions below, then merge the lane. Items 7 and 8 (document storage) sit below the stop marker and were deliberately not started.
-- **Blockers:** none blocking. One caveat carries forward: no database anyone
-  can reach holds the practice's real 2025 figures, so any criterion phrased as
-  "matches the 2025 numbers" is checked as behaviour, not as a number. The plan
-  now says so in writing, and names the local file that would close it.
+- **Status:** all eight items are done. The lane is ready to merge. Journey 06 — the
+  lane's headline acceptance test — passes for the first time. The full test suite is
+  green in both modes. One of the four "lane done when" criteria stays open by design:
+  nobody has loaded the practice's real 2025 data anywhere, so no figure can be compared
+  against the old Access reports yet.
+- **Next:** a human reads the pull request into `integration`. Four things want a decision
+  before or shortly after that merge — they are listed under "What still needs a person"
+  below.
+- **Blockers:** none. The two questions that paused the run after item 6 were settled by
+  amending the plan, and the toolchain fault that stopped items 7 and 8 is fixed.
 - **Last updated:** 2026-09-19
 
 ## docs-reports lane (2026-09-19)
@@ -23,8 +27,61 @@ LANE.md wins for scope, this file wins for state.
 | `/reports` page | done — the reports screen exists with start and end date boxes, the six familiar report buttons plus an accountant export button, and one results panel each button refills. Signing in is enforced: asking for the page without signing in sends you to the login screen and shows no figures. The buttons were proved against a stand-in database rather than clicked through in a browser, because the only database the app is pointed at is the practice's live one, which this work is not allowed to write to. (2026-09-19) |
 | Excel export | done — every report downloads as an Excel file, and the accountant export produces one workbook holding the full January hand-over set: a sheet per month for income and for expenses, plus the two yearly rollups and the profit-and-loss summary, 27 sheets in all. Money cells are real numbers with a currency format, not text, so the accountant can total them. The download was proved by building the file in a test, not by clicking it in a browser. (2026-09-19) |
 | `/dashboard` | done, with two open questions for a human — the screen exists with four count tiles (due, overdue, waiting, unpaid) above the work-status table, sorted by priority, and it reuses the existing billing and case rules rather than recreating them. Two things in the plan cannot be satisfied from inside this lane: the end-to-end test for this screen looks for the word "due", which now matches both the Due and the Overdue tile and so fails on an ambiguity, fixable only in a file this lane may not edit; and two of the four tiles link to a page that lists more rows than the tile counts, because no page showing just those rows exists yet. (2026-09-19) |
-| Supabase Storage adapter | skipped — below stop marker |
-| `/documents` and case documents panel | skipped — below stop marker |
+| Supabase Storage adapter | done — the app can now put a file into private storage and hand back a link that works for fifteen minutes and then stops working. Nothing is ever served from a public address, and a file's address is built from the case number plus a random token, never from the name the file was uploaded under. Proved against a throwaway copy of the database running on this machine, so the practice's own system was never touched. (2026-09-19) |
+| `/documents` and case documents panel | done — a file can be attached to a case, it shows up on that case's page, and clicking it downloads the original unchanged. A case only ever shows its own documents: asking for another case's document by its number returns nothing at all. Signing in is required to upload and to download. Proved end to end against the throwaway database using two real cases. (2026-09-19) |
+
+## Run summary — completion session, 2026-09-19
+
+Items 7 and 8, the document storage work that was deliberately left out of the first
+session, are now built and merged. Journey 06 passes.
+
+The test suite finishes with **1106 tests and no failures**, in both of the two ways it
+can be run: 878 pass with 228 skipped on a plain checkout, and 892 pass with 214 skipped
+when the throwaway local database is switched on. It was 986 tests when this lane started.
+The type checker is clean.
+
+To prove the document work without touching the practice's live system, a complete copy of
+the database now runs on this machine inside Docker. Standing it up took two fixes that are
+worth knowing about, both captured in one re-runnable script
+(`tests/docs-reports/local-stack-setup.sh`): the local copy grants the app no permission to
+read or write any table until it is told to, and the sample data has to be loaded in a
+specific order or it is rejected. The same script also creates the private storage area.
+
+Journeys 02, 03, 04 and 05 still fail. They were re-run from a separate copy of the code
+that contains none of this lane's work, and they fail there too, so this lane did not break
+them. The reason is in the tests themselves, not in the app: they insert the rows they need
+into the practice's hosted database while the screen they then check is reading a different
+database, so the rows are never visible. That is the same on every branch.
+
+A final review was run against the whole merged change. It confirmed three of the four
+acceptance criteria by reproducing them itself, confirmed that the change touches only the
+files this lane is allowed to touch, and confirmed that no real client figure appears in any
+committed file. It found no critical fault and four things worth fixing, none of which stops
+the merge. They are written up in the pull request.
+
+## What still needs a person
+
+- **Nobody has loaded the practice's real 2025 data.** Until someone restores the legacy
+  backup into a throwaway database, no report figure can be checked against the old Access
+  output. Every such criterion was checked as behaviour instead. A related gap: the plan
+  promised that once that data exists the tests would read expected figures from a local
+  file and skip when it is absent. The file is listed as ignored by version control, but
+  nothing actually reads it yet, so dropping the file in place today would change nothing
+  and could be mistaken for proof.
+- **Four of the end-to-end journeys write to the practice's live database.** Journeys 03, 04
+  and 05 are written that way on purpose and have been since before this lane; they add rows
+  and then remove them again. Running them tonight therefore wrote to the live system. The
+  check for whether anything was left behind could not be completed from here, because
+  reading the live database is blocked. Somebody should confirm case 90001 is clean, and
+  decide whether those tests should keep working that way at all.
+- **"Authorized user" currently means anyone who is signed in.** Every signed-in person can
+  see every document in the practice from the `/documents` screen. That matches how bills
+  and funds already work, but for legal case files it should be an explicit decision rather
+  than an inherited one.
+- **Two report buttons ignore the end date.** P&L and the accountant export always produce a
+  full calendar year, even when a narrower range is entered. The underlying engine already
+  supports stopping at a chosen month — that is how the quarterly tax snapshots are made —
+  but no button on the screen uses it yet.
 
 ## Run summary — autonomous session, 2026-09-19
 

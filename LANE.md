@@ -270,7 +270,7 @@ schema and VBA behaviour), `MAP.md` (lane map), `CLAUDE.md` (repo conventions).
     - Requesting a signed URL for a key that does not exist returns the defined error rather than a 500
     - `getStorageAdapter()` returns null with storage env absent, and no caller throws
   caution: true
-  status: not started
+  status: done — commits 1539c3f (build) + a6e420b (review fixes), merged 6ff82dc; 2 attempts, caution: true, team dt-engineer + dt-qa + dt-review. All four criteria verified by execution against a LOCAL Docker Supabase stack stood up for this lane (tests/docs-reports/local-stack-setup.sh); the client's hosted project is never written to. The private `case-documents` bucket is created by that test setup, never at runtime. dt-review caught two real defects, both fixed: an error taxonomy keyed on HTTP status, where `NoSuchBucket` and `NoSuchKey` both return 404 so "storage misconfigured" surfaced as "document does not exist"; and an unpaged `listKeys` silently capped at 100 objects. Signed-URL TTL is clamped to 900s. NOTE: item 8 later modified this file (+35/-8) — see item 8's status.
 
 - task: Build `/documents` in `app/documents/` plus a documents panel on the case
     page — upload a file against a case, list that case's documents, download one.
@@ -290,4 +290,4 @@ schema and VBA behaviour), `MAP.md` (lane map), `CLAUDE.md` (repo conventions).
     - Existing passing tests remain passing
   after: cases
   ui: true
-  status: not started
+  status: done — commits 28ddcc0 (build) + 518af27 / f681347 (QA tests) + b2e1b04 (QA fix); 2 attempts, QA VERDICT PASS on re-gate. All four criteria and all four guardrails verified live over real HTTP against `next dev` with a genuine Supabase SSR session cookie and two seeded cases (90001 / 90003): upload creates exactly one row with that caseid, download returns byte-identical bytes, and neither case can reach the other's document by id, key or list. Exactly 2 lines added to `app/cases/[id]/page.tsx`. `supabase/migrations/**` untouched. QA refuted attempt 1's claim that item 7's bucket-vs-key conflation was not repeated — Supabase's `object/sign` returns `code:"NoSuchKey"` for a missing BUCKET too, byte-identical to a missing key — so `lib/storage.ts` gained a `getBucket` probe that fails closed. CAVEAT: browser QA never ran (the Chrome extension is bound to a different claude.ai account); the live-HTTP behavioural pass was accepted in its place.
