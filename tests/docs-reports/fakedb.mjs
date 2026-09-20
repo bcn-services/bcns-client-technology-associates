@@ -16,6 +16,35 @@ const rx = (pattern) => {
   return new RegExp(`^${out}$`, "i");
 };
 
+
+/** Split a PostgREST or-string on top-level commas (values are double-quoted). */
+const splitOr = (expr) => {
+  const out = [];
+  let cur = "", q = false;
+  for (let i = 0; i < expr.length; i += 1) {
+    const c = expr[i];
+    if (q && c === "\\") { cur += c + (expr[++i] ?? ""); continue; }
+    if (c === '"') { q = !q; cur += c; continue; }
+    if (c === "," && !q) { out.push(cur); cur = ""; continue; }
+    cur += c;
+  }
+  out.push(cur);
+  return out.filter((s) => s.length > 0);
+};
+
+const orMatch = (row, part) => {
+  const m = /^([A-Za-z0-9_]+)\.([a-z]+)\.([\s\S]*)$/.exec(part.trim());
+  if (!m) throw new Error(`fake: cannot parse or() element ${part}`);
+  const [, col, op, rawIn] = m;
+  const quoted = rawIn.startsWith('"') && rawIn.endsWith('"');
+  const raw = quoted ? rawIn.slice(1, -1).replace(/\\"/g, '"') : rawIn;
+  const v = row[col] ?? null;
+  if (op === "is") return raw === "null" ? v === null : String(v) === raw;
+  if (op === "eq") return String(v) === raw;
+  if (op === "ilike") return v != null && rx(raw).test(String(v));
+  throw new Error(`fake: or() supports is, eq, ilike (got ${op})`);
+};
+
 export function fakeDb(tables) {
   const self = {
     tables,
@@ -46,7 +75,13 @@ export function fakeDb(tables) {
         delete: () => { st.op = "delete"; return b; },
         eq: (c, v) => { st.filters.push((r) => r[c] === v); return b; },
         is: (c, v) => { st.filters.push((r) => (r[c] ?? null) === v); return b; },
-        not: (c, op, v) => { if (op !== "is") throw new Error("fake: not() supports is"); st.filters.push((r) => (r[c] ?? null) !== v); return b; },
+        not: (c, op, v) => {
+          if (op === "is") { st.filters.push((r) => (r[c] ?? null) !== v); return b; }
+          if (op === "like") { const re = rx(v); st.filters.push((r) => r[c] == null || !re.test(String(r[c]))); return b; }
+          throw new Error("fake: not() supports is, like");
+        },
+        // PostgREST or-string, as lib/cases/search.ts#orElement writes it: `col.op."value"` joined by commas.
+        or: (expr) => { const ps = splitOr(expr); st.filters.push((r) => ps.some((p) => orMatch(r, p))); return b; },
         in: (c, vs) => { st.filters.push((r) => vs.includes(r[c])); return b; },
         gte: (c, v) => { st.filters.push((r) => r[c] != null && String(r[c]) >= String(v)); return b; },
         lte: (c, v) => { st.filters.push((r) => r[c] != null && String(r[c]) <= String(v)); return b; },
