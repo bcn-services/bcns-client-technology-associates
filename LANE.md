@@ -225,7 +225,9 @@ schema and VBA behaviour), `MAP.md` (lane map), `CLAUDE.md` (repo conventions).
     - Existing passing tests remain passing
   after: billing
   ui: true
-  status: not started
+  status: done, with two criteria UNMET — both are plan defects outside this lane's ownership, not code defects. Commits 7731ae6 (build) + b145416 (QA proof), 1 attempt, QA VERDICT PASS. Built `app/dashboard/page.tsx` over a new injectable `lib/reports/dashboard.ts`; `lib/bills/rules.ts` and `lib/cases/presets.ts` are imported, never modified (verified: neither file appears in the diff). Suite 1056 -> 1074 tests, 841 -> 859 pass, 0 fail, skip unchanged. Criteria 3 and 4 verified by execution.
+    UNMET 1 — criterion 1 cannot pass as written. Journey 06 asserts `expect(page.getByText(/due/i)).toBeVisible()`, but this item is required to render BOTH a `Due` and an `Overdue` tile, so the regex matches two elements and Playwright raises a strict-mode violation. Independently confirmed by rendering the page: `/due/i` matches exactly 2 leaf elements (`Due`, `Overdue`); `/overdue/i`, `/waiting/i` and `/unpaid/i` each match exactly 1. The one-word fix is `/^due$/i`, which narrows it to 1 — but it lives in `tests/journeys/06-dashboard-reports.spec.ts`, a `protected:` path. NEEDS a protected-path amendment, same shape as the billing lane's journeys amendment (PR #12).
+    UNMET 2 — criterion 2 is unsatisfiable for 2 of the 4 tiles. No existing page renders a due-only or overdue-only subset: `due` links to `/bills` (all open bills) and `overdue` to the work-status list (all work-status rows), so those two tiles are honest counts pointing at a superset page. `waiting` and `unpaid` do match their pages exactly. Fixing it would mean building filtered views in `app/bills/**` / `app/cases/**`, which belong to merged lanes, not this one. NEEDS a human decision: amend the criterion, or open a follow-up item against those lanes.
 
 > **⚠️ AUTONOMOUS RUN — STOP HERE**
 

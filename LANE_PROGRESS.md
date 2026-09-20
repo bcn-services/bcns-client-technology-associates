@@ -5,8 +5,8 @@ LANE.md wins for scope, this file wins for state.
 
 ## Current position
 
-- **Status:** items 1-5 of 6 done. The toolchain that blocked it is diagnosed and repaired, and the plan itself was amended on 2026-09-19 to fix four defects in its own criteria. Run paused at Nate's request after item 4. Autonomous run in progress on `auto/docs-reports`, forked from `lane/docs-reports`.
-- **Next:** item 6 — the `/dashboard` screen, the last item before the stop marker.
+- **Status:** all 6 items above the stop marker are done. Two plan criteria are unmet and need a human decision; both are plan defects outside this lane's ownership, not unfinished code. The toolchain that blocked it is diagnosed and repaired, and the plan itself was amended on 2026-09-19 to fix four defects in its own criteria. Run paused at Nate's request after item 4. Autonomous run in progress on `auto/docs-reports`, forked from `lane/docs-reports`.
+- **Next:** decide the two open questions below, then merge the lane. Items 7 and 8 (document storage) sit below the stop marker and were deliberately not started.
 - **Blockers:** none blocking. One caveat carries forward: no database anyone
   can reach holds the practice's real 2025 figures, so any criterion phrased as
   "matches the 2025 numbers" is checked as behaviour, not as a number. The plan
@@ -22,7 +22,7 @@ LANE.md wins for scope, this file wins for state.
 | P&L summary engine | done — Kris can run the profit-and-loss summary for a year: income, expenses and net for each month plus a total for the year, with owner withdrawals shown on their own line rather than mixed into expenses. Stopping at a chosen month gives a part-year snapshot with the later months genuinely absent, which is how the quarterly tax figures are produced. Checked against a stand-in database. (2026-09-19) |
 | `/reports` page | done — the reports screen exists with start and end date boxes, the six familiar report buttons plus an accountant export button, and one results panel each button refills. Signing in is enforced: asking for the page without signing in sends you to the login screen and shows no figures. The buttons were proved against a stand-in database rather than clicked through in a browser, because the only database the app is pointed at is the practice's live one, which this work is not allowed to write to. (2026-09-19) |
 | Excel export | done — every report downloads as an Excel file, and the accountant export produces one workbook holding the full January hand-over set: a sheet per month for income and for expenses, plus the two yearly rollups and the profit-and-loss summary, 27 sheets in all. Money cells are real numbers with a currency format, not text, so the accountant can total them. The download was proved by building the file in a test, not by clicking it in a browser. (2026-09-19) |
-| `/dashboard` | not started |
+| `/dashboard` | done, with two open questions for a human — the screen exists with four count tiles (due, overdue, waiting, unpaid) above the work-status table, sorted by priority, and it reuses the existing billing and case rules rather than recreating them. Two things in the plan cannot be satisfied from inside this lane: the end-to-end test for this screen looks for the word "due", which now matches both the Due and the Overdue tile and so fails on an ambiguity, fixable only in a file this lane may not edit; and two of the four tiles link to a page that lists more rows than the tile counts, because no page showing just those rows exists yet. (2026-09-19) |
 | Supabase Storage adapter | skipped — below stop marker |
 | `/documents` and case documents panel | skipped — below stop marker |
 
