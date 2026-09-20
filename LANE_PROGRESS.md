@@ -5,8 +5,8 @@ LANE.md wins for scope, this file wins for state.
 
 ## Current position
 
-- **Status:** items 1-4 of 6 done. The toolchain that blocked it is diagnosed and repaired, and the plan itself was amended on 2026-09-19 to fix four defects in its own criteria. Run paused at Nate's request after item 4. Autonomous run in progress on `auto/docs-reports`, forked from `lane/docs-reports`.
-- **Next:** item 5 — the Excel export.
+- **Status:** items 1-5 of 6 done. The toolchain that blocked it is diagnosed and repaired, and the plan itself was amended on 2026-09-19 to fix four defects in its own criteria. Run paused at Nate's request after item 4. Autonomous run in progress on `auto/docs-reports`, forked from `lane/docs-reports`.
+- **Next:** item 6 — the `/dashboard` screen, the last item before the stop marker.
 - **Blockers:** none blocking. One caveat carries forward: no database anyone
   can reach holds the practice's real 2025 figures, so any criterion phrased as
   "matches the 2025 numbers" is checked as behaviour, not as a number. The plan
@@ -21,7 +21,7 @@ LANE.md wins for scope, this file wins for state.
 | Month-matrix report engine | done — Kris can pull the year-by-month grids behind the Expense Matrix, Income Matrix and Branch Matrix reports, broken out by expense type, income source or branch, with row and column totals that agree with the detail lists. Months with no activity come back genuinely empty rather than as a zero. Checked against a stand-in database; the practice's own 2025 figures were not available to compare against. (2026-09-19) |
 | P&L summary engine | done — Kris can run the profit-and-loss summary for a year: income, expenses and net for each month plus a total for the year, with owner withdrawals shown on their own line rather than mixed into expenses. Stopping at a chosen month gives a part-year snapshot with the later months genuinely absent, which is how the quarterly tax figures are produced. Checked against a stand-in database. (2026-09-19) |
 | `/reports` page | done — the reports screen exists with start and end date boxes, the six familiar report buttons plus an accountant export button, and one results panel each button refills. Signing in is enforced: asking for the page without signing in sends you to the login screen and shows no figures. The buttons were proved against a stand-in database rather than clicked through in a browser, because the only database the app is pointed at is the practice's live one, which this work is not allowed to write to. (2026-09-19) |
-| Excel export | not started — the plan now allows this item to add the spreadsheet library and to make this lane's tests actually run, which they do not today |
+| Excel export | done — every report downloads as an Excel file, and the accountant export produces one workbook holding the full January hand-over set: a sheet per month for income and for expenses, plus the two yearly rollups and the profit-and-loss summary, 27 sheets in all. Money cells are real numbers with a currency format, not text, so the accountant can total them. The download was proved by building the file in a test, not by clicking it in a browser. (2026-09-19) |
 | `/dashboard` | not started |
 | Supabase Storage adapter | skipped — below stop marker |
 | `/documents` and case documents panel | skipped — below stop marker |
