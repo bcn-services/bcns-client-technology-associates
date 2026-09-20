@@ -2,7 +2,7 @@
 //  1. `.order()` is a NO-OP and rows come back in raw table order — fixtures are seeded scrambled, so any
 //     ordering assertion on a module's output proves the MODULE sorted, never that the fake did.
 //  2. `writes` counts every insert/update/delete statement, so a read-only claim is proved by a counter, not a grep.
-const ID = { tblexpenses: "expid", tblfundsrcvd: "fndsid", tblexptype: "exptypeid", tblcase: "caseid", tblattorney: "attyid", tblbillingnames: "personid" };
+const ID = { tblscanneddocument: "id", tblexpenses: "expid", tblfundsrcvd: "fndsid", tblexptype: "exptypeid", tblcase: "caseid", tblattorney: "attyid", tblbillingnames: "personid" };
 
 const rx = (pattern) => {
   let out = "";
@@ -91,6 +91,13 @@ export function fakeDb(tables) {
         order: () => b, // no-op on purpose; see header
         limit: (n) => { st.limit = n; return b; },
         range: (a, z) => { st.offset = a; st.limit = z - a + 1; return b; },
+        // Row accessors (additive): PostgREST semantics — maybeSingle tolerates 0, single does not.
+        maybeSingle: async () => { const r = await run(); return { data: r.data?.[0] ?? null, error: r.error }; },
+        single: async () => {
+          const r = await run();
+          if (r.error) return { data: null, error: r.error };
+          return (r.data ?? []).length === 1 ? { data: r.data[0], error: null } : { data: null, error: { message: `expected exactly 1 row, got ${(r.data ?? []).length}` } };
+        },
         then: (res, rej) => run().then(res, rej),
       };
       return b;
