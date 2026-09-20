@@ -13,6 +13,7 @@ import { TimePanel } from "./time-panel";
 import { BillsPanel } from "@/app/bills/bills-panel";
 import { CaseFundsPanel } from "@/app/funds/case-panel";
 import { CaseExpensesPanel } from "@/app/expenses/case-panel";
+import { CaseDocumentsPanel } from "@/app/documents/case-panel";
 import { loadServiceAuths } from "@/lib/cases/service-auths";
 import { firmToday } from "@/lib/cases/presets";
 
@@ -198,6 +199,7 @@ export default async function CaseRecordPage({ params, searchParams }: { params:
         <CaseFundsPanel caseId={id} />
         <CaseExpensesPanel caseId={id} />
         <TimePanel caseId={id} />
+        <CaseDocumentsPanel caseId={id} />
       </div>
     </main>
   );

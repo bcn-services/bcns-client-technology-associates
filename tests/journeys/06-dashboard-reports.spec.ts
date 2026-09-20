@@ -6,7 +6,7 @@ test.describe('Partner opens dashboard → sees due/overdue/waiting/unpaid by pr
     await login(page, 'admin');
 
     await page.goto('/dashboard');
-    await expect(page.getByText(/due/i)).toBeVisible();
+    await expect(page.getByText(/^due$/i)).toBeVisible();
     await expect(page.getByText(/overdue/i)).toBeVisible();
     await expect(page.getByText(/waiting/i)).toBeVisible();
     await expect(page.getByText(/unpaid/i)).toBeVisible();
