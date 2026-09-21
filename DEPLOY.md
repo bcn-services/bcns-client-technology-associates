@@ -92,3 +92,9 @@ monorepo under `infra/` — one copy per droplet, not per client repo.
   `tests/docs-reports/local-stack-setup.sh` (`grant usage on schema public`,
   `grant all on all tables/sequences/functions in schema public`, plus the
   matching `alter default privileges`) to `anon, authenticated, service_role`.
+- **Never run `supabase link` or push config (`supabase config push`) against
+  the hosted project.** `supabase/config.toml` is local-stack config only:
+  `site_url = "http://127.0.0.1:3000"` and `enable_signup = true`. Pushed to
+  the hosted project it points the practice's login emails at localhost and
+  opens public sign-up. Change hosted auth settings in the Supabase dashboard
+  only.
