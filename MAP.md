@@ -1,9 +1,11 @@
 # Technology Associates — Lane Map
 
 Round: full v1 → go-live. Solo (nate), lanes run one at a time in listed order.
-Rate card + rate math deferred with billing output (2026-09-08): v1 records hours and balances, prices nothing.
-Bill PDF rendering + email delivery are OUT this round (client bills from another
-service; add-on later). Legacy table/column names carry into Postgres unchanged.
+Amended 2026-09-21: bill output is IN. The legacy database generates every bill
+(Word template → PDF → Thunderbird email); the 2026-09-08 "client bills from another
+service" note was wrong. Real rate card stays deferred — guessed defaults, admins set the
+rate per person at finalize. One branch only (Stratford). Legacy table/column names carry
+into Postgres unchanged.
 
 protected:
   - supabase/migrations/**        # schema = LEGACY.md tables + profiles/bank_transactions/audit_log, frozen by /foundation
@@ -25,7 +27,6 @@ unowned:
   - lib/ai.ts, lib/webhooks.ts — AI off, no webhooks (CLIENT.md)
   - tests/*.test.mjs (ai-optin, qa-hosted-web, rls-forbidden-read) — template scaffold tests
   - remote sync + backup (Kalpna task 5) — obsolete under hosting
-  - bill PDF generation + email (quote §2 Billing) — deferred add-on, client uses another service
 
 journeys:
   - Legacy .bak loaded into Supabase → an existing case shows its full bill, funds, and expense history unchanged
@@ -34,6 +35,7 @@ journeys:
   - Check scanned → funds recorded against the bill → bill marked paid → case unpaid count drops, second/final notice dates stay empty
   - Bank of America card export uploaded → transaction reviewed, expense type assigned (retired types hidden, never deleted) → shows on the case ledger and clears against the bank account
   - Partner opens dashboard → sees due/overdue/waiting/unpaid by priority → runs P&L, YearlyExpense, and accountant export for a date range
+  - Admin finalizes a timesheet bill with one person's rate changed → previews the PDF and the email → sends → PDF stored on the case, the charged rates saved on the bill (added 2026-09-21)
 
 ---
 
@@ -78,3 +80,21 @@ journeys:
   owns: [ app/documents/**, app/reports/**, app/dashboard/**, lib/documents/**, lib/reports/**, lib/storage.ts, tests/docs-reports/** ]
   assignee: nate
   depends on: cases, time, billing, money (read-only over their tables — contract lib/db types)
+
+- lane: billing-output
+  area: added 2026-09-21. Bill PDFs for all 6 types from the legacy invoice layout, per-person rate set at finalize (admins only, stored per bill line), Preview-then-Send email via Resend with the legacy To/CC/subject/body, 2nd/Final notice resend with stamp, service authorization document + legacy approval-date rule
+  owns: [ app/bills/**, lib/bills/**, lib/bill-docs/**, app/cases/[id]/service-auths.tsx, app/cases/[id]/sa-submit.tsx, app/cases/service-auths/**, lib/cases/service-auths.ts, tests/billing-output/** ]   # app/bills + lib/bills taken over from billing (done); SA files from cases (done)
+  assignee: nate
+  depends on: billing (sequenced — merged), cases (sequenced — merged); protected-path amendments: supabase/migrations/0009 (bill lines), lib/env.ts (Resend keys + bill CC/BCC addresses), lib/db/types.ts regen
+
+- lane: case-docs
+  area: added 2026-09-21. The 4 prefilled case documents from frmCaseUpdate (Inspection Plan, Memo, CTA Report, File Review Summary) as downloads. Gated on Kris sending the .dotx templates; no LANE.md until then
+  owns: [ lib/case-docs/**, app/cases/[id]/documents/**, tests/case-docs/** ]
+  assignee: nate
+  depends on: cases (tblcase / tblattorney / tblfirm rows — contract lib/db types)
+
+- lane: parity
+  area: added 2026-09-21. Every legacy form/query/report PARITY.md marks MISSING or PARTIAL and not owned by billing-output or case-docs, plus the accuracy harness (legacy query logic on the restored SQL Server vs the app's engines, month by month, zero diffs). LANE.md written from PARITY.md; each item names the done-lane path it takes over
+  owns: [ scripts/parity/**, tests/parity/** ]   # + per-item takeovers of done-lane paths, listed in its LANE.md
+  assignee: nate
+  depends on: billing-output (sequenced — starts after billing-output merges; shares bill and SA files)

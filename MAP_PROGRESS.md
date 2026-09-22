@@ -14,6 +14,9 @@ across rounds — never reset. Per-item detail lives in `progress/<lane>.md`.
 | billing | nate | lane/billing | done — 9/9 items + suite/seed fixes, merged 2026-09-13 (`c663304`, PR #11; journeys amendment PR #12) |
 | money | nate | lane/money | done — 12/12 items (11 + check → bill link), merged 2026-09-15 (`075c477`, PR #13; `819ecef`, PR #14) |
 | docs-reports | nate | lane/docs-reports | done — 8/8 items, merged 2026-09-20 (`4fa1973`, PR #15) |
+| billing-output | nate | lane/billing-output | not started |
+| case-docs | nate | lane/case-docs | not started — waiting on Kris's templates |
+| parity | nate | lane/parity | not started — waiting on PARITY.md + billing-output merge |
 
 **Journeys:** 3 of 3 re-run green; 6 of 6 green if the three not re-run still hold.
 01, 02 and 06 re-run 2026-09-20 after docs-reports
@@ -54,3 +57,13 @@ reports 02–05 as failures that serialize away. Progress reading, not a merge g
   `ta_foundation`; `lib/db/types.ts` regenerated. Every cleanup now deletes funds before bills.
   Journeys 04/05 are rerun-safe (own fixtures, 05 clicks Import). `tests/foundation/schema.test.mjs`
   excludes the app-added FK from the legacy "26 NOT VALID" count.
+- 2026-09-21 — `MAP.md` round amendment. The legacy VBA (`modBillingAndServAuth`,
+  `frmCaseBill`, `frmBillUnpaid`, `frmCaseServAuth`, `frmCaseUpdate`) shows the database
+  generates, emails, and re-notices every bill and writes service authorization documents;
+  the 2026-09-08 "client bills from another service" note was wrong. Header rewritten, the
+  unowned bill-PDF line removed, journey 07 (finalize → preview → send) added — its test is
+  a protected-path addition written with billing-output's first item. Three lanes added:
+  billing-output (takes over `app/bills/**`, `lib/bills/**` from billing and the SA files
+  from cases, both done), case-docs (gated on templates), parity (sequenced after
+  billing-output, items from `PARITY.md`). Rate card still deferred: guessed defaults,
+  admin sets the per-person rate at finalize.
