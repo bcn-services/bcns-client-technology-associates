@@ -1,3 +1,6 @@
+// SAFETY: run this journey only with RESEND_API_URL pointed at a local stub. Never run it with real
+// Resend keys against the real API: it would email real staff from an unverified domain. The stub and
+// the assertion that the email reached it arrive in billing-output item 8.
 import { test, expect } from '@playwright/test';
 import { createServerClient } from '../../lib/db/client';
 import { STORAGE_BUCKET } from '../../lib/storage';
@@ -6,7 +9,7 @@ import { login, CASE_ID } from './helpers';
 // Journey 07 finalizes and sends its own timesheet bill on shared case 90001: one bill plus two
 // billed activity rows (fixture people 1 and 2). afterAll removes the bill's lines, its PDF, the
 // activity rows and the bill, so a rerun starts the same way. Email: with no RESEND_API_KEY the Send
-// button stays disabled — this journey expects a local stack with email configured (or Resend mocked).
+// button stays disabled — this journey expects a local stack with email configured against the stub above.
 const db = () => {
   try { process.loadEnvFile('.env.local'); } catch { /* no file: use the ambient env */ }
   return createServerClient();
@@ -59,6 +62,8 @@ test.describe("Admin finalizes a timesheet bill with one person's rate changed �
     await expect(page.getByLabel(/^to$/i)).toBeVisible();
     await expect(page.getByLabel(/subject/i)).toHaveValue(/^Re: /);
     await expect(page.getByRole('link', { name: /\.pdf|view pdf|open pdf/i })).toBeVisible();
+    await page.getByLabel(/^to$/i).fill('pat@example.test'); // fixture attorney 1 has no attyemail
+    await page.getByLabel(/^cc$/i).fill(''); // never the configured BILL_CC_EMAIL (a real staff address)
     await page.getByRole('button', { name: /^send$/i }).click();
     await expect(page.getByText(/sent .* to /i)).toBeVisible();
 

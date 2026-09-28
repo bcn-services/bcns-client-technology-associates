@@ -15,6 +15,12 @@ function readEnv(name: string): string | undefined {
   return trimmed.length > 0 ? trimmed : undefined;
 }
 
+/** Split a multi-line env value on real newlines or a literal "\\n"; no non-blank line → undefined, never []. */
+function readLines(name: string): string[] | undefined {
+  const lines = readEnv(name)?.split(/\r?\n|\\n/).map((l) => l.trim()).filter(Boolean);
+  return lines?.length ? lines : undefined;
+}
+
 /** Coerce a truthy env flag ("1", "true", "yes", case-insensitive) to boolean. */
 function readFlag(name: string): boolean {
   const v = readEnv(name)?.toLowerCase();
@@ -38,6 +44,8 @@ export interface AppConfig {
   aiEnabled: boolean;
   /** Resend API key for emailing bills. Unset → sending is disabled, preview still works. */
   resendApiKey?: string;
+  /** Resend API base URL. Unset/blank → https://api.resend.com; tests point it at a local stub so no real mail goes out. */
+  resendApiUrl: string;
   /** From address on bill emails. */
   billFromEmail?: string;
   /** Always-cc'd address on bill emails (legacy Access db: Kalpna). */
@@ -67,10 +75,11 @@ export function getConfig(): AppConfig {
     anthropicApiKey: readEnv("ANTHROPIC_API_KEY"),
     aiEnabled: readFlag("AI_ENABLED"),
     resendApiKey: readEnv("RESEND_API_KEY"),
+    resendApiUrl: readEnv("RESEND_API_URL") ?? "https://api.resend.com",
     billFromEmail: readEnv("BILL_FROM_EMAIL"),
     billCcEmail: readEnv("BILL_CC_EMAIL"),
     noticeBccEmail: readEnv("NOTICE_BCC_EMAIL"),
     billTaxId: readEnv("BILL_TAX_ID"),
-    billLetterhead: readEnv("BILL_LETTERHEAD")?.split(/\r?\n|\\n/).map((l) => l.trim()).filter(Boolean),
+    billLetterhead: readLines("BILL_LETTERHEAD"),
   };
 }

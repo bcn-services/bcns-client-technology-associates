@@ -79,9 +79,10 @@ test("0009 bill output: tblbilllines shape, new nullable tblbills columns, const
   // FKs are app-added and validated (new table, no legacy orphans); billid restricts delete.
   assert.equal(one("select confdeltype||':'||convalidated from pg_constraint where conname='tblbilllines_billid_fkey'"), "r:true");
   assert.equal(one("select confrelid::regclass::text from pg_constraint where conname='tblbilllines_personid_fkey'"), "tblbillingnames");
-  assert.equal(one("select count(*) from tblbilllines where billid=1"), "1");
-  assert.match(errorOf(insertSql("tblbilllines", { billid: 1, lineno: 1, kind: "charge", description: "dup", amount: 1 })) ?? "", /unique/);
-  assert.match(errorOf(insertSql("tblbilllines", { billid: 1, lineno: 9, kind: "discount", description: "bad kind", amount: 1 })) ?? "", /check constraint/);
+  assert.equal(one("select count(*) from tblbilllines where billid=2"), "1");
+  assert.equal(one("select count(*) from tblbilllines where billid=1"), "0", "legacy bill 1 has no lines");
+  assert.match(errorOf(insertSql("tblbilllines", { billid: 2, lineno: 1, kind: "charge", description: "dup", amount: 1 })) ?? "", /unique/);
+  assert.match(errorOf(insertSql("tblbilllines", { billid: 2, lineno: 9, kind: "discount", description: "bad kind", amount: 1 })) ?? "", /check constraint/);
   assert.match(errorOf(insertSql("tblbilllines", { billid: 999999, lineno: 1, kind: "charge", description: "orphan", amount: 1 })) ?? "", /foreign key/);
   // Every other FK into tblbills dropped inside a rolled-back txn, so only the new one can block the delete.
   assert.match(errorOf(`begin;
@@ -89,7 +90,7 @@ test("0009 bill output: tblbilllines shape, new nullable tblbills columns, const
       for r in select conrelid::regclass t, conname from pg_constraint where confrelid='tblbills'::regclass and conname<>'tblbilllines_billid_fkey' loop
         execute format('alter table %s drop constraint %I', r.t, r.conname);
       end loop; end $$;
-    delete from tblbills where billid=1;
+    delete from tblbills where billid=2;
     rollback;`) ?? "", /tblbilllines_billid_fkey/);
 });
 
