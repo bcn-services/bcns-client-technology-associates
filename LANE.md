@@ -164,7 +164,7 @@ named constant or template, not the design.
     - Journey 07 exists under `tests/journeys/` and fails on a missing Finalize control, not on a syntax or setup error
     - Existing passing tests remain passing
   caution: true
-  status: not started
+  status: done (2026-09-28)
 
 - task: Build the pricing engine in `lib/bills/lines.ts` + `lib/bills/rates.ts` — pure
     functions, no DB, no clock. Input: bill type, bill date, case start date, the
