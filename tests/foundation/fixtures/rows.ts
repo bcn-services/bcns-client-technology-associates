@@ -23,6 +23,7 @@ export const rows: Row[] = [
   ["tblinquiry", { id: 1, inqdate: "2026-01-05", inqtime: "09:30", inqattyid: 1, inqsubject: "Slip and fall", inqreceptionist: "RM", inqengineer: "KJS" }],
   ["tblcase", { caseid: CASE_ID, caseatty: 1, casetitle: "Sample v. Example", caseclient: 1, tabranch: "Hartford", status: "Active", casestartdate: "2026-01-10", casestatpriority: "High", casestatwaitingfor: "Retainer", caseinquiry: 1, numunpaidbills: 1, billingalert: false }],
   ["tblbills", { billid: 1, billcaseid: CASE_ID, billdate: "2026-02-01", billhours: 3.5, billbalance: 875.0, billnotice: "First", billestimate: false }],
+  ["tblbilllines", { billid: 1, lineno: 1, kind: "charge", linedate: "2026-01-15", description: "Site inspection", personid: 1, hours: 2.0, rate: 250.0, amount: 500.0 }],
   ["tblactivity", { actid: 1, actcaseid: CASE_ID, actdate: "2026-01-15", actdescription: "Site inspection", acthrs: 2.0, actwho: 1, actbilled: false }],
   ["tblactivity", { actid: 2, actcaseid: CASE_ID, actdate: "2026-01-16", actdescription: "Photo review", acthrs: 1.5, actwho: 2, actbilled: true }],
   ["tblexpenses", { expid: 1, expcaseid: CASE_ID, expbillid: 1, expdate: "2026-01-20", expdscr: "Photo prints", expchecknum: 1001, exptype: 1, expamount: 42.5, expinit: 1, expclearedbank: false, exp_notcountedinprofit: 0 }],

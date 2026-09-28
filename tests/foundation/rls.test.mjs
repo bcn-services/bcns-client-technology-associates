@@ -15,9 +15,9 @@ before(() => {
   sql(insertSql("profiles", { id: ADMIN_ID, email: "admin@example.test", role: "admin" }));
 });
 
-test("authenticated_all sits on all 21 non-profiles/audit_log tables; RLS is on everywhere", () => {
+test("authenticated_all sits on all 22 non-profiles/audit_log tables; RLS is on everywhere", () => {
   const withPolicy = sql("select tablename from pg_policies where schemaname='public' and policyname='authenticated_all' order by 1").map((r) => r[0]);
-  assert.equal(withPolicy.length, 21);
+  assert.equal(withPolicy.length, 22); // 21 + tblbilllines (0009)
   assert.ok(!withPolicy.includes("profiles"));
   assert.ok(!withPolicy.includes("audit_log"));
 

@@ -36,6 +36,21 @@ export interface AppConfig {
   anthropicApiKey?: string;
   /** Master switch for the opt-in AI module. Default OFF. */
   aiEnabled: boolean;
+  /** Resend API key for emailing bills. Unset → sending is disabled, preview still works. */
+  resendApiKey?: string;
+  /** From address on bill emails. */
+  billFromEmail?: string;
+  /** Always-cc'd address on bill emails (legacy Access db: Kalpna). */
+  billCcEmail?: string;
+  /** Always-bcc'd address on bill/notice emails (legacy Access db: Kris). */
+  noticeBccEmail?: string;
+  /** Firm tax id printed on the invoice. */
+  billTaxId?: string;
+  /**
+   * Invoice letterhead lines (firm name, address, phone, web). One env value; lines split on
+   * real newlines or a literal "\n" so it fits a single-line .env entry.
+   */
+  billLetterhead?: string[];
 }
 
 /**
@@ -51,5 +66,11 @@ export function getConfig(): AppConfig {
     supabaseServiceRoleKey: readEnv("SUPABASE_SERVICE_ROLE_KEY"),
     anthropicApiKey: readEnv("ANTHROPIC_API_KEY"),
     aiEnabled: readFlag("AI_ENABLED"),
+    resendApiKey: readEnv("RESEND_API_KEY"),
+    billFromEmail: readEnv("BILL_FROM_EMAIL"),
+    billCcEmail: readEnv("BILL_CC_EMAIL"),
+    noticeBccEmail: readEnv("NOTICE_BCC_EMAIL"),
+    billTaxId: readEnv("BILL_TAX_ID"),
+    billLetterhead: readEnv("BILL_LETTERHEAD")?.split(/\r?\n|\\n/).map((l) => l.trim()).filter(Boolean),
   };
 }
