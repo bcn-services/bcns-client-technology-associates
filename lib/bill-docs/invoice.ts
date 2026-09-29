@@ -16,6 +16,7 @@ import { labelLines, type LabelAttorney, type LabelFirm } from "@/lib/cases/sear
 import { brokenFinalize, storedLines } from "@/lib/bills/finalize";
 import { summarize, type BillLine } from "@/lib/bills/lines";
 import { billFileName } from "@/lib/bills/rules";
+import { firstFreeName } from "@/lib/bills/create";
 
 export type InvoiceConfig = { letterhead?: string[]; taxId?: string };
 export type InvoiceBill = {
@@ -107,11 +108,14 @@ const NOTE = [
 const FOOTER = [
   "PLEASE NOTIFY US PROMPTLY IF THIS INVOICE DOES NOT AGREE WITH YOUR RECORDS",
   "PLEASE RETURN A COPY OF THIS INVOICE WITH YOUR CHECK",
-  "THANK YOU",
 ];
 const INK = rgb(0.2, 0.2, 0.22);
-// Letter page, points. Columns: date, reference, hours, charges (right edge), credits (right edge), balance.
-const W = 612, H = 792, L = 54, R = 558, REF = 112, HRS = 330, TOTAL_R = 390, CHG_R = 445, CRD_R = 505, BAL = 512, BOTTOM = 96;
+// Letter page, points, measured off the legacy Word template. Text margin L; the table runs TL..TR with column rules
+// between DATE | REFERENCE | CHARGES | CREDITS | BALANCE, from under its header down to TABLE_BOTTOM on every page.
+const W = 612, H = 792, L = 58, R = 558, RX = 342, RCOL = 414;
+const TL = 27, TR = 585, COLS = [TL, 94, 355, 437, 509, TR] as const;
+const DATE_X = TL + 5, REF = COLS[1] + 5, HRS_R = COLS[2] - 9, CHG_R = COLS[3] - 5, CRD_R = COLS[4] - 5, BAL = COLS[4] + 4;
+const TABLE_BOTTOM = 110, BOTTOM = 118;
 
 /** Standard fonts are WinAnsi-only: keep what the font encodes, strip accents from the rest, else "?". Control chars → space. */
 function cleaner(font: PDFFont): (s: string) => string {
@@ -122,13 +126,22 @@ function cleaner(font: PDFFont): (s: string) => string {
     .join("");
 }
 
-/** Greedy word wrap to `width` (pass CLEANED text — the width lookup throws on non-WinAnsi); a single over-long word is left whole. */
+/** Greedy word wrap to `width` (pass CLEANED text — the width lookup throws on non-WinAnsi); a word wider than `width` is split. */
 function wrap(font: PDFFont, size: number, s: string, width: number): string[] {
+  const fits = (t: string) => font.widthOfTextAtSize(t, size) <= width;
   const out: string[] = [];
   let cur = "";
-  for (const w of s.split(/\s+/).filter(Boolean)) {
+  for (let w of s.split(/\s+/).filter(Boolean)) {
     const next = cur ? `${cur} ${w}` : w;
-    if (cur && font.widthOfTextAtSize(next, size) > width) { out.push(cur); cur = w; } else cur = next;
+    if (fits(next)) { cur = next; continue; }
+    if (cur) out.push(cur);
+    while (!fits(w) && w.length > 1) {
+      let i = w.length - 1;
+      while (i > 1 && !fits(w.slice(0, i))) i--;
+      out.push(w.slice(0, i));
+      w = w.slice(i);
+    }
+    cur = w;
   }
   return out.length || cur ? [...out, cur] : [""];
 }
@@ -143,65 +156,92 @@ export async function renderInvoice(data: InvoiceData, cfg: InvoiceConfig): Prom
   let page: PDFPage = doc.addPage([W, H]);
   const text = (s: string, x: number, y: number, size = 11, font = reg) => { if (s) page.drawText(clean(s), { x, y, size, font, color: INK }); };
   const right = (s: string, xr: number, y: number, size = 11, font = reg) => text(s, xr - font.widthOfTextAtSize(clean(s), size), y, size, font);
-  const center = (s: string, y: number, size: number, font: PDFFont) => text(s, (W - font.widthOfTextAtSize(clean(s), size)) / 2, y, size, font);
-  const footer = () => FOOTER.forEach((s, i) => center(s, 64 - i * 12, 9, bold));
+  const centerAt = (s: string, cx: number, y: number, size: number, font: PDFFont) => text(s, cx - font.widthOfTextAtSize(clean(s), size) / 2, y, size, font);
+  const line = (x1: number, y1: number, x2: number, y2: number) => page.drawLine({ start: { x: x1, y: y1 }, end: { x: x2, y: y2 }, thickness: 0.75, color: INK });
 
-  let y = H - 54;
-  (cfg.letterhead ?? []).forEach((s, i) => { center(s, y, i === 0 ? 14 : 10, i === 0 ? bold : reg); y -= i === 0 ? 16 : 12; });
-  y -= 18;
+  // Letterhead as the legacy template: firm name at left, the rest (address, phone, web) in a column at right.
+  let y = H - 58;
+  const [firm, ...rest] = cfg.letterhead ?? [];
+  if (firm) text(firm, L, y, 14, bold);
+  rest.forEach((s, i) => text(s, RCOL, y - i * 13, 11));
+  y -= Math.max(firm ? 16 : 0, rest.length * 13) + 22;
   text("INVOICE", L, y, 18, bold);
-  if (cfg.taxId) right(`TAX ID: ${cfg.taxId}`, R, y, 11, bold);
-  y -= 40;
-  let left = y, rt = y;
-  data.address.forEach((s, i) => { text(s, L, left, 11, i === 0 ? bold : reg); left -= 13; });
-  const RX = 340;
-  const block: [string, PDFFont, number][] = [
-    [`DATE: ${longDate(data.bill.billdate)}`, reg, 0], ["", reg, 0], [`RE: ${data.casetitle}`, bold, 0],
-    ...(data.casecaption?.trim() ? [[data.casecaption, reg, 14] as [string, PDFFont, number]] : []),
-    [`Our File No.: ${data.bill.billcaseid}`, reg, 14],
-  ];
-  for (const [s, f, indent] of block) for (const part of wrap(f, 11, clean(s), R - RX - indent)) { text(part, RX + indent, rt, 11, f); rt -= 13; }
-  y = Math.min(left, rt) - 28;
+  if (cfg.taxId) text(`TAX ID: ${cfg.taxId}`, RCOL, y, 11);
+  y -= 48;
 
+  // Attorney block (wrapped inside the window-envelope corner marks) beside DATE / RE / caption / Our File No.
+  const top = y, BOX_R = 286;
+  let left = y, rt = y;
+  for (const s of data.address) for (const part of wrap(reg, 11, clean(s), BOX_R - 6 - L)) { text(part, L, left, 11); left -= 15; }
+  const hasCaption = !!data.casecaption?.trim(), IND = 20;
+  const block: [string, number][] = [
+    [`DATE: ${longDate(data.bill.billdate)}`, 0], ["", 0], [`RE: ${data.casetitle}`, 0],
+    ...(hasCaption ? [[data.casecaption!, IND] as [string, number]] : []),
+    [`Our File No.: ${data.bill.billcaseid}`, hasCaption ? IND : 0],
+  ];
+  for (const [s, indent] of block) {
+    wrap(reg, 11, clean(s), R - RX - IND).forEach((part, i) => { text(part, RX + (i ? IND : indent), rt, 11); rt -= 15; });
+  }
+  // Corner marks: four L-shaped ticks framing the address, as the envelope window on the Word template.
+  const bx1 = L - 12, bx2 = BOX_R + 4, by1 = top + 18, by2 = Math.min(top - 78, left + 2), ax = 12, ay = 9;
+  line(bx1, by1, bx1 + ax, by1); line(bx1, by1, bx1, by1 - ay);
+  line(bx2, by1, bx2 - ax, by1); line(bx2, by1, bx2, by1 - ay);
+  line(bx1, by2, bx1 + ax, by2); line(bx1, by2, bx1, by2 + ay);
+  line(bx2, by2, bx2 - ax, by2); line(bx2, by2, bx2, by2 + ay);
+  y = Math.min(by2, rt) - 30;
+
+  let rulesTop = y;
   const header = () => {
-    text("DATE", L, y, 9, bold); text("REFERENCE", REF, y, 9, bold);
-    right("CHARGES", CHG_R, y, 9, bold); right("CREDITS", CRD_R, y, 9, bold); text("BALANCE", BAL, y, 9, bold);
-    page.drawLine({ start: { x: L, y: y - 4 }, end: { x: R, y: y - 4 }, thickness: 0.5, color: INK });
-    y -= 20;
+    line(TL, y, TR, y);
+    ["DATE", "REFERENCE", "CHARGES", "CREDITS", "BALANCE"].forEach((s, i) => centerAt(s, (COLS[i]! + COLS[i + 1]!) / 2, y - 10, 7, bold));
+    line(TL, y - 14, TR, y - 14);
+    rulesTop = y - 14;
+    y -= 28;
+  };
+  const finishPage = () => {
+    for (const x of COLS.slice(1, -1)) line(x, rulesTop, x, TABLE_BOTTOM);
+    line(TL, TABLE_BOTTOM, TR, TABLE_BOTTOM);
+    FOOTER.forEach((s, i) => centerAt(s, W / 2, 96 - i * 10, 8, reg));
+    centerAt("THANK YOU", W / 2, 70, 11, reg);
   };
   const room = (h: number) => {
     if (y - h >= BOTTOM) return;
-    footer();
+    finishPage();
     page = doc.addPage([W, H]);
     y = H - 72;
     header();
   };
   header();
-  const SIZE = 10, LEAD = 12.5;
+  const SIZE = 11, LEAD = 13.5;
   const sum = summarize(data.lines);
-  for (const r of invoiceRows(data.lines, sum.estimated)) {
-    if (r.gap) { y -= LEAD / 2; continue; }
-    const refLines = r.ref ? wrap(reg, SIZE, clean(r.ref), (r.hrs ? HRS : CHG_R - 50) - REF - 8) : [""];
-    room(refLines.length * LEAD);
-    text(r.date ?? "", L, y, SIZE);
-    if (r.hrs) text(r.hrs, HRS, y, SIZE);
-    if (r.total) right(r.total, TOTAL_R, y, SIZE);
+  const rows = invoiceRows(data.lines, sum.estimated);
+  const lastRow = rows.length - 1; // invoiceRows drops trailing gaps
+  let balanceY = y;
+  rows.forEach((r, idx) => {
+    if (r.gap) { y -= LEAD; return; }
+    const hrsW = r.hrs ? reg.widthOfTextAtSize(clean(r.hrs), SIZE) + 8 : 0;
+    const refLines = r.ref ? wrap(reg, SIZE, clean(r.ref), HRS_R - hrsW - REF - (r.hrs ? 0 : -4)) : [""];
+    // The balance prints in the BALANCE column beside the last row (two lines), so that row needs room for both.
+    room(Math.max(refLines.length, idx === lastRow ? 2 : 1) * LEAD);
+    if (idx === lastRow) balanceY = y;
+    text(r.date ?? "", DATE_X, y, SIZE);
+    if (r.hrs) right(r.hrs, HRS_R, y, SIZE);
+    if (r.total) right(r.total, HRS_R, y, SIZE);
     if (r.charges) right(r.charges, CHG_R, y, SIZE);
     if (r.credits) right(r.credits, CRD_R, y, SIZE);
     for (const part of refLines) { text(part, REF, y, SIZE); y -= LEAD; }
-  }
-  room(4 * LEAD);
-  y -= LEAD;
-  right("Balance due:", R, y, 11, bold);
-  y -= 14;
-  right(`${balanceText(toCents(data.bill.billbalance))}${sum.estimated ? "(est.)" : ""}`, R, y, 11, bold);
-  y -= 30;
+  });
+  if (lastRow < 0) room(2 * LEAD);
+  text("Balance due:", BAL, balanceY, SIZE, bold);
+  text(`${balanceText(toCents(data.bill.billbalance))}${sum.estimated ? "(est.)" : ""}`, BAL, balanceY - LEAD, SIZE, bold);
   if (sum.estimated) {
-    room(NOTE.length * LEAD);
-    text("Note:", L, y, SIZE, bold);
-    for (const s of NOTE) { text(s, REF, y, SIZE); y -= LEAD; }
+    // Legacy prints the note low in the table; keep it there unless the rows already reach past that spot.
+    room((NOTE.length + 1) * LEAD);
+    y = Math.min(y - LEAD, BOTTOM + 6 + (NOTE.length - 1) * LEAD);
+    text("Note:", DATE_X + 8, y, SIZE);
+    for (const s of NOTE) { text(s, REF + 3, y, SIZE); y -= LEAD; }
   }
-  footer();
+  finishPage();
   return doc.save();
 }
 
@@ -209,25 +249,38 @@ export async function renderInvoice(data: InvoiceData, cfg: InvoiceConfig): Prom
 export const invoiceKey = (caseid: number, filename: string): string =>
   `bills/${caseid}/${filename.normalize("NFKD").replace(/[^\w .()&$@=;:+,-]/g, "")}.pdf`;
 
-/** Legacy suffix rule for a bill with no stored name: the lowest `-N` (from 0) no other bill on the case already uses. */
-async function freeFileName(db: Db, data: InvoiceData): Promise<string> {
+/**
+ * This bill's file name, never one another bill already owns. The stored name is kept unless another bill on the case
+ * has the same billfilename or already stores its PDF at the same key (billpdfpath — this also catches two names that
+ * differ only in characters invoiceKey drops); then — and for a bill with no stored name — the legacy rule takes the
+ * first free `-N` (MakeBillWordDoc's Dir() loop). Only OTHER bills count, so re-creating a bill's own PDF keeps its
+ * key and overwrites only itself.
+ */
+async function ownFileName(db: Db, data: InvoiceData): Promise<string> {
   const { bill } = data;
-  const r = await db.from("tblbills").select("billfilename").eq("billcaseid", bill.billcaseid);
+  const r = await db.from("tblbills").select("billid, billfilename, billpdfpath").eq("billcaseid", bill.billcaseid);
   if (r.error) throw new Error(`tblbills read: ${r.error.message}`);
-  const used = new Set((r.data ?? []).map((x: { billfilename: string | null }) => x.billfilename));
-  let n = 0;
-  while (used.has(billFileName(bill.billcaseid, data.attyLastName, bill.billdate, n))) n++;
-  return billFileName(bill.billcaseid, data.attyLastName, bill.billdate, n);
+  const others = ((r.data ?? []) as { billid: number; billfilename: string | null; billpdfpath: string | null }[])
+    .filter((o) => o.billid !== bill.billid);
+  const taken = (name: string) => {
+    const key = invoiceKey(bill.billcaseid, name);
+    return others.some((o) => o.billfilename === name || o.billpdfpath === key);
+  };
+  if (bill.billfilename !== null && !taken(bill.billfilename)) return bill.billfilename;
+  const base = bill.billfilename?.replace(/-\d+$/, "") ?? billFileName(bill.billcaseid, data.attyLastName, bill.billdate, 0).slice(0, -2);
+  return firstFreeName(base, taken);
 }
 
 /**
- * Render and store one bill's invoice, then set `billpdfpath` (and `billfilename` when it was null), guarded on the
- * finalize stamp that was read. Regenerating overwrites the same key. Returns the key.
+ * Render and store one bill's invoice under a key no other bill uses (ownFileName), then set `billpdfpath` and
+ * `billfilename`, guarded on the finalize stamp that was read. Regenerating overwrites only this bill's own key.
+ * ponytail: read-then-write, not atomic — two same-case PDFs saved in the same instant can still pick one name; add a
+ * unique index on billpdfpath if concurrent Create PDF ever matters. Returns the key.
  */
 export async function saveInvoicePdf(db: Db, storage: StorageAdapter | null, billid: number, cfg: InvoiceConfig): Promise<string> {
   if (!storage) throw new InvoiceError("storage");
   const data = await loadInvoice(db, billid);
-  const filename = data.bill.billfilename ?? await freeFileName(db, data);
+  const filename = await ownFileName(db, data);
   const key = invoiceKey(data.bill.billcaseid, filename);
   await storage.putFile(key, await renderInvoice(data, cfg), "application/pdf");
   const upd = await db.from("tblbills").update({ billpdfpath: key, billfilename: filename })

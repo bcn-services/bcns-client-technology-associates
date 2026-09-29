@@ -58,7 +58,7 @@ function pdfText(buf) {
 /** Page count from the page tree, which pdf-lib may put inside a compressed object stream. */
 function pageCount(buf) {
   const s = buf.toString("latin1"), texts = [s];
-  for (const m of s.matchAll(/stream\r?\n/g)) { const a = m.index + m[0].length; try { texts.push(inflateSync(Buffer.from(s.slice(a, s.indexOf("endstream", a)), "latin1")).toString("latin1")); } catch {} }
+  for (const m of s.matchAll(/stream\r?\n/g)) { const a = m.index + m[0].length; try { texts.push(inflateSync(Buffer.from(s.slice(a, s.indexOf("endstream", a)), "latin1")).toString("latin1")); } catch { /* not a flate stream */ } }
   for (const x of texts) { const m = x.match(/\/Type \/Pages[^>]*?\/Count (\d+)/) ?? x.match(/\/Count (\d+)[^>]*?\/Type \/Pages/); if (m) return Number(m[1]); }
   throw new Error("no page tree");
 }

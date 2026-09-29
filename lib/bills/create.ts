@@ -61,13 +61,31 @@ export async function loadNewBill(db: Db, caseId: number, now: Date): Promise<Ne
   };
 }
 
-/** `billfilename` for a new bill on `caseId` dated `billdate`: n = bills already on that case and date. */
+/**
+ * Legacy `-N` rule (modBillingAndServAuth `MakeBillWordDoc`): `<base>-N` for the first N (from `start`) whose name
+ * `taken` rejects. Shared by bill creation (fileNameFor) and the invoice PDF save (lib/bill-docs/invoice.ts).
+ */
+export function firstFreeName(base: string, taken: (name: string) => boolean, start = 0): string {
+  let n = start;
+  while (taken(`${base}-${n}`)) n++;
+  return `${base}-${n}`;
+}
+
+/**
+ * `billfilename` for a new bill on `caseId` dated `billdate`: the first `-N` no bill on the case already uses, counting
+ * from the number of bills already on that date (a same-day bill with no stored name still holds its slot, as
+ * tests/billing pins). A re-dated bill keeps its old name, so its `-N` is skipped rather than reused.
+ */
 export async function fileNameFor(db: Db, caseId: number, attyLastName: string | null | undefined, billdate: string): Promise<string | null> {
-  const same = await db.from("tblbills").select("billid").eq("billcaseid", caseId).eq("billdate", billdate);
-  if (same.error) throw new Error(`tblbills read: ${same.error.message}`);
   const last = attyLastName?.trim();
   // No attorney row → no file name (admin can set one on the bill page) rather than "Bill123  2026 ..." with a blank name.
-  return last ? billFileName(caseId, last, billdate, (same.data ?? []).length) : null;
+  if (!last) return null;
+  const r = await db.from("tblbills").select("billdate, billfilename").eq("billcaseid", caseId);
+  if (r.error) throw new Error(`tblbills read: ${r.error.message}`);
+  const rows = (r.data ?? []) as { billdate: string; billfilename: string | null }[];
+  const used = new Set(rows.map((x) => x.billfilename));
+  const sameDay = rows.filter((x) => x.billdate?.slice(0, 10) === billdate.slice(0, 10)).length;
+  return firstFreeName(billFileName(caseId, last, billdate, 0).slice(0, -2), (name) => used.has(name), sameDay);
 }
 
 /**

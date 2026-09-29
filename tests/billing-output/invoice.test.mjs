@@ -230,6 +230,42 @@ test("legacy file-name suffix: two bills for the same case, attorney and date ge
   assert.equal(await inv.saveInvoicePdf(db, storage, B, {}), `bills/${CASE}/Kept name.pdf`);
 });
 
+test("D1: a bill whose stored name/key another bill already owns moves to the first free -N; each bill re-creates only its own key", async () => {
+  const lines = (id) => [{ billid: id, lineno: 1, kind: "charge", linedate: "2026-08-01", description: "Flat fee", personid: null, hours: null, rate: null, amount: "500.00" }];
+  const fin = { billfinalizedat: "2026-09-28T16:00:00Z", billbalance: "500.00" };
+  const name0 = "Bill992310 Testwood 2026 09 07-0";
+  const db = world({ bills: [bill({ ...fin }), bill({ ...fin, billid: B + 1 }), bill({ ...fin, billid: B + 2, billfilename: "Bill992310 Testwood 2026 09 07-2" })], lines: [...lines(B), ...lines(B + 1), ...lines(B + 2)] });
+  const storage = fakeStorage();
+  const k0 = await inv.saveInvoicePdf(db, storage, B, {});
+  const first = Buffer.from(storage.files.get(k0).body);
+  getB(db, B + 1).billfilename = name0; // admin typed bill 1's name into Edit bill → File name
+  const k1 = await inv.saveInvoicePdf(db, storage, B + 1, {});
+  assert.notEqual(k1, k0, "bill 2 overwrote bill 1's PDF");
+  assert.equal(getB(db, B + 1).billfilename, "Bill992310 Testwood 2026 09 07-1", "first free -N, skipping names other bills use");
+  assert.equal(getB(db, B + 1).billpdfpath, k1);
+  assert.deepEqual(storage.files.get(k0).body, first, "bill 1's stored object untouched");
+  assert.equal(await inv.saveInvoicePdf(db, storage, B, {}), k0, "bill 1 re-creates its own key");
+  assert.equal(await inv.saveInvoicePdf(db, storage, B + 1, {}), k1, "bill 2 re-creates its own key");
+  // A name owned by a bill with no PDF yet (bill 3, "-2") is still taken.
+  getB(db, B + 1).billfilename = "Bill992310 Testwood 2026 09 07-2";
+  assert.equal(await inv.saveInvoicePdf(db, storage, B + 1, {}), k1);
+  assert.equal(getB(db, B + 1).billfilename, "Bill992310 Testwood 2026 09 07-1");
+  // Different names, same storage key (invoiceKey drops "'"): still a collision.
+  getB(db, B + 2).billfilename = "Bill992310 O'Neil 2026 09 07-0";
+  getB(db).billfilename = "Bill992310 ONeil 2026 09 07-0";
+  const kA = await inv.saveInvoicePdf(db, storage, B, {}), kB = await inv.saveInvoicePdf(db, storage, B + 2, {});
+  assert.notEqual(kA, kB);
+});
+
+test("D1 re-date: a bill re-dated after creation does not free its -N for a new bill on the old date", async () => {
+  const { fileNameFor } = await import("../../lib/bills/create.ts");
+  const db = world({ bills: [bill({ billfilename: await fileNameFor(world({ bills: [] }), CASE, "Testwood", "2026-09-07") })] });
+  assert.equal(getB(db).billfilename, "Bill992310 Testwood 2026 09 07-0");
+  getB(db).billdate = "2026-09-08";
+  assert.equal(await fileNameFor(db, CASE, "Testwood", "2026-09-07"), "Bill992310 Testwood 2026 09 07-1");
+  assert.equal(await fileNameFor(db, CASE, "Testwood", "2026-09-09"), "Bill992310 Testwood 2026 09 09-0");
+});
+
 test("billFileName strips like the VBA across the whole name: '-' and '_' → space, '/' removed (\"'\" kept — tests/billing guard h)", () => {
   assert.equal(billFileName(7, "O'Neil-Smith_Jr/II", "2026-09-01", 0), "Bill7 O'Neil Smith JrII 2026 09 01-0");
   assert.equal(inv.invoiceKey(7, "Bill7 O'Neil Smith JrII 2026 09 01-0"), "bills/7/Bill7 ONeil Smith JrII 2026 09 01-0.pdf");
