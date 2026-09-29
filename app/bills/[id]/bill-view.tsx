@@ -4,6 +4,7 @@ import { BILL_TYPES, isOpen, nextNotice } from "@/lib/bills/rules";
 import { closeTargets } from "@/lib/bills/notice";
 import { fmtMoney, type BillPageData } from "@/lib/bills/edit";
 import { fmtHours, thousandths } from "@/lib/time/week";
+import { finalizedOn } from "@/lib/bills/finalize-model";
 import { RecipientAlert } from "../recipient-alert";
 
 const DASH = "—";
@@ -42,12 +43,24 @@ export function BillView({ data, admin, action, advance, close, revise, error, s
   const next = isOpen(b.billnotice) ? nextNotice(b.billnotice) : null;
   const targets = closeTargets(b.billnotice);
   const canRevise = admin && !!revise && isOpen(b.billnotice) && revisedBy.length === 0;
+  const finalized = !!b.billfinalizedat;
+  // Legacy bills (no type) get nothing new; a revised (superseded) bill is finalized through its revision.
+  const canFinalize = admin && b.billtype != null && !finalized && revisedBy.length === 0;
   const formKey = JSON.stringify([b.billdate, b.billtype, b.billbalance, b.billestimate, b.billcomments, b.billfilename]);
   return (
     <div className="space-y-4">
       {error && <p role="alert" className="text-sm text-red-700">{error}</p>}
       {saved && !error && <p role="status" className="text-sm text-green-700">Bill updated</p>}
       <RecipientAlert alert={data.billingalert} cc={data.billingcc} />
+      {finalized && (
+        <p data-testid="bill-finalized" className="rounded border border-slate-200 bg-slate-50 p-2 text-sm">
+          Finalized {finalizedOn(b.billfinalizedat!)} — the lines are locked; changes go through Revise.{" "}
+          <Link href={`/bills/${b.billid}/finalize`} className="underline">View saved lines</Link>
+        </p>
+      )}
+      {canFinalize && (
+        <p><Link href={`/bills/${b.billid}/finalize`} data-testid="bill-finalize" className="inline-block rounded bg-slate-800 px-3 py-1 text-sm text-white">Finalize bill</Link></p>
+      )}
       <dl data-testid="bill-fields" className="grid grid-cols-[max-content_1fr] gap-x-4 gap-y-1 text-sm">
         {fields.map(([k, v]) => (
           <div key={k} className="contents">
@@ -110,7 +123,7 @@ export function BillView({ data, admin, action, advance, close, revise, error, s
           )}
         </section>
       )}
-      {admin && action && (
+      {admin && action && !finalized && (
         <form key={formKey} action={action} data-testid="bill-edit" className="max-w-xl space-y-3 rounded border border-slate-200 p-3">
           <h2 className="font-semibold">Edit bill</h2>
           <div className="grid gap-3 sm:grid-cols-2">

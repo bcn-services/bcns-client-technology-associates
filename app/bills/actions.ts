@@ -9,6 +9,7 @@ import { runEditBill } from "@/lib/bills/edit";
 import { runCreateBill } from "@/lib/bills/create";
 import { runNoticeAction } from "@/lib/bills/notice";
 import { runRevise } from "@/lib/bills/revise";
+import { runFinalize } from "@/lib/bills/finalize";
 
 /** Admin create of one bill on a case, claiming the checked unbilled time rows (see createBill in lib/bills/create.ts). */
 export async function createBill(formData: FormData): Promise<void> {
@@ -51,4 +52,9 @@ export async function editBill(billid: number, formData: FormData): Promise<void
     revalidatePath,
     redirect,
   });
+}
+
+/** Admin: save the priced lines with hours/balance and stamp billfinalizedat, guarded (see lib/bills/finalize.ts). */
+export async function finalizeBillAction(billid: number, formData: FormData): Promise<void> {
+  await runFinalize(billid, formData, noticeDeps());
 }

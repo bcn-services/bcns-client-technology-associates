@@ -46,8 +46,8 @@ export function NewBillForm({ data, action, error }: {
         <label className="grid gap-1 text-sm">Bill date
           <input name="billdate" type="date" required defaultValue={today} className={input} />
         </label>
-        <label className="grid gap-1 text-sm">Balance
-          <input name="billbalance" inputMode="decimal" required pattern="-?[0-9,]{1,13}(\.[0-9]{1,2})?" placeholder="0.00" className={input} />
+        <label className="grid gap-1 text-sm">Balance (optional — Finalize sets it)
+          <input name="billbalance" inputMode="decimal" pattern="-?[0-9,]{1,13}(\.[0-9]{1,2})?" placeholder="set at Finalize" className={input} />
         </label>
         <label className="grid gap-1 text-sm">Start status
           <select name="billnotice" defaultValue="1st" className={input}>

@@ -24,7 +24,8 @@ export function parseBillCreate(formData: FormData): BillCreate {
   if (!BILL_TYPES.includes(billtype)) throw new BillInputError("type");
   const billdate = get("billdate");
   if (!isDate(billdate)) throw new BillInputError("date");
-  const billbalance = get("billbalance").replace(/,/g, "");
+  // Finalize (item 3) computes the balance from the lines; typed here only as an optional placeholder, blank → 0.
+  const billbalance = get("billbalance").replace(/,/g, "") || "0";
   if (!BALANCE_RE.test(billbalance)) throw new BillInputError("balance");
   const billnotice = get("billnotice") || "1st";
   if (!START_NOTICES.has(billnotice)) throw new BillInputError("notice");
