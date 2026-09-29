@@ -5,9 +5,9 @@ LANE.md is the contract; this tracks where we are in it — if they disagree, LA
 ## Current position
 
 - **Status:** round 1 (items 1–4, autonomous run) complete — items 1–4 done; stopped at the STOP marker.
-- **Next:** item 5, Preview-then-Send (next run, after Kris and Kalpna review v1).
-- **Blockers:** none. (Docs PR #18 with the MAP amendment is waiting on Nate's merge before this branch is rebased onto integration.)
-- **Last updated:** 2026-09-28
+- **Next:** round 2, items 5–8 (Send, notice resend, service authorization, wiring) — autonomous run; the STOP marker is removed.
+- **Blockers:** none.
+- **Last updated:** 2026-09-29
 
 ## Round 1 — bill output v1
 

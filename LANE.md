@@ -109,10 +109,10 @@ named constant or template, not the design.
 
 - Retainer / depo prep / depo / trial bill samples — build the lines verbatim
   from `modBillingAndServAuth.bas` (item 2 lists them)
-- `SecondNotice.png` / `FinalNotice.png` stamp images — draw a red boxed text
-  stamp "SECOND NOTICE" / "FINAL NOTICE" at the legacy position (left 150pt,
-  top 250pt); swap in the PNGs when they arrive
-- `ServAuth.dotx` layout — build from the bookmarks the VBA fills (item 6)
+- `ServAuth.dotx` layout — never sent; build from the bookmarks the VBA fills
+  (item 7), laid out like the two sample SAs in
+  `~/Downloads/TA_Files/Nate_Examples/1/` (real client data, not in git — read
+  for layout only, never copy a name or figure into a committed file)
 - The sending address and DNS for technology-assoc.com — config key; until DNS is
   verified in Resend, Send is disabled per the env rule
 - Whether Jon's hours bill at the same rate as Kris's — default both to
@@ -239,8 +239,6 @@ named constant or template, not the design.
   ui: true
   status: done (2026-09-28)
 
-> **⚠️ AUTONOMOUS RUN — STOP HERE**
-
 - task: Build Preview-then-Send at `/bills/[id]/send` — admin-only, finalized bills
     only. Preview pre-fills To = the attorney's `attyemail`; CC = `BILL_CC_EMAIL`
     plus the case's `billingcc`; subject "Re: `<casecaption>`"; body "Atty.
@@ -267,8 +265,8 @@ named constant or template, not the design.
 - task: Build notice resend on bills at 2nd or Final — from the bill page and the
     unpaid list, a "Send notice" action with the same Preview-then-Send flow.
     The PDF is the stored invoice with a stamp overlaid (left 150pt, top 250pt):
-    "SECOND NOTICE" for 2nd, "FINAL NOTICE" for Final (text stamp until the PNGs
-    arrive), saved beside the original as `<billfilename> SecondNotice.pdf` /
+    the legacy image `lib/bill-docs/stamps/SecondNotice.png` for 2nd,
+    `FinalNotice.png` for Final, saved beside the original as `<billfilename> SecondNotice.pdf` /
     `FinalNotice.pdf`. Email: To attorney, CC `billingcc`, BCC `NOTICE_BCC_EMAIL`,
     subject "Re: `<casecaption>`", body "Dear Atty. `<Last>`,\n\nAttached is a
     copy of an invoice that is past due in the subject matter." + for Final "A copy
@@ -297,7 +295,8 @@ named constant or template, not the design.
     offers the download. Also bring the approval-date rule to legacy
     (`frmCaseServAuth.SrvAuthStatus_AfterUpdate`): status Approved, Declined,
     Modified, or Modified and Approved → set `srvdateapproved` to today when null;
-    any other status → clear it.
+    any other status → clear it. Layout reference: the sample SAs named under
+    "Not yet specified".
   guardrails:
     - The existing SA edit form, lists and totals keep working; only the stamp rule changes
     - "Since the last invoice" = unbilled rows (the frozen definition), not a date cutoff
