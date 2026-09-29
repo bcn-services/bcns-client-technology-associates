@@ -237,7 +237,7 @@ named constant or template, not the design.
     - Two bills for the same case, attorney and date get `-1` and `-2` file names
     - Existing passing tests remain passing
   ui: true
-  status: not started
+  status: done (2026-09-28)
 
 > **⚠️ AUTONOMOUS RUN — STOP HERE**
 
