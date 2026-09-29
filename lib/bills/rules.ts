@@ -28,9 +28,13 @@ const NEXT: Readonly<Record<string, string>> = { "1st": "2nd", "2nd": "Final" };
 /** 1st → 2nd → Final → null; anything else → null. */
 export const nextNotice = (notice: string): string | null => (Object.hasOwn(NEXT, notice) ? NEXT[notice]! : null);
 
-/** `Bill<caseid> <last name> <yyyy mm dd>-<n>`, e.g. `Bill2788 Flood 2026 08 14-1`. */
+/**
+ * `Bill<caseid> <last name> <yyyy mm dd>-<n>`, e.g. `Bill123 Example 2026 08 14-0`. As the VBA's Replace calls on the
+ * whole base name: "-" and "_" become spaces, "/" is dropped; then the `-<n>` suffix is appended (n from 0).
+ * Unlike the VBA, "'" is KEPT: tests/billing (guard h) pins "O'Neil"; the PDF's storage key drops it (invoiceKey).
+ */
 export const billFileName = (caseId: number, attyLastName: string, billdate: string, n: number): string =>
-  `Bill${caseId} ${attyLastName} ${billdate.slice(0, 10).replaceAll("-", " ")}-${n}`;
+  `${`Bill${caseId} ${attyLastName} ${billdate.slice(0, 10).replaceAll("-", " ")}`.replace(/[-_]/g, " ").replaceAll("/", "")}-${n}`;
 
 export const lastNoticeDate = (bill: BillDates): string =>
   bill.billfinalnoticedate ?? bill.billsecondnoticedate ?? bill.billdate;

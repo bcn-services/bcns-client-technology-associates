@@ -12,13 +12,15 @@ const show = (v: string | number | null | undefined) => (v == null || v === "" ?
 const input = "rounded border border-slate-300 px-2 py-1";
 
 /** Pure view of one bill. `action` is the bound editBill; passed only for admins, so staff get no form. */
-export function BillView({ data, admin, action, advance, close, revise, error, saved, broken }: {
+export function BillView({ data, admin, action, advance, close, revise, createPdf, error, saved, broken }: {
   data: BillPageData;
   admin: boolean;
   action?: (formData: FormData) => void | Promise<void>;
   advance?: (formData: FormData) => void | Promise<void>;
   close?: (formData: FormData) => void | Promise<void>;
   revise?: (formData: FormData) => void | Promise<void>;
+  /** Bound createBillPdf; admins only. */
+  createPdf?: (formData: FormData) => void | Promise<void>;
   error?: string;
   saved?: boolean;
   /** Finalized but its stored lines don't add up (lib/bills/finalize.ts brokenFinalize). */
@@ -59,6 +61,16 @@ export function BillView({ data, admin, action, advance, close, revise, error, s
           <Link href={`/bills/${b.billid}/finalize`} className="underline">View saved lines</Link>
         </p>
       )}
+      {finalized && !broken && (b.billpdfpath ? (
+        <div className="flex items-center gap-3 text-sm">
+          <a href={`/bills/${b.billid}/pdf`} data-testid="bill-pdf" className="underline">Download invoice PDF</a>
+          {createPdf && <form action={createPdf}><SaSubmit label="Re-create PDF" /></form>}
+        </div>
+      ) : createPdf ? (
+        <form action={createPdf} data-testid="bill-create-pdf"><SaSubmit label="Create PDF" /></form>
+      ) : (
+        <p data-testid="bill-no-pdf" className="text-sm text-slate-500">No invoice PDF yet — an admin can create it.</p>
+      ))}
       {broken && revisedBy.length === 0 && (
         <p role="alert" data-testid="bill-broken" className="rounded border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
           {finalizeErrorMessage("broken")}

@@ -10,6 +10,11 @@ import { runCreateBill } from "@/lib/bills/create";
 import { runNoticeAction } from "@/lib/bills/notice";
 import { runRevise } from "@/lib/bills/revise";
 import { runFinalize } from "@/lib/bills/finalize";
+import { runCreatePdf, saveInvoicePdf } from "@/lib/bill-docs/invoice";
+import { getStorageAdapter } from "@/lib/storage";
+import { getConfig } from "@/lib/env";
+
+const invoiceConfig = () => { const c = getConfig(); return { letterhead: c.billLetterhead, taxId: c.billTaxId }; };
 
 /** Admin create of one bill on a case, claiming the checked unbilled time rows (see createBill in lib/bills/create.ts). */
 export async function createBill(formData: FormData): Promise<void> {
@@ -56,5 +61,13 @@ export async function editBill(billid: number, formData: FormData): Promise<void
 
 /** Admin: save the priced lines with hours/balance and stamp billfinalizedat, guarded (see lib/bills/finalize.ts). */
 export async function finalizeBillAction(billid: number, formData: FormData): Promise<void> {
-  await runFinalize(billid, formData, noticeDeps());
+  await runFinalize(billid, formData, {
+    ...noticeDeps(),
+    afterFinalize: (db, id) => saveInvoicePdf(db, getStorageAdapter(), id, invoiceConfig()),
+  });
+}
+
+/** Admin: (re)create a finalized bill's invoice PDF from its stored lines (see lib/bill-docs/invoice.ts). */
+export async function createBillPdf(billid: number): Promise<void> {
+  await runCreatePdf(billid, { ...noticeDeps(), storage: getStorageAdapter, config: invoiceConfig });
 }

@@ -5,7 +5,7 @@ import type { Db } from "@/lib/time/entries";
 import { loadBill } from "@/lib/bills/edit";
 import { brokenFinalize, storedLines } from "@/lib/bills/finalize";
 import { noticeErrorMessage } from "@/lib/bills/notice";
-import { advanceBillNotice, closeBillAs, editBill, reviseBillAction } from "../actions";
+import { advanceBillNotice, closeBillAs, createBillPdf, editBill, reviseBillAction } from "../actions";
 import { BillView } from "./bill-view";
 
 export const dynamic = "force-dynamic";
@@ -34,6 +34,7 @@ export default async function BillPage({ params, searchParams }: { params: { id:
         advance={admin ? advanceBillNotice.bind(null, id) : undefined}
         close={admin ? closeBillAs.bind(null, id) : undefined}
         revise={admin ? reviseBillAction.bind(null, id) : undefined}
+        createPdf={admin ? createBillPdf.bind(null, id) : undefined}
         error={error ? noticeErrorMessage(error) : undefined}
         saved={first(searchParams.saved) === "1"}
         broken={broken}

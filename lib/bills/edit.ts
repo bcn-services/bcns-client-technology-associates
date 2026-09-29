@@ -22,6 +22,8 @@ export type BillRow = {
   supersedesbillid: number | null;
   /** billing-output 0009: set once Finalize saved the lines; the bill is then locked (changes go through Revise). */
   billfinalizedat: string | null;
+  /** billing-output 0009: storage key of the invoice PDF (lib/bill-docs/invoice.ts), null until one is made. */
+  billpdfpath?: string | null;
 };
 export type BillActivity = { actid: number; actdate: string; actdescription: string; acthrs: number | string; initials: string };
 export type BillPageData = {

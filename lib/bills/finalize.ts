@@ -217,9 +217,13 @@ export async function finalizeBill(db: Db, data: FinalizeData, lines: BillLine[]
 
 /**
  * Body of the finalizeBill server action. Admin check first (staff → forbidden, no DB call); redirects outside try.
+ * `afterFinalize` (the invoice PDF) runs only after a successful save; whatever it throws is logged, never surfaced.
  * Success → /bills/<id>?saved=1; refusal → /bills/<id>/finalize?error=<code>.
  */
-export async function runFinalize(billid: number, formData: FormData, deps: NoticeDeps): Promise<void> {
+export async function runFinalize(
+  billid: number, formData: FormData,
+  deps: NoticeDeps & { afterFinalize?: (db: Db, billid: number) => Promise<unknown> },
+): Promise<void> {
   let code: string | null = null;
   try {
     await deps.session();
@@ -240,6 +244,9 @@ export async function runFinalize(billid: number, formData: FormData, deps: Noti
       if (get("fingerprint") !== data.fingerprint) throw new BillInputError("stale");
       const lines = finalLines(data.base, get);
       await finalizeBill(db, data, lines, deps.now());
+      // The invoice PDF (item 4) is made after the bill is finalized; its failure never un-finalizes the bill —
+      // the bill page then offers "Create PDF".
+      if (deps.afterFinalize) await deps.afterFinalize(db, billid).catch((e) => console.error("invoice PDF after finalize:", billid, e));
     } catch (e) {
       if (e instanceof BillInputError || e instanceof FinalizeInputError) code = e.code;
       else if (e instanceof BillLineError) code = e.field;
