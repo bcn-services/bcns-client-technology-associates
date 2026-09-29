@@ -131,14 +131,14 @@ test("revised bill (a row supersedes it): not priced, the save refuses with ?err
   assert.match(finalizeErrorMessage("revised"), /revised or closed/);
 });
 
-test("closed bill (Cancelled / Settled / Carried Over, no revision): refused with ?error=revised; Credit/Refund starts stay finalizable", async () => {
+test("closed bill (Cancelled / Settled / Carried Over, no revision): refused with ?error=revised; Credit/Refund starts and Paid (a check recorded before Finalize) stay finalizable", async () => {
   for (const notice of ["Cancelled", "Settled", "Carried Over"]) {
     const db = world({ bill: { billnotice: notice } });
     assert.equal((await loadFinalize(db, B)).base, null, notice);
     assert.equal(await post(db, FORM), `/bills/${B}/finalize?error=revised`, notice);
     assert.equal(getB(db).billfinalizedat, null, notice);
   }
-  for (const notice of ["1st", "2nd", "Final", "Partial Payment", "Deadbeat", "Credit", "Refund"]) {
+  for (const notice of ["1st", "2nd", "Final", "Partial Payment", "Deadbeat", "Credit", "Refund", "Paid"]) {
     assert.equal(canFinalizeBill(bill({ billnotice: notice }), false), true, notice);
   }
 });

@@ -48,9 +48,10 @@ export const isDue = (bill: BillDates, today: string): boolean =>
 
 /**
  * Finalize may write this bill: typed (legacy bills get nothing new), not yet finalized, not revised (a superseded bill
- * is finalized through its revision), and not closed (Cancelled / Carried Over / Settled are never billed again).
+ * is finalized through its revision), and not closed (Cancelled / Carried Over / Settled are never billed again; Paid and Deadbeat can still be finalized).
  * The one rule behind the Finalize button, the Finalize page and the save.
  */
+const NEVER_BILLED_AGAIN: ReadonlySet<string> = new Set(["Cancelled", "Carried Over", "Settled"]);
 export const canFinalizeBill = (
   b: { billtype: string | null; billfinalizedat?: string | null; billnotice: string }, revised: boolean,
-): boolean => b.billtype != null && !b.billfinalizedat && !revised && (isOpen(b.billnotice) || START_NOTICES.has(b.billnotice));
+): boolean => b.billtype != null && !b.billfinalizedat && !revised && !NEVER_BILLED_AGAIN.has(b.billnotice);

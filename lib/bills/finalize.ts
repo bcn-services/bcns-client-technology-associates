@@ -86,7 +86,7 @@ const thousandthsText = (n: number): string => {
  * stores 0 / 0, so it is never flagged.
  */
 export function brokenFinalize(
-  bill: { billtype: string | null; billfinalizedat?: string | null; billhours: number | string; billbalance: number | string },
+  bill: { billtype: string | null; billfinalizedat: string | null; billhours: number | string; billbalance: number | string },
   stored: BillLine[],
 ): boolean {
   if (bill.billtype === null || !bill.billfinalizedat) return false;

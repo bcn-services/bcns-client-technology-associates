@@ -21,7 +21,7 @@ export type BillRow = {
   billtype: string | null;
   supersedesbillid: number | null;
   /** billing-output 0009: set once Finalize saved the lines; the bill is then locked (changes go through Revise). */
-  billfinalizedat?: string | null;
+  billfinalizedat: string | null;
 };
 export type BillActivity = { actid: number; actdate: string; actdescription: string; acthrs: number | string; initials: string };
 export type BillPageData = {
