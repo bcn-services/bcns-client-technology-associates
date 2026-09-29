@@ -4,8 +4,8 @@ LANE.md is the contract; this tracks where we are in it — if they disagree, LA
 
 ## Current position
 
-- **Status:** round 1 (items 1–4, autonomous run) in progress — item 1 done.
-- **Next:** item 2, the pricing engine.
+- **Status:** round 1 (items 1–4, autonomous run) in progress — items 1–2 done.
+- **Next:** item 3, the Finalize page.
 - **Blockers:** none. (Docs PR #18 with the MAP amendment is waiting on Nate's merge before this branch is rebased onto integration.)
 - **Last updated:** 2026-09-28
 
@@ -14,7 +14,7 @@ LANE.md is the contract; this tracks where we are in it — if they disagree, LA
 | Item | Status |
 |------|--------|
 | Schema and config for bill output | done — Bills can now store their priced line items and when they were finalized and sent; the email and letterhead settings exist but are optional, and the end-to-end "finalize and send a bill" test is in place and waiting for the screens. |
-| Pricing engine (lines + rates) | not started |
+| Pricing engine (lines + rates) | done — The app can now work out every bill type's lines and totals the way Access did, with the 2-year rate rise, per-person rates, whole-dollar rounding, and payments credited on timesheet bills. |
 | Finalize page | not started |
 | Invoice PDF | not started |
 | Preview-then-Send | skipped — below stop marker |

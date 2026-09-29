@@ -192,7 +192,7 @@ named constant or template, not the design.
     - A bill dated 2 years + 1 day after case start prices at $475/$535 by default; 2 years exactly prices at $435/$490
     - Existing passing tests remain passing
   caution: true
-  status: not started
+  status: done (2026-09-28)
 
 - task: Build Finalize at `/bills/[id]/finalize` — admin-only. Shows the bill's
     lines from item 2 with one rate box per person (default + "default $X" hint),
