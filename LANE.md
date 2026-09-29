@@ -215,7 +215,7 @@ named constant or template, not the design.
     - Existing passing tests remain passing
   ui: true
   caution: true
-  status: not started
+  status: done (2026-09-28)
 
 - task: Render the invoice PDF in `lib/bill-docs/invoice.ts` from a finalized
     bill's stored lines — layout of the legacy sample: letterhead block (from
