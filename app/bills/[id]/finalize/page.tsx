@@ -52,8 +52,11 @@ export default async function FinalizePage({ params, searchParams }: { params: {
           <p data-testid="finalize-locked" className="text-sm">
             Finalized {finalizedOn(bill.billfinalizedat)}. These are the saved lines; changes go through Revise on the bill page.
           </p>
+          {data.broken && !data.revised && <p role="alert" data-testid="finalize-broken" className={warn}>{finalizeErrorMessage("broken")}</p>}
           <LinesTable lines={data.stored} testid="finalize-stored" />
         </section>
+      ) : !base ? (
+        <p data-testid="finalize-closed" className="text-sm text-slate-600">{finalizeErrorMessage("revised")}</p>
       ) : !admin ? (
         <p className="text-sm text-slate-600">Only admins can finalize bills.</p>
       ) : (

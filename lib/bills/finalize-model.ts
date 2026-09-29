@@ -7,7 +7,7 @@
  * Other types: estimate groups (`g.<i>.rate`, `g.<i>.n` item count, `g.<i>.<j>.desc` / `.hours`) then flat
  * lines (`f.<k>.desc` / `.amount`: the retainer charge, the trial expense). Kinds and dates come from the base.
  */
-import { priceBill, totalLine, type BillLine, type PricingInput } from "./lines";
+import { billHours, priceBill, summarize, totalLine, type BillLine, type PricingInput } from "./lines";
 import { testimonyFor } from "./rates";
 import { fmtCents } from "@/lib/expenses/list";
 
@@ -21,7 +21,7 @@ export type FinalizeBase = { billType: string; input: PricingInput; model: Estim
 export const MAX_ITEMS = 50;
 
 export class FinalizeInputError extends Error {
-  constructor(readonly code: "rate" | "hours" | "amount" | "description" | "lines") {
+  constructor(readonly code: "rate" | "hours" | "amount" | "description" | "lines" | "too-large") {
     super(code);
     this.name = "FinalizeInputError";
   }
@@ -34,6 +34,9 @@ const MESSAGES: Record<string, string> = {
   description: "Every estimate line with hours needs a description.",
   lines: "Too many estimate lines.",
   range: "A rate, hours or amount is too large to bill.",
+  "too-large": "A rate or total is too large.",
+  broken: "Lines missing: use Revise to rebuild this bill",
+  revised: "This bill was revised or closed, so it can't be finalized. Finalize its revision instead.",
   forbidden: "Only admins can finalize bills.",
   stale: "This bill changed meanwhile — reload and try again",
   legacy: "This is a legacy bill: it has no bill type, so there is nothing to finalize.",
@@ -97,12 +100,30 @@ function timesheetLines(input: PricingInput, rates: Map<number | null, number>):
     none !== undefined && l.kind === "charge" && l.rate !== null && l.personid === null ? totalLine(l.hours!, none) : l);
 }
 
+/** Largest values the columns hold: tblbilllines rate numeric(10,2), hours numeric(9,3), amount + billbalance numeric(12,2), billhours numeric(9,3). */
+const MAX_RATE = 9_999_999_999; // cents
+const MAX_HOURS = 999_999_999; // thousandths
+const MAX_AMOUNT = 999_999_999_999; // cents
+
+/** Throws FinalizeInputError("too-large") before the claim when a line or the bill total wouldn't fit its column. */
+function fitColumns(lines: BillLine[]): BillLine[] {
+  const over = (v: number | null, max: number) => v !== null && Math.abs(v) > max;
+  const sum = summarize(lines);
+  if (lines.some((l) => over(l.rate, MAX_RATE) || over(l.hours, MAX_HOURS) || over(l.amount, MAX_AMOUNT))
+    || over(billHours(sum.hours), MAX_HOURS) || over(sum.balance, MAX_AMOUNT)) throw new FinalizeInputError("too-large");
+  return lines;
+}
+
 /**
  * The lines to save, from the base the page rendered and the typed fields (`get` = FormData or form state).
- * Throws FinalizeInputError on any field that isn't whole cents / thousandths. The server only reads the keys
- * its own base defines, so a forged extra field is ignored and a missing one is an error.
+ * Throws FinalizeInputError on any field that isn't whole cents / thousandths, or on a value too large for its column.
+ * The server only reads the keys its own base defines, so a forged extra field is ignored and a missing one is an error.
  */
 export function finalLines(base: FinalizeBase, get: (k: string) => string): BillLine[] {
+  return fitColumns(typedLines(base, get));
+}
+
+function typedLines(base: FinalizeBase, get: (k: string) => string): BillLine[] {
   const rate = (k: string) => {
     const c = parseCents(get(k));
     if (c === null || c <= 0) throw new FinalizeInputError("rate");

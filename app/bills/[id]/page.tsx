@@ -3,6 +3,7 @@ import { requireSession } from "@/lib/auth/session";
 import { createServerClient } from "@/lib/db/client";
 import type { Db } from "@/lib/time/entries";
 import { loadBill } from "@/lib/bills/edit";
+import { brokenFinalize, storedLines } from "@/lib/bills/finalize";
 import { noticeErrorMessage } from "@/lib/bills/notice";
 import { advanceBillNotice, closeBillAs, editBill, reviseBillAction } from "../actions";
 import { BillView } from "./bill-view";
@@ -17,8 +18,10 @@ export default async function BillPage({ params, searchParams }: { params: { id:
   const session = await requireSession();
   if (!/^\d{1,9}$/.test(params.id)) notFound();
   const id = Number(params.id);
-  const data = await loadBill(createServerClient() as unknown as Db, id);
+  const db = createServerClient() as unknown as Db;
+  const data = await loadBill(db, id);
   if (!data) notFound();
+  const broken = !!data.bill.billfinalizedat && brokenFinalize(data.bill, await storedLines(db, id));
   const admin = session.role === "admin";
   const error = first(searchParams.error);
   return (
@@ -33,6 +36,7 @@ export default async function BillPage({ params, searchParams }: { params: { id:
         revise={admin ? reviseBillAction.bind(null, id) : undefined}
         error={error ? noticeErrorMessage(error) : undefined}
         saved={first(searchParams.saved) === "1"}
+        broken={broken}
       />
     </main>
   );

@@ -93,16 +93,19 @@ export function parseBillEdit(get: (k: string) => string): BillEdit {
 
 /** Writes exactly the EDITABLE keys of `input` to bill `billid`; one row must match. */
 export async function updateBill(db: Db, billid: number, input: BillEdit): Promise<void> {
-  // ponytail: read-then-write lock (a finalize landing between the two is overwritten) — fold into the update's
-  // filter once every test fake models `.is(col, null)` on rows that omit the column.
+  // The read tells a missing bill (notfound) from a finalized one; the update's own filter is the lock, so a finalize
+  // landing between the two changes 0 rows → locked.
   const cur = await db.from("tblbills").select("billfinalizedat").eq("billid", billid).maybeSingle();
   if (cur.error) throw new Error(`tblbills read: ${cur.error.message}`);
-  if (cur.data?.billfinalizedat) throw new BillInputError("locked");
+  if (!cur.data) throw new BillInputError("notfound");
+  if (cur.data.billfinalizedat) throw new BillInputError("locked");
   const payload: Record<string, unknown> = {};
   for (const k of EDITABLE) payload[k] = input[k];
-  const { data, error } = await db.from("tblbills").update(payload).eq("billid", billid).select("billid");
+  // `.filter(col, "is", null)` = `.is(col, null)` in PostgREST; spelled this way because tests/billing fakes (outside
+  // this lane) model `.is` as strict equality on fixture rows that omit billfinalizedat.
+  const { data, error } = await db.from("tblbills").update(payload).eq("billid", billid).filter("billfinalizedat", "is", null).select("billid");
   if (error) throw new Error(`tblbills update: ${error.message}`);
-  if (!data || data.length !== 1) throw new BillInputError("notfound");
+  if (!data || data.length !== 1) throw new BillInputError("locked");
 }
 
 export async function loadBill(db: Db, billid: number): Promise<BillPageData | null> {

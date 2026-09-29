@@ -45,3 +45,12 @@ export const daysSinceNotice = (bill: BillDates, today: string): number => dayNu
 
 export const isDue = (bill: BillDates, today: string): boolean =>
   isOpen(bill.billnotice) && daysSinceNotice(bill, today) >= BILL_DUE_DAYS;
+
+/**
+ * Finalize may write this bill: typed (legacy bills get nothing new), not yet finalized, not revised (a superseded bill
+ * is finalized through its revision), and not closed (Cancelled / Carried Over / Settled are never billed again).
+ * The one rule behind the Finalize button, the Finalize page and the save.
+ */
+export const canFinalizeBill = (
+  b: { billtype: string | null; billfinalizedat?: string | null; billnotice: string }, revised: boolean,
+): boolean => b.billtype != null && !b.billfinalizedat && !revised && (isOpen(b.billnotice) || START_NOTICES.has(b.billnotice));

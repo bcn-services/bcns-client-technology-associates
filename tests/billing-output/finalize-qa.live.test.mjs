@@ -192,14 +192,16 @@ test("legacy: no control, and the action refuses a bill that became legacy after
   assert.equal(snap(B), open);
 });
 
-test("undo: forced line-insert failure leaves the bill unfinalized with its ORIGINAL non-zero hours and balance", { skip }, async () => {
+// Review fix (item 3): the column-overflow rate is now refused before the claim (?error=too-large) instead of reaching the
+// insert-failure undo; the bill must still keep its ORIGINAL non-zero hours and balance.
+test("too large: a forced submit of a rate the column can't hold leaves the bill unfinalized with its ORIGINAL hours and balance", { skip }, async () => {
   const C = await newCase();
   const B = await addBill(C, { billhours: 4.25, billbalance: 612.34 });
   await addAct(C, B, "1.000", 1, "2026-08-10");
   await admin.goto(`/bills/${B}/finalize`);
   await admin.getByLabel("Rate for KJS").fill("999999999.00"); // overflows tblbilllines.rate numeric(10,2)
-  await saveBtn(admin).click();
-  await admin.waitForURL((u) => u.search === "?error=failed", { timeout: 20_000 }).catch(async (e) => { console.log(`# undo landed at ${admin.url()} snap ${snap(B)}`); throw e; });
+  await admin.locator('form[data-testid="finalize-form"]').evaluate((f) => f.requestSubmit()); // Save is disabled; bypass it
+  await admin.waitForURL((u) => u.search === "?error=too-large", { timeout: 20_000 }).catch(async (e) => { console.log(`# landed at ${admin.url()} snap ${snap(B)}`); throw e; });
   assert.equal(sql(`select coalesce(billfinalizedat::text,'null')||'|'||billhours::numeric(9,2)||'|'||billbalance from tblbills where billid=${B}`), "null|4.25|612.34");
   assert.equal(sql(`select count(*) from tblbilllines where billid=${B}`), "0");
 });

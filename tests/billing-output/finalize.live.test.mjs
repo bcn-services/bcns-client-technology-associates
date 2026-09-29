@@ -145,16 +145,19 @@ test("legacy bill (billtype null): no Finalize link, finalize page offers nothin
   assert.match(await admin.locator("main").innerText(), /legacy bill/i);
 });
 
-test("line insert fails (rate too large for the column) → bill un-finalized, no lines, form error shown", { skip }, async () => {
+// Review fix (item 3): a rate the rate column can't hold is refused BEFORE the claim (?error=too-large), so it no longer
+// reaches the insert-failure undo (that path is covered by the unit tests' forced insert failure).
+test("rate too large for its column → form says so, Save disabled; a forced submit gets ?error=too-large, nothing written", { skip }, async () => {
   const B = await timesheet();
   await admin.goto(`/bills/${B}/finalize`);
   await admin.getByLabel("Rate for KJS").fill("999999999.00");
-  await saveBtn(admin).click();
-  await admin.waitForURL((u) => u.pathname === `/bills/${B}/finalize` && u.search === "?error=failed");
+  assert.match(await admin.getByRole("alert").first().innerText(), /A rate or total is too large/);
+  assert.equal(await saveBtn(admin).isDisabled(), true);
+  await admin.locator('form[data-testid="finalize-form"]').evaluate((f) => f.requestSubmit());
+  await admin.waitForURL((u) => u.pathname === `/bills/${B}/finalize` && u.search === "?error=too-large");
   const b = await bill(B);
   assert.deepEqual([b.billfinalizedat, Number(b.billhours), Number(b.billbalance)], [null, 0, 0]);
   assert.equal((await lines(B)).length, 0);
-  assert.match(await admin.getByRole("alert").first().innerText(), /could not be finalized/);
   // Still finalizable afterwards.
   await admin.getByLabel("Rate for KJS").fill("399.00");
   await saveBtn(admin).click();

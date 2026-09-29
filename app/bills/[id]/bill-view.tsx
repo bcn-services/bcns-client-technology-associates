@@ -1,10 +1,10 @@
 import Link from "next/link";
 import { SaSubmit } from "@/app/cases/[id]/sa-submit";
-import { BILL_TYPES, isOpen, nextNotice } from "@/lib/bills/rules";
+import { BILL_TYPES, canFinalizeBill, isOpen, nextNotice } from "@/lib/bills/rules";
 import { closeTargets } from "@/lib/bills/notice";
 import { fmtMoney, type BillPageData } from "@/lib/bills/edit";
 import { fmtHours, thousandths } from "@/lib/time/week";
-import { finalizedOn } from "@/lib/bills/finalize-model";
+import { finalizeErrorMessage, finalizedOn } from "@/lib/bills/finalize-model";
 import { RecipientAlert } from "../recipient-alert";
 
 const DASH = "—";
@@ -12,7 +12,7 @@ const show = (v: string | number | null | undefined) => (v == null || v === "" ?
 const input = "rounded border border-slate-300 px-2 py-1";
 
 /** Pure view of one bill. `action` is the bound editBill; passed only for admins, so staff get no form. */
-export function BillView({ data, admin, action, advance, close, revise, error, saved }: {
+export function BillView({ data, admin, action, advance, close, revise, error, saved, broken }: {
   data: BillPageData;
   admin: boolean;
   action?: (formData: FormData) => void | Promise<void>;
@@ -21,6 +21,8 @@ export function BillView({ data, admin, action, advance, close, revise, error, s
   revise?: (formData: FormData) => void | Promise<void>;
   error?: string;
   saved?: boolean;
+  /** Finalized but its stored lines don't add up (lib/bills/finalize.ts brokenFinalize). */
+  broken?: boolean;
 }) {
   const { bill: b, casetitle, activity, revisedBy } = data;
   const fields: [string, React.ReactNode][] = [
@@ -44,8 +46,7 @@ export function BillView({ data, admin, action, advance, close, revise, error, s
   const targets = closeTargets(b.billnotice);
   const canRevise = admin && !!revise && isOpen(b.billnotice) && revisedBy.length === 0;
   const finalized = !!b.billfinalizedat;
-  // Legacy bills (no type) get nothing new; a revised (superseded) bill is finalized through its revision.
-  const canFinalize = admin && b.billtype != null && !finalized && revisedBy.length === 0;
+  const canFinalize = admin && canFinalizeBill(b, revisedBy.length > 0);
   const formKey = JSON.stringify([b.billdate, b.billtype, b.billbalance, b.billestimate, b.billcomments, b.billfilename]);
   return (
     <div className="space-y-4">
@@ -56,6 +57,11 @@ export function BillView({ data, admin, action, advance, close, revise, error, s
         <p data-testid="bill-finalized" className="rounded border border-slate-200 bg-slate-50 p-2 text-sm">
           Finalized {finalizedOn(b.billfinalizedat!)} — the lines are locked; changes go through Revise.{" "}
           <Link href={`/bills/${b.billid}/finalize`} className="underline">View saved lines</Link>
+        </p>
+      )}
+      {broken && revisedBy.length === 0 && (
+        <p role="alert" data-testid="bill-broken" className="rounded border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+          {finalizeErrorMessage("broken")}
         </p>
       )}
       {canFinalize && (
