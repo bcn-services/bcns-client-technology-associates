@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { SaSubmit } from "@/app/cases/[id]/sa-submit";
-import { BILL_TYPES, canFinalizeBill, canSendBill, isOpen, nextNotice } from "@/lib/bills/rules";
+import { BILL_TYPES, canFinalizeBill, canSendBill, canSendNotice, isNoticeStage, isOpen, nextNotice } from "@/lib/bills/rules";
+import { noticeBlockCode, sendErrorMessage } from "@/lib/bills/send";
 import { closeTargets } from "@/lib/bills/notice";
 import { fmtMoney, type BillPageData } from "@/lib/bills/edit";
 import { fmtHours, thousandths } from "@/lib/time/week";
@@ -75,6 +76,11 @@ export function BillView({ data, admin, action, advance, close, revise, createPd
       {admin && canSendBill(b, !!broken) && (
         <p><Link href={`/bills/${b.billid}/send${b.billsentat ? "?again=1" : ""}`} data-testid="bill-send" className="underline text-sm">{b.billsentat ? "Email again" : "Email this bill"}</Link></p>
       )}
+      {admin && isNoticeStage(b.billnotice) && (canSendNotice(b) ? (
+        <p><Link href={`/bills/${b.billid}/notice`} data-testid="bill-send-notice" className="underline text-sm">{`Send ${b.billnotice} notice`}</Link></p>
+      ) : (
+        <p data-testid="bill-notice-blocked" className="text-sm text-slate-500">{sendErrorMessage(noticeBlockCode(b))}</p>
+      ))}
       {broken && revisedBy.length === 0 && (
         <p role="alert" data-testid="bill-broken" className="rounded border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
           {finalizeErrorMessage("broken")}

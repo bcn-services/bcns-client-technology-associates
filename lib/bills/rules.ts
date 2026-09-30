@@ -68,3 +68,17 @@ export const canFinalizeBill = (
 export const canSendBill = (
   b: { billtype: string | null; billfinalizedat?: string | null; billpdfpath?: string | null; billnotice: string }, broken: boolean,
 ): boolean => b.billtype != null && !!b.billfinalizedat && !!b.billpdfpath && !broken && !NEVER_BILLED_AGAIN.has(b.billnotice);
+
+/** Notices that resend the stored invoice with a stamp → the legacy stamp image / file-name word. */
+export const NOTICE_STAMPS: Readonly<Record<string, "SecondNotice" | "FinalNotice">> = { "2nd": "SecondNotice", Final: "FinalNotice" };
+/** A notice can be resent: 2nd or Final. */
+export const isNoticeStage = (notice: string): boolean => Object.hasOwn(NOTICE_STAMPS, notice);
+
+/**
+ * Send notice may email this bill: at 2nd or Final, typed, finalized and its invoice PDF stored (the notice IS that
+ * stored PDF, stamped). Unlike canSendBill it ignores `broken` — the stored PDF, not the lines, is what goes out.
+ * The one rule behind the bill page's and the unpaid list's Send notice link, the notice page and the send action.
+ */
+export const canSendNotice = (
+  b: { billtype: string | null; billfinalizedat?: string | null; billpdfpath?: string | null; billnotice: string },
+): boolean => isNoticeStage(b.billnotice) && b.billtype != null && !!b.billfinalizedat && !!b.billpdfpath;

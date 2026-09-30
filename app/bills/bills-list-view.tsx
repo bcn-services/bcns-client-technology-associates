@@ -1,8 +1,12 @@
 import Link from "next/link";
 import type { BillGroup } from "@/lib/bills/list";
+import { sendErrorMessage } from "@/lib/bills/send";
 
-/** Read-only list of open bills by stage. No forms, no actions. */
-export function BillsListView({ groups }: { groups: BillGroup[] }) {
+/**
+ * Open bills by stage. No forms, no actions: for admins a 2nd / Final row links to its Send notice preview, or says
+ * why it can't (no stored PDF).
+ */
+export function BillsListView({ groups, admin = false }: { groups: BillGroup[]; admin?: boolean }) {
   if (groups.every((g) => g.rows.length === 0)) return <p className="text-sm text-gray-600">No open bills.</p>;
   return (
     <div className="space-y-6">
@@ -12,7 +16,7 @@ export function BillsListView({ groups }: { groups: BillGroup[] }) {
           <table className="w-full text-sm">
             <thead>
               <tr className="text-left text-gray-600">
-                <th className="py-1">Case</th><th>Bill</th><th>Bill date</th><th className="text-right">Balance</th><th className="text-right">Since notice</th><th></th>
+                <th className="py-1">Case</th><th>Bill</th><th>Bill date</th><th className="text-right">Balance</th><th className="text-right">Since notice</th><th></th>{admin && <th></th>}
               </tr>
             </thead>
             <tbody>
@@ -24,6 +28,12 @@ export function BillsListView({ groups }: { groups: BillGroup[] }) {
                   <td className="text-right">{r.balance.toFixed(2)}</td>
                   <td className="text-right">{r.days} days</td>
                   <td>{r.due ? <span data-testid="due-badge" className="rounded bg-red-100 px-2 text-xs font-medium text-red-800">due</span> : null}</td>
+                  {admin && (
+                    <td>
+                      {r.sendNotice ? <Link href={`/bills/${r.billid}/notice`} data-testid="send-notice" className="text-blue-700 hover:underline">Send notice</Link>
+                        : r.noticeWhy ? <span data-testid="notice-blocked" title={sendErrorMessage(r.noticeWhy)} className="text-xs text-gray-500">No stored PDF</span> : null}
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>

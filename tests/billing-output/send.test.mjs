@@ -380,12 +380,24 @@ test("claim errors AND its release fails → code 'release' (reload and check), 
   assert.equal(calls.length, 0);
 });
 
-test("provider failure and the release fails → code 'release'", async () => {
+test("provider refusal (4xx) and the release fails → code 'release'", async () => {
+  reset();
+  reply = () => [422, { message: "boom" }];
+  const db = flakyWorld(["ok", "error"]);
+  const r = await send(db);
+  assert.equal(r.state.code, "release");
+  assert.equal(calls.length, 1);
+});
+
+// item 6 (deferred item-5 Minor): a no-answer (here a 5xx) whose release fails may have gone out AND shows as sent.
+test("no answer (5xx) and the release fails → code 'noanswer-release' (may have been sent, shows as sent)", async () => {
   reset();
   reply = () => [500, { message: "boom" }];
   const db = flakyWorld(["ok", "error"]);
   const r = await send(db);
-  assert.equal(r.state.code, "release");
+  assert.equal(r.state.code, "noanswer-release");
+  assert.match(r.state.message, /may have been sent, and the bill shows as sent\. Check before sending again/);
+  assert.match(r.state.message, /500 boom/);
   assert.equal(calls.length, 1);
 });
 

@@ -13,7 +13,7 @@ import { runFinalize } from "@/lib/bills/finalize";
 import { runCreatePdf, saveInvoicePdf } from "@/lib/bill-docs/invoice";
 import { getStorageAdapter } from "@/lib/storage";
 import { runSend, type SendState } from "@/lib/bills/send";
-import { readStoredFile } from "@/lib/bill-docs/send";
+import { readStoredFile, writeStoredFile } from "@/lib/bill-docs/send";
 import { getConfig } from "@/lib/env";
 
 const invoiceConfig = () => { const c = getConfig(); return { letterhead: c.billLetterhead, taxId: c.billTaxId }; };
@@ -74,11 +74,19 @@ export async function createBillPdf(billid: number): Promise<void> {
   await runCreatePdf(billid, { ...noticeDeps(), storage: getStorageAdapter, config: invoiceConfig });
 }
 
+const sendDeps = () => ({
+  ...noticeDeps(),
+  config: () => { const c = getConfig(); return { apiKey: c.resendApiKey, apiUrl: c.resendApiUrl, from: c.billFromEmail }; },
+  readPdf: (key: string) => readStoredFile(getStorageAdapter(), key),
+  writePdf: (key: string, bytes: Uint8Array) => writeStoredFile(getStorageAdapter(), key, bytes),
+});
+
 /** Admin: email a finalized bill's invoice as previewed and edited (see lib/bills/send.ts). useFormState action. */
 export async function sendBillAction(billid: number, _prev: SendState, formData: FormData): Promise<SendState> {
-  return runSend(billid, formData, {
-    ...noticeDeps(),
-    config: () => { const c = getConfig(); return { apiKey: c.resendApiKey, apiUrl: c.resendApiUrl, from: c.billFromEmail }; },
-    readPdf: (key) => readStoredFile(getStorageAdapter(), key),
-  });
+  return runSend(billid, formData, sendDeps());
+}
+
+/** Admin: email a 2nd / Final bill's stored invoice with its notice stamp, as previewed (see lib/bills/send.ts). */
+export async function sendNoticeAction(billid: number, _prev: SendState, formData: FormData): Promise<SendState> {
+  return runSend(billid, formData, sendDeps(), "notice");
 }

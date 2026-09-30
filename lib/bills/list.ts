@@ -1,7 +1,8 @@
 import type { Db } from "@/lib/time/entries";
 import { requireSession, type SessionClient } from "@/lib/auth/session";
 import { firmToday } from "@/lib/cases/presets";
-import { OPEN_NOTICES, daysSinceNotice, isDue, lastNoticeDate } from "./rules";
+import { noticeBlockCode } from "./send";
+import { OPEN_NOTICES, canSendNotice, daysSinceNotice, isDue, isNoticeStage, lastNoticeDate } from "./rules";
 
 export type OpenBillRow = {
   billid: number;
@@ -12,11 +13,15 @@ export type OpenBillRow = {
   lastNotice: string;
   days: number;
   due: boolean;
+  /** canSendNotice: a 2nd / Final bill with its invoice PDF stored. */
+  sendNotice: boolean;
+  /** A 2nd / Final bill that can't have its notice sent: why (a lib/bills/send message code); else null. */
+  noticeWhy: string | null;
 };
 export type BillGroup = { stage: string; rows: OpenBillRow[] };
 
 const STAGES = [...OPEN_NOTICES];
-const COLS = "billid, billcaseid, billdate, billbalance, billfilename, billnotice, billsecondnoticedate, billfinalnoticedate, tblcase(caseid)";
+const COLS = "billid, billcaseid, billdate, billbalance, billfilename, billnotice, billsecondnoticedate, billfinalnoticedate, billtype, billfinalizedat, billpdfpath, tblcase(caseid)";
 
 /** Open bills grouped by stage (OPEN_NOTICES order), most days since last notice first. One query, read-only. */
 export async function loadOpenBills(db: Db, today: string): Promise<BillGroup[]> {
@@ -35,6 +40,8 @@ export async function loadOpenBills(db: Db, today: string): Promise<BillGroup[]>
       lastNotice: lastNoticeDate(b),
       days: daysSinceNotice(b, today),
       due: isDue(b, today),
+      sendNotice: canSendNotice(b),
+      noticeWhy: isNoticeStage(b.billnotice) && !canSendNotice(b) ? noticeBlockCode(b) : null,
     });
   }
   const rank = (s: string) => { const i = STAGES.indexOf(s); return i < 0 ? STAGES.length : i; };

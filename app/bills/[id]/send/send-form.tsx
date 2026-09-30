@@ -11,12 +11,14 @@ const input = "rounded border border-slate-300 px-2 py-1";
  * The editable email preview. Fields are uncontrolled (defaultValue), so a refused send keeps what was typed.
  * Send is disabled until email is configured and, on an alert case, the alert box is ticked; the server re-checks both.
  */
-export function SendForm({ draft, alert, emailOn, token, sentat, pdfHref, pdfName, action }: {
+export function SendForm({ draft, alert, emailOn, token, sentat, notice, pdfHref, pdfName, action }: {
   draft: EmailDraft;
   alert: boolean;
   emailOn: boolean;
   token: string;
   sentat: string;
+  /** Notice resend: the notice the preview rendered (the server refuses if the bill has moved on). */
+  notice?: string;
   pdfHref: string;
   pdfName: string;
   action: (prev: SendState, formData: FormData) => Promise<SendState>;
@@ -35,6 +37,7 @@ export function SendForm({ draft, alert, emailOn, token, sentat, pdfHref, pdfNam
     <form action={formAction} data-testid="send-form" className="space-y-3">
       <input type="hidden" name="token" value={token} />
       <input type="hidden" name="sentat" value={sentat} />
+      {notice !== undefined && <input type="hidden" name="notice" value={notice} />}
       {field("to", "To")}
       {field("cc", "CC")}
       {field("bcc", "BCC")}

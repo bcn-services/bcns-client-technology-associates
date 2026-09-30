@@ -211,19 +211,22 @@ test("QA-5 empty / malformed To (incl. header-injection shapes) refused before t
   assert.equal(hits.length, 0);
 });
 
-test("QA-6 Resend 4xx / 5xx / non-JSON: bill NOT marked sent (first send and Send again), provider's error shown", async () => {
-  for (const [status, payload, expect] of [
-    [401, { statusCode: 401, name: "missing_api_key", message: "API key is invalid" }, /401 API key is invalid/],
-    [429, { statusCode: 429, name: "rate_limit_exceeded", message: "Too many requests" }, /429 Too many requests/],
-    [500, { statusCode: 500, name: "internal_server_error", message: "Resend fell over" }, /500 Resend fell over/],
-    [502, "upstream bad gateway", /502 upstream bad gateway/],
+// Item 6 deliberate spec change (deferred item-5 Minor): a 409 or any 5xx may have gone out → "noanswer" (was
+// "provider"), still released and never marked sent, the provider's detail kept.
+test("QA-6 Resend 4xx → provider; 409 / 5xx / non-JSON 5xx → noanswer: bill NOT marked sent (first send and Send again), provider's error shown", async () => {
+  for (const [status, payload, expect, code] of [
+    [401, { statusCode: 401, name: "missing_api_key", message: "API key is invalid" }, /401 API key is invalid/, "provider"],
+    [429, { statusCode: 429, name: "rate_limit_exceeded", message: "Too many requests" }, /429 Too many requests/, "provider"],
+    [409, { statusCode: 409, name: "concurrent_idempotent_requests", message: "Same key in flight" }, /409 Same key in flight/, "noanswer"],
+    [500, { statusCode: 500, name: "internal_server_error", message: "Resend fell over" }, /500 Resend fell over/, "noanswer"],
+    [502, "upstream bad gateway", /502 upstream bad gateway/, "noanswer"],
   ]) {
     fresh();
     answer = () => [status, payload];
     const db = seed();
     const r = await act(db, fd());
     assert.equal(r.url, null, String(status));
-    assert.equal(r.state?.code, "provider", String(status));
+    assert.equal(r.state?.code, code, String(status));
     assert.match(r.state.message, expect);
     assert.deepEqual(sent(db), [null, null], `${status}: never marked sent`);
     assert.equal(hits.length, 1);
@@ -231,7 +234,7 @@ test("QA-6 Resend 4xx / 5xx / non-JSON: bill NOT marked sent (first send and Sen
     const prev = ["2026-09-15T09:00:00.000+00:00", "earlier@example.test"];
     const db2 = seed({ bill: { billsentat: prev[0], billsentto: prev[1] } });
     const r2 = await act(db2, fd({ sentat: prev[0] }));
-    assert.equal(r2.state?.code, "provider");
+    assert.equal(r2.state?.code, code);
     assert.deepEqual(sent(db2), prev, `${status}: Send again failure keeps the previous send`);
   }
 });

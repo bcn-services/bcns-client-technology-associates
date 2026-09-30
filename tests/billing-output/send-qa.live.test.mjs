@@ -100,13 +100,13 @@ test("QA live: edited fields + attachment bytes == stored object; two concurrent
   assert.equal(b1.billsentto, `${won}@example.test`);
 });
 
-test("QA live: Resend 500 → bill not marked sent, provider message returned", { skip }, async () => {
+test("QA live: Resend 500 → noanswer (item 6 spec change: may have been sent), bill not marked sent, provider message kept", { skip }, async () => {
   hits = []; answer = () => [500, { statusCode: 500, name: "internal_server_error", message: "QA stub exploded" }];
   const id = await makeBill();
   const b0 = await read(id);
   const r = await act(id, fd(b0));
   assert.equal(r.url, null);
-  assert.equal(r.state?.code, "provider");
+  assert.equal(r.state?.code, "noanswer");
   assert.match(r.state.message, /500 QA stub exploded/);
   const b1 = await read(id);
   assert.deepEqual([b1.billsentat, b1.billsentto], [null, null]);

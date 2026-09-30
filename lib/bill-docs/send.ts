@@ -8,9 +8,11 @@
  *      `bill-<id>-<billsentat before this send>`), never from a per-render token: a retry after a lost answer — same
  *      form, a reloaded page, or another entry point — sends the unchanged payload under the same key, and Resend
  *      (24h window) returns the first result instead of sending twice. An edited payload is a new key;
- *   3. provider answered with an error → release, SendError("provider", <provider's message>);
- *      no answer (timeout / dropped connection) → release, SendError("noanswer"): it MAY have been sent. Releasing
- *      keeps the state the key is scoped on, so resending unchanged is deduped; the caller must say "may have been sent".
+ *   3. provider refused (4xx other than 409) → release, SendError("provider", <provider's message>): nothing was sent;
+ *      no answer (timeout / dropped connection), a 409 (concurrent request on the same key still in flight) or a 5xx
+ *      → release, SendError("noanswer", <detail>): it MAY have been sent. Releasing keeps the state the key is scoped
+ *      on, so resending unchanged is deduped; the caller must say "may have been sent". If that release itself fails
+ *      the code is "noanswer-release" (may have been sent AND still shows as sent), else "release".
  * The claim IS the record: once the provider accepts, nothing else is written, so "sent but not recorded" can't happen.
  * ponytail: after Resend's 24h key window a no-answer resend could double-send — upgrade to a Resend status lookup then.
  */
@@ -42,6 +44,12 @@ export const MAX_RECIPIENTS = 50;
 export function parseAddresses(raw: string): string[] | null {
   const list = raw.split(/[,;\s]+/).filter(Boolean);
   return list.length <= MAX_RECIPIENTS && list.every((a) => a.length <= 254 && ADDRESS.test(a)) ? list : null;
+}
+
+/** Store bytes at `key` (upsert: overwrites only that key). */
+export async function writeStoredFile(storage: StorageAdapter | null, key: string, bytes: Uint8Array): Promise<void> {
+  if (!storage) throw new SendError("storage");
+  await storage.putFile(key, bytes, "application/pdf");
 }
 
 /** A stored object's bytes (via a short signed URL, as the PDF download route does). */
@@ -102,7 +110,8 @@ export async function sendWithGuard(
       const json = (await res.json().catch(() => ({}))) as { id?: string };
       return json.id ?? "";
     }
-    failure = new SendError("provider", await providerMessage(res));
+    // 409 = a request with this key is still in flight; 5xx = the service failed mid-way. Either may have gone out.
+    failure = new SendError(res.status === 409 || res.status >= 500 ? "noanswer" : "provider", await providerMessage(res));
   } catch (e) {
     console.error("send: no answer from the email service, key", key, e);
     failure = new SendError("noanswer", e instanceof Error ? e.message : String(e));
@@ -111,7 +120,7 @@ export async function sendWithGuard(
     await guard.release();
   } catch (e) {
     console.error("send release failed after a provider failure:", e);
-    throw new SendError("release", failure.detail);
+    throw new SendError(failure.code === "noanswer" ? "noanswer-release" : "release", failure.detail);
   }
   throw failure;
 }
