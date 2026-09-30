@@ -55,17 +55,12 @@ Test against the fixture, not the producing lane. Do not wait for it to exist.
 - No migration, no `process.env` outside `lib/env.ts`, queries live in `lib/**`.
 - The template files under `lib/case-docs/templates/` are never edited.
 
-## Not yet specified
-
-- The Inspection Plan template Access uses today has CaseTitle and CaseID bookmarks; the committed copy has neither — revisit when Kris sends the current file (swap the file, regenerate, add two values).
-
 ## Out of scope
 
 - Saving the generated document in the app — Access keeps nothing; staff upload the finished file through the case Documents panel.
 - Emailing a document — v1 is download only.
 - Memo templates for other branches — one branch only (MAP.md); every case uses `CTA_Memo`.
 - Filling the CTA Report's `PutDocumentNumberHere`, `cvs`, `PutConferenceHere` — typed by hand in Access too.
-- Inserting title and case number into the Inspection Plan — no bookmarks in this copy; shipped unfilled (Nate, 2026-09-30).
 
 ---
 
@@ -106,7 +101,7 @@ Test against the fixture, not the producing lane. Do not wait for it to exist.
     `lib/cases/presets.ts`), TitleCaption (`casecaption` + ", " + `casetitle`).
     CTA Report — Atty (the `ContactInfo` address block the invoice already
     builds in `lib/bill-docs/invoice.ts`), Title, CaseID. File Review Summary —
-    CaseTitle, CaseID, TodayDate. Inspection Plan — empty map. Reuse the
+    CaseTitle, CaseID, TodayDate. Inspection Plan — CaseTitle, CaseID (bookmarks in the page header). Reuse the
     existing loaders and formatters (`lib/cases/record.ts`,
     `lib/contacts/contacts.ts`, `lib/bill-docs/**`); read the two legacy
     formatting functions in the VBA source and match them. File names:

@@ -71,7 +71,7 @@ export async function loadCaseDocValues(db: Db, caseId: number, slug: CaseDocSlu
   if (error) throw new Error(`tblcase read: ${error.message}`);
   if (!k) return null;
   const caseID = nz(k.caseid), title = nz(k.casetitle);
-  if (slug === "inspection-plan") return {};
+  if (slug === "inspection-plan") return { CaseTitle: title, CaseID: caseID }; // bookmarks in the page header
   if (slug === "file-review-summary") return { CaseTitle: title, CaseID: caseID, TodayDate: todayText(now) };
 
   const af = k.caseatty == null ? null : await loadAttorneyWithFirm(db, Number(k.caseatty));

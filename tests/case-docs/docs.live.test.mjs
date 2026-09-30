@@ -48,7 +48,7 @@ test("live: each kind's map from the case's real rows", { skip }, async () => {
   });
   assert.deepEqual(await m("cta-report"), { Atty: "Pat Quinn Example, Jr., Esq.\nExample Firm LLP\n1 Test St\nSuite 2\nSampletown, NY 100019999", Title: TITLE, CaseID: String(CASE) });
   assert.deepEqual(await m("file-review-summary"), { CaseTitle: TITLE, CaseID: String(CASE), TodayDate: "September 30, 2026" });
-  assert.deepEqual(await m("inspection-plan"), {});
+  assert.deepEqual(await m("inspection-plan"), { CaseTitle: TITLE, CaseID: String(CASE) });
 });
 
 test("live: case whose attorney row is missing → empty Atty/Firm/Address, TitleCaption filled; unknown case → null", { skip }, async () => {

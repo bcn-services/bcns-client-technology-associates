@@ -2,9 +2,11 @@
  * Fill engine for the legacy case documents: `.dotx` template bytes + bookmark name → text, out come `.docx` bytes.
  * Bytes in, bytes out — no database, storage or Next imports. What it changes, and nothing else:
  *   1. `[Content_Types].xml`: the main part's type, template → document (that is all that makes a .dotx a .docx).
- *   2. `word/document.xml`: for each named bookmark, the runs between its start and end markers become ONE run holding
- *      the escaped text (newlines as `w:br`). Both markers stay, as does any other bookmark's marker sitting between them.
- *      Then every CREATEDATE field's cached result becomes the firm's date (see refreshCreateDate).
+ *   2. `word/document.xml` and every `word/header*.xml` / `word/footer*.xml` (the Inspection Plan's CaseID and CaseTitle
+ *      sit in its page header): for each named bookmark, in every one of those parts that has it, the runs between its
+ *      start and end markers become ONE run holding the escaped text (newlines as `w:br`, tabs as `w:tab`). Both markers
+ *      stay, as does any other bookmark's marker sitting between them. Then every CREATEDATE field's cached result
+ *      becomes the firm's date (see refreshCreateDate). A part neither step changes is not rewritten.
  *   3. The attached-template relationship, if the template has one (legacy: `AttachedTemplate = ""`).
  *   4. `docProps/core.xml`: created and modified become `now` — a new document, as Documents.Add made.
  * Run formatting: the first replaced run's `w:rPr`; for an empty bookmark, the run just before it in the paragraph
@@ -38,7 +40,7 @@ const RPR = /<w:rPr>[\s\S]*?<\/w:rPr>/;
 const MARKERS = /<w:(?:bookmarkStart|bookmarkEnd|proofErr)\b[^>]*\/>/g;
 /** What a replaceable run may hold besides its rPr: text, tabs, breaks. Fields, images, footnote refs are refused. */
 const PLAIN_RUN_BODY = /^(?:<w:t(?: [^>]*)?>[^<]*<\/w:t>|<w:(?:t|tab|br|cr|lastRenderedPageBreak)\b[^>]*\/>)*$/;
-// Characters XML 1.0 cannot carry at all, even escaped (tab is fine; newlines are split out before this runs).
+// Characters XML 1.0 cannot carry at all, even escaped (newlines and tabs are split out before this runs).
 const XML_ILLEGAL = /[^\t\x20-퟿-�\u{10000}-\u{10FFFF}]/gu;
 
 const ESCAPES: Record<string, string> = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&apos;" };
@@ -77,16 +79,17 @@ function replaceRuns(segment: string, text: string, what: string, fallback: () =
   const rPr = first !== undefined ? RPR.exec(first)?.[0] ?? "" : fallback();
   const body = text
     .split(/\r\n|\r|\n/)
-    .map((line) => (line === "" ? "" : `<w:t xml:space="preserve">${escapeXml(line)}</w:t>`))
+    .map((line) => line.split("\t").map((s) => (s === "" ? "" : `<w:t xml:space="preserve">${escapeXml(s)}</w:t>`)).join("<w:tab/>"))
     .join("<w:br/>");
   const run = body === "" ? "" : `<w:r>${rPr}${body}</w:r>`;
   const at = runs.length ? segment.search(RUN) : 0;
   return segment.slice(0, at) + run + segment.slice(at).replace(RUN, "");
 }
 
-function fillBookmark(xml: string, name: string, text: string): string {
+/** `xml` with bookmark `name` holding `text`; null when this part has no such bookmark. */
+function fillBookmark(xml: string, name: string, text: string): string | null {
   const mark = findBookmark(xml, name);
-  if (!mark) throw new UnknownBookmarkError(name);
+  if (!mark) return null;
   const between = replaceRuns(xml.slice(mark.from, mark.to), text, `Bookmark "${name}"`, () => formattingBefore(xml, mark.from, name));
   return xml.slice(0, mark.from) + between + xml.slice(mark.to);
 }
@@ -95,7 +98,6 @@ function fillBookmark(xml: string, name: string, text: string): string {
  * CREATEDATE fields show the document's creation date. Access's Documents.Add made a NEW document, so they read
  * the day it was made; Word does not recalculate them on open, so their cached results are rewritten here from the
  * firm's date. Only the two pictures the templates use; any other CREATEDATE throws rather than keep a stale date.
- * ponytail: word/document.xml only — no template has a CREATEDATE in a header/footer; scan those parts when one does.
  */
 function refreshCreateDate(xml: string, firmDate: string): string {
   if (/<w:fldSimple\b[^>]*\bw:instr="\s*CREATEDATE\b/i.test(xml)) throw new UnsupportedTemplateError("Simple CREATEDATE field is not supported");
@@ -137,16 +139,29 @@ export async function fillTemplate(template: Uint8Array, values: Readonly<Record
     if (!entry) throw new UnsupportedTemplateError(`Not a Word template: ${path} is missing`);
     return entry.async("string");
   };
-  // Keep the entry's own timestamp so the same input always yields the same bytes.
-  const write = (path: string, content: string) => zip.file(path, content, { date: zip.file(path)?.date });
+  // Keep the entry's own timestamp so the same input always yields the same bytes; add no folder entries.
+  const write = (path: string, content: string) => zip.file(path, content, { date: zip.file(path)?.date, createFolders: false });
 
   const types = await read("[Content_Types].xml");
   if (!types.includes(TEMPLATE_TYPE)) throw new UnsupportedTemplateError("Not a Word template (.dotx): main part is not the template type");
   write("[Content_Types].xml", types.replace(TEMPLATE_TYPE, DOCUMENT_TYPE));
 
-  let doc = await read("word/document.xml");
-  for (const [name, text] of Object.entries(values)) doc = fillBookmark(doc, name, text);
-  write("word/document.xml", refreshCreateDate(doc, firmDate));
+  const parts = ["word/document.xml", ...Object.keys(zip.files).filter((p) => /^word\/(?:header|footer)\d*\.xml$/.test(p))];
+  const found = new Set<string>();
+  for (const path of parts) {
+    const xml = await read(path);
+    let out = xml;
+    for (const [name, text] of Object.entries(values)) {
+      const filled = fillBookmark(out, name, text);
+      if (filled === null) continue;
+      out = filled;
+      found.add(name);
+    }
+    out = refreshCreateDate(out, firmDate);
+    if (out !== xml) write(path, out);
+  }
+  const missing = Object.keys(values).find((name) => !found.has(name));
+  if (missing !== undefined) throw new UnknownBookmarkError(missing);
 
   const CORE = "docProps/core.xml";
   const stamp = `${now.toISOString().slice(0, 16)}:00Z`; // W3CDTF to the minute, as Word writes it

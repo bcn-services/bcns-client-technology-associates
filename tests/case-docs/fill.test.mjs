@@ -18,6 +18,8 @@ const DIR = new URL("../../lib/case-docs/templates/", import.meta.url);
 const TEMPLATE_TYPE = "application/vnd.openxmlformats-officedocument.wordprocessingml.template.main+xml";
 const DOCUMENT_TYPE = "application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml";
 const CHANGED = ["[Content_Types].xml", "word/document.xml", "docProps/core.xml", "word/_rels/settings.xml.rels"];
+/** Entries a fill may change, per template: CHANGED plus the part holding its bookmarks when that is not document.xml. */
+const changed = (name) => (CASES[name].part === "word/document.xml" ? CHANGED : [...CHANGED, CASES[name].part]);
 /** The creation moment every fill here stamps: 11:00 Sep 30 2026 in New York. */
 const NOW = new Date(Date.UTC(2026, 8, 30, 15, 0));
 const fill = (tpl, values) => fillTemplate(tpl, values, NOW, "2026-09-30");
@@ -30,12 +32,14 @@ const MEMO = {
   TodayDate: "January 02, 2031",
   TitleCaption: `Index No. 000/0000, ${TRICKY_TITLE}`,
 };
-/** Per template: values for the bookmarks the app fills, and a piece of the template's own text that must survive. */
+/** Per template: values for the bookmarks the app fills, the part holding those bookmarks, and a piece of the template's
+ *  own text that must survive. The Inspection Plan's two bookmarks are in its default page header. */
+const DOC = "word/document.xml";
 const CASES = {
-  CTA_Memo: { values: MEMO, boilerplate: "Memo to:" },
-  CTA_REPORT: { values: { Title: TRICKY_TITLE, CaseID: "99001", Atty: "Pat Example, Esq.\nExample & Sons <LLP>\n1 Test St" }, boilerplate: "TA REPORT #" },
-  File_Review_Summary: { values: { CaseID: "99001", CaseTitle: TRICKY_TITLE, TodayDate: "January 02, 2031" }, boilerplate: "Summary Outline" },
-  Inspection_Plan: { values: {}, boilerplate: "Additional notes:" },
+  CTA_Memo: { values: MEMO, part: DOC, boilerplate: "Memo to:" },
+  CTA_REPORT: { values: { Title: TRICKY_TITLE, CaseID: "99001", Atty: "Pat Example, Esq.\nExample & Sons <LLP>\n1 Test St" }, part: DOC, boilerplate: "TA REPORT #" },
+  File_Review_Summary: { values: { CaseID: "99001", CaseTitle: TRICKY_TITLE, TodayDate: "January 02, 2031" }, part: DOC, boilerplate: "Summary Outline" },
+  Inspection_Plan: { values: { CaseTitle: TRICKY_TITLE, CaseID: "99001" }, part: "word/header2.xml", boilerplate: "Additional notes:" },
 };
 
 const bytes = (name) => new Uint8Array(Buffer.from(TEMPLATE_DOTX[name], "base64"));
@@ -109,7 +113,7 @@ for (const [name, { values }] of Object.entries(CASES)) {
     assert.equal(types, before["[Content_Types].xml"].toString("utf8").replace(TEMPLATE_TYPE, DOCUMENT_TYPE), "nothing else in [Content_Types].xml moved");
     let same = 0;
     for (const path of Object.keys(before)) {
-      if (CHANGED.includes(path)) continue;
+      if (changed(name).includes(path)) continue;
       assert.ok(before[path].equals(after[path]), `${path} is byte-identical`);
       same++;
     }
@@ -120,8 +124,15 @@ for (const [name, { values }] of Object.entries(CASES)) {
   });
 
   test(`${name}: each value sits between its bookmark's markers and reads back as the same text`, async () => {
-    const xml = (await entries(await fill(bytes(name), values)))["word/document.xml"].toString("utf8");
+    const xml = (await entries(await fill(bytes(name), values)))[CASES[name].part].toString("utf8");
     for (const [bookmark, value] of Object.entries(values)) assert.equal(textOf(between(xml, bookmark)), value, bookmark);
+  });
+
+  test(`${name}: the output's zip entry list is the template's — same names, same order, no added folder entries`, async () => {
+    const list = async (buf) => Object.keys((await JSZip.loadAsync(buf)).files);
+    const want = await list(bytes(name));
+    assert.ok(!want.some((p) => p.endsWith("/")), "fixture: the template has no folder entries");
+    assert.deepEqual(await list(await fill(bytes(name), values)), want);
   });
 
   test(`${name}: textutil reads the filled file and finds every value and the boilerplate`, { skip: existsSync("/usr/bin/textutil") ? false : "textutil is macOS-only — not present here" }, async () => {
@@ -132,7 +143,8 @@ for (const [name, { values }] of Object.entries(CASES)) {
     const flat = (s) => s.replace(/\s+/g, " ").toLowerCase(); // w:br comes back as a line separator; w:caps text may be upper-cased
     const text = flat(r.stdout);
     assert.ok(text.includes(flat(CASES[name].boilerplate)), `boilerplate "${CASES[name].boilerplate}"`);
-    for (const [bookmark, value] of Object.entries(values)) assert.ok(text.includes(flat(value)), `${bookmark}: ${value}`);
+    // textutil prints no page headers — the Inspection Plan's header values are checked in its header2.xml test.
+    if (CASES[name].part === DOC) for (const [bookmark, value] of Object.entries(values)) assert.ok(text.includes(flat(value)), `${bookmark}: ${value}`);
     if (name === "CTA_REPORT") assert.ok(text.includes("september 2026") && text.includes("#99001-2026") && !text.includes("2023"), "CREATEDATE fields read the fill date");
   });
 }
@@ -188,8 +200,41 @@ test("control characters that XML cannot carry are dropped, not written", async 
   assertWellFormed(xml, "control chars");
 });
 
+test("Inspection_Plan: title and case number land in the page header (header2.xml), placeholders gone, header parses", async () => {
+  const before = await entries(bytes("Inspection_Plan"));
+  const after = await entries(await fill(bytes("Inspection_Plan"), { CaseTitle: "Zed Example v. Qux Sample", CaseID: "993099" }));
+  const was = before["word/header2.xml"].toString("utf8"), hdr = after["word/header2.xml"].toString("utf8");
+  assert.deepEqual([textOf(between(was, "CaseID")), textOf(between(was, "CaseTitle"))], ["CaseID", "Title"], "fixture: the template's placeholders");
+  assert.equal(textOf(between(hdr, "CaseID")), "993099");
+  assert.equal(textOf(between(hdr, "CaseTitle")), "Zed Example v. Qux Sample");
+  assert.equal(textOf(hdr), "Case #: 993099; Zed Example v. Qux Sample", "the header reads as Access filled it");
+  assert.ok(!/>(?:CaseID|Title)</.test(hdr), "no placeholder text left in the header");
+  assertWellFormed(hdr, "Inspection_Plan header2.xml");
+  // Neither name is in document.xml, and the other header/footer parts are untouched.
+  for (const n of ["CaseID", "CaseTitle"]) assert.ok(!before["word/document.xml"].toString("utf8").includes(`w:name="${n}"`), `fixture: ${n} only in the header`);
+  for (const p of Object.keys(before).filter((p) => /^word\/(header|footer)\d*\.xml$/.test(p) && p !== "word/header2.xml")) assert.ok(before[p].equals(after[p]), `${p} untouched`);
+});
+
+test("a bookmark name in several parts gets the same value in each", async () => {
+  // Put a copy of the header's CaseID bookmark into footer2.xml too.
+  const src = await variant("Inspection_Plan", async (zip) => {
+    const footer = await zip.file("word/footer2.xml").async("string");
+    zip.file("word/footer2.xml", footer.replace(/(<w:p\b[^>]*>(?:<w:pPr>[\s\S]*?<\/w:pPr>)?)/, '$1<w:bookmarkStart w:id="90" w:name="CaseID"/><w:r><w:t>CaseID</w:t></w:r><w:bookmarkEnd w:id="90"/>'));
+  });
+  const after = await entries(await fill(src, { CaseID: "993099" }));
+  for (const p of ["word/header2.xml", "word/footer2.xml"]) assert.equal(textOf(between(after[p].toString("utf8"), "CaseID")), "993099", p);
+});
+
+test("a tab in a value becomes w:tab inside the run, never a raw tab in w:t", async () => {
+  const xml = (await entries(await fill(bytes("CTA_Memo"), { Firm: "A\tB\nC\t" })))["word/document.xml"].toString("utf8");
+  assert.equal(between(xml, "Firm").replace(/^<w:r>(?:<w:rPr>.*?<\/w:rPr>)?/, ""), '<w:t xml:space="preserve">A</w:t><w:tab/><w:t xml:space="preserve">B</w:t><w:br/><w:t xml:space="preserve">C</w:t><w:tab/></w:r>');
+  assert.ok(!xml.includes("\t"), "no raw tab anywhere");
+  assertWellFormed(xml, "tab");
+});
+
 test("a map name the template does not have throws UnknownBookmarkError naming it", async () => {
-  await assert.rejects(fill(bytes("Inspection_Plan"), { CaseTitle: "x" }), (e) => e instanceof UnknownBookmarkError && e.name === "UnknownBookmarkError" && e.bookmark === "CaseTitle" && /CaseTitle/.test(e.message));
+  await assert.rejects(fill(bytes("Inspection_Plan"), { CaseTitle: "x", TodayDate: "y" }), (e) => e instanceof UnknownBookmarkError && e.bookmark === "TodayDate");
+  await assert.rejects(fill(bytes("CTA_Memo"), { CaseTitle: "x" }), (e) => e instanceof UnknownBookmarkError && e.name === "UnknownBookmarkError" && e.bookmark === "CaseTitle" && /CaseTitle/.test(e.message));
   await assert.rejects(fill(bytes("CTA_Memo"), { ...MEMO, Nope: "x" }), UnknownBookmarkError);
 });
 

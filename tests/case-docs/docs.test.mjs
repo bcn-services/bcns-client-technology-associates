@@ -6,6 +6,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import JSZip from "jszip";
 
 const { CASE_DOCS, caseDoc, formatAttyName, formatAddress, todayText, loadCaseDocValues } = await import("../../lib/case-docs/docs.ts");
 const { fillTemplate, UnknownBookmarkError } = await import("../../lib/case-docs/fill.ts");
@@ -118,7 +119,7 @@ test("each kind's map has exactly its bookmark names, built from the case's rows
     CaseID: "99001",
   });
   assert.deepEqual(await m("file-review-summary"), { CaseTitle: `Example & Co <v.> "Sample"`, CaseID: "99001", TodayDate: "September 05, 2026" });
-  assert.deepEqual(await m("inspection-plan"), {});
+  assert.deepEqual(await m("inspection-plan"), { CaseTitle: `Example & Co <v.> "Sample"`, CaseID: "99001" });
 });
 
 test("a non-Esq. attorney: title prefix, null parts as blanks", async () => {
@@ -146,10 +147,15 @@ test("unknown case id → null for every kind", async () => {
   for (const d of CASE_DOCS) assert.equal(await loadCaseDocValues(full, 12345, d.slug, NOW), null);
 });
 
-test("every bookmark name a kind returns exists in that kind's template", async () => {
+test("every bookmark name a kind returns exists in that kind's template (document.xml or a header/footer part)", async () => {
   for (const d of CASE_DOCS) {
     const values = await loadCaseDocValues(full, 99001, d.slug, NOW);
     const tpl = new Uint8Array(Buffer.from(TEMPLATE_DOTX[d.template], "base64"));
+    // Independent of the fill engine: every name has a bookmarkStart in the document or a header/footer part.
+    const zip = await JSZip.loadAsync(tpl);
+    const parts = await Promise.all(Object.keys(zip.files).filter((p) => /^word\/(document|header\d*|footer\d*)\.xml$/.test(p)).map((p) => zip.file(p).async("string")));
+    for (const name of Object.keys(values)) assert.ok(parts.some((x) => x.includes(`w:name="${name}"`)), `${d.slug}: ${name}`);
+    assert.ok(Object.keys(values).length > 0, `${d.slug}: fills at least one bookmark`);
     await fillTemplate(tpl, values, NOW, "2026-09-05"); // throws UnknownBookmarkError on a name the template lacks
     await assert.rejects(fillTemplate(tpl, { ...values, NotABookmark: "x" }, NOW, "2026-09-05"), UnknownBookmarkError, "the check bites");
   }

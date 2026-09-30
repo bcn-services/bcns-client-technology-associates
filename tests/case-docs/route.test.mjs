@@ -55,8 +55,11 @@ test("signed in → 200 docx attachment named for the case, filled with the case
     assert.equal(res.headers.get("cache-control"), "private, no-store");
     const name = d.fileName(99001);
     assert.equal(res.headers.get("content-disposition"), `attachment; filename="${name}"; filename*=UTF-8''${encodeURIComponent(name)}`);
-    const xml = await (await JSZip.loadAsync(await res.arrayBuffer())).file("word/document.xml").async("string");
-    if (d.slug !== "inspection-plan") assert.ok(xml.includes("Example v. Sample"), `${d.slug}: title not filled`);
+    // The Inspection Plan's title and case number are in its page header.
+    const part = d.slug === "inspection-plan" ? "word/header2.xml" : "word/document.xml";
+    const xml = await (await JSZip.loadAsync(await res.arrayBuffer())).file(part).async("string");
+    assert.ok(xml.includes("Example v. Sample"), `${d.slug}: title not filled`);
+    if (d.slug !== "memo") assert.ok(xml.includes("99001"), `${d.slug}: case number not filled`);
   }
 });
 

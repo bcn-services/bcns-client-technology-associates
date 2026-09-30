@@ -39,10 +39,14 @@ async function signIn([email, password]) {
   }
   return page;
 }
-/** The document's visible text: w:br → newline, tags dropped, the five XML entities decoded. */
-const docText = async (buf) => (await (await JSZip.loadAsync(buf)).file("word/document.xml").async("string"))
-  .replace(/<w:br\/>/g, "\n").replace(/<[^>]+>/g, "")
-  .replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&amp;/g, "&");
+/** The document's visible text (body, then page headers/footers): w:br → newline, tags dropped, the five XML entities decoded. */
+const docText = async (buf) => {
+  const zip = await JSZip.loadAsync(buf);
+  const parts = ["word/document.xml", ...Object.keys(zip.files).filter((p) => /^word\/(header|footer)\d*\.xml$/.test(p))];
+  return (await Promise.all(parts.map((p) => zip.file(p).async("string")))).join("\n")
+    .replace(/<w:br\/>/g, "\n").replace(/<[^>]+>/g, "")
+    .replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&amp;/g, "&");
+};
 
 before(async () => {
   if (skip) return;
@@ -76,7 +80,7 @@ test("signed-in staff: each link downloads a .docx named for the case holding th
     "memo": ["Pat Q. Example, Jr., Esq.", "Example Firm LLP", "1 Test St\nSuite 2\nSampletown, NY 10001-9999", today, `Index No. 000/0000, ${TITLE}`],
     "cta-report": ["Pat Quinn Example, Jr., Esq.\nExample Firm LLP\n1 Test St\nSuite 2\nSampletown, NY 100019999", TITLE, String(CASE)],
     "file-review-summary": [TITLE, String(CASE), today],
-    "inspection-plan": ["Additional notes:"], // no bookmarks filled — the template's own text comes through
+    "inspection-plan": ["Additional notes:", TITLE, String(CASE)], // title and case number are in the page header
   };
   const names = { "memo": "Memo", "cta-report": "CTA Report", "file-review-summary": "File Review Summary", "inspection-plan": "Inspection Plan" };
   for (const d of CASE_DOCS) {

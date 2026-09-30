@@ -41,7 +41,12 @@ async function signIn([email, password]) {
   }
   return page;
 }
-const docXml = async (buf) => (await JSZip.loadAsync(buf)).file("word/document.xml").async("string");
+/** document.xml, then every page header/footer part — the Inspection Plan's values are in its header. */
+const docXml = async (buf) => {
+  const zip = await JSZip.loadAsync(buf);
+  const parts = ["word/document.xml", ...Object.keys(zip.files).filter((p) => /^word\/(header|footer)\d*\.xml$/.test(p))];
+  return (await Promise.all(parts.map((p) => zip.file(p).async("string")))).join("\n");
+};
 const docText = (xml) => xml.replace(/<w:br\/>/g, "\n").replace(/<[^>]+>/g, "")
   .replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&amp;/g, "&");
 const get = (who, path) => who.request.get(path, { maxRedirects: 0 });
@@ -74,7 +79,7 @@ test("staff and admin: escaping title, two-line address and filename survive end
     "memo": ["Ms. Alex Sample", "Sample & Partners <PLLC>", "12 Example Ave\nFloor 3\nTestville, NY 10001", `Docket A-1 & B, ${TITLE}`],
     "cta-report": [TITLE, String(CASE), "Sample & Partners <PLLC>\n12 Example Ave\nFloor 3"],
     "file-review-summary": [TITLE, String(CASE)],
-    "inspection-plan": [],
+    "inspection-plan": [TITLE, String(CASE)],
   };
   for (const who of [staff, admin]) {
     for (const d of CASE_DOCS) {
