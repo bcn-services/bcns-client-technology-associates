@@ -307,7 +307,7 @@ named constant or template, not the design.
     - The pending and approved lists at `/cases/service-auths` reflect both changes
     - Existing passing tests remain passing
   ui: true
-  status: not started
+  status: done (2026-09-30)
 
 - task: Wire bill output into the app — the case bills panel and `/bills` list show
     each bill's state (Draft / Finalized / Sent `<date>`) with Finalize, Download,
