@@ -23,7 +23,7 @@ jobs:
       # Plain Postgres for tests/foundation's harness (it builds its own database
       # from the migrations with a Supabase stub), as on a developer's machine.
       postgres:
-        image: postgres:17
+        image: postgres:14 # match the Homebrew 14 the suite is developed against
         env:
           POSTGRES_PASSWORD: postgres
         ports: ["5432:5432"]

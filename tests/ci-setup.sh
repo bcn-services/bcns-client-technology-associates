@@ -14,6 +14,7 @@ eval "$(supabase status -o env \
   --override-name db.url=DATABASE_URL)"
 export NEXT_PUBLIC_SUPABASE_URL NEXT_PUBLIC_SUPABASE_ANON_KEY SUPABASE_SERVICE_ROLE_KEY DATABASE_URL
 export FOUNDATION_PG_URL="postgresql://postgres:postgres@localhost:5432/ta_ci_foundation"
+export CONTACTS_PG_URL="postgresql://postgres:postgres@localhost:5432/ta_ci_contacts"
 export DOCS_REPORTS_LOCAL_STACK=1
 cat > .env.test.local <<ENV
 NEXT_PUBLIC_SUPABASE_URL=$NEXT_PUBLIC_SUPABASE_URL
