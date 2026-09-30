@@ -10,6 +10,7 @@ import JSZip from "jszip";
 import session from "../docs-reports/stub-session.cjs";
 import dbclient from "../docs-reports/stub-dbclient.cjs";
 import { CASE_DOCS } from "../../lib/case-docs/docs.ts";
+import { firmToday } from "../../lib/cases/presets.ts";
 
 const here = (f) => fileURLToPath(new URL(f, import.meta.url));
 const STUBS = { "@/lib/auth/session": here("../docs-reports/stub-session.cjs"), "@/lib/db/client": here("../docs-reports/stub-dbclient.cjs") };
@@ -80,6 +81,26 @@ test("db failure → 503 plain text, never document bytes", async () => {
     assert.match(res.headers.get("content-type"), /^text\/plain/);
     assert.equal(res.headers.get("content-disposition"), null);
   } finally { console.error = orig; }
+});
+
+test("CTA Report: the CREATEDATE fields and core.xml carry the request's date, not the template's 2023", async () => {
+  setup();
+  const t0 = new Date();
+  const zip = await JSZip.loadAsync(await (await get(99001, "cta-report")).arrayBuffer());
+  const t1 = new Date();
+  const text = (await zip.file("word/document.xml").async("string")).replace(/<w:instrText\b[^>]*>[^<]*<\/w:instrText>/g, "").replace(/<[^>]+>/g, "");
+  const years = new Set([t0, t1].map((d) => firmToday(d).slice(0, 4)));
+  assert.ok([...years].some((y) => text.includes(`-${y}`)), "CTA REPORT #<id>-<firm year>");
+  assert.ok(!text.includes("2023"));
+  const created = /<dcterms:created\b[^>]*>([^<]*)</.exec(await zip.file("docProps/core.xml").async("string"))[1];
+  assert.ok(Math.abs(Date.parse(created) - t0.getTime()) < 120_000, `created ${created} is now`);
+});
+
+test("source: one `now` feeds loadCaseDocValues and fillTemplate, with the firm's date from firmToday(now)", () => {
+  assert.match(ROUTE_SRC, /const now = new Date\(\);/);
+  assert.match(ROUTE_SRC, /loadCaseDocValues\(.*, now\);/);
+  assert.match(ROUTE_SRC, /fillTemplate\([^;]*, values, now, firmToday\(now\)\)/);
+  assert.equal(ROUTE_SRC.match(/new Date\(/g).length, 1);
 });
 
 test("source: GET's first statement is `await requireSession()`", () => {

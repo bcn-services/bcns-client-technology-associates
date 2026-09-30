@@ -150,7 +150,7 @@ test("every bookmark name a kind returns exists in that kind's template", async 
   for (const d of CASE_DOCS) {
     const values = await loadCaseDocValues(full, 99001, d.slug, NOW);
     const tpl = new Uint8Array(Buffer.from(TEMPLATE_DOTX[d.template], "base64"));
-    await fillTemplate(tpl, values); // throws UnknownBookmarkError on a name the template lacks
-    await assert.rejects(fillTemplate(tpl, { ...values, NotABookmark: "x" }), UnknownBookmarkError, "the check bites");
+    await fillTemplate(tpl, values, NOW, "2026-09-05"); // throws UnknownBookmarkError on a name the template lacks
+    await assert.rejects(fillTemplate(tpl, { ...values, NotABookmark: "x" }, NOW, "2026-09-05"), UnknownBookmarkError, "the check bites");
   }
 });

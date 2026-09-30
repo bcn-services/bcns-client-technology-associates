@@ -4,7 +4,9 @@
  *   1. `[Content_Types].xml`: the main part's type, template → document (that is all that makes a .dotx a .docx).
  *   2. `word/document.xml`: for each named bookmark, the runs between its start and end markers become ONE run holding
  *      the escaped text (newlines as `w:br`). Both markers stay, as does any other bookmark's marker sitting between them.
+ *      Then every CREATEDATE field's cached result becomes the firm's date (see refreshCreateDate).
  *   3. The attached-template relationship, if the template has one (legacy: `AttachedTemplate = ""`).
+ *   4. `docProps/core.xml`: created and modified become `now` — a new document, as Documents.Add made.
  * Run formatting: the first replaced run's `w:rPr`; for an empty bookmark, the run just before it in the paragraph
  * (what Word gives text typed there), else the paragraph mark's.
  *
@@ -65,30 +67,70 @@ function formattingBefore(xml: string, at: number, name: string): string {
   return RPR.exec(pPr)?.[0] ?? "";
 }
 
-function fillBookmark(xml: string, name: string, text: string): string {
-  const mark = findBookmark(xml, name);
-  if (!mark) throw new UnknownBookmarkError(name);
-  const between = xml.slice(mark.from, mark.to);
-  const runs = between.match(RUN) ?? [];
-  if (between.replace(RUN, "").replace(MARKERS, "") !== "" || runs.some((r) => !PLAIN_RUN_BODY.test(r.replace(/^<w:r[^>]*>/, "").replace(/<\/w:r>$/, "").replace(RPR, "")))) {
-    throw new UnsupportedTemplateError(`Bookmark "${name}" holds more than plain text in one paragraph`);
+/** The plain text runs in `segment` become ONE run holding `text`, formatted like the first of them (else `fallback()`). */
+function replaceRuns(segment: string, text: string, what: string, fallback: () => string): string {
+  const runs = segment.match(RUN) ?? [];
+  if (segment.replace(RUN, "").replace(MARKERS, "") !== "" || runs.some((r) => !PLAIN_RUN_BODY.test(r.replace(/^<w:r[^>]*>/, "").replace(/<\/w:r>$/, "").replace(RPR, "")))) {
+    throw new UnsupportedTemplateError(`${what} holds more than plain text in one paragraph`);
   }
   const first = runs[0];
-  const rPr = first !== undefined ? RPR.exec(first)?.[0] ?? "" : formattingBefore(xml, mark.from, name);
+  const rPr = first !== undefined ? RPR.exec(first)?.[0] ?? "" : fallback();
   const body = text
     .split(/\r\n|\r|\n/)
     .map((line) => (line === "" ? "" : `<w:t xml:space="preserve">${escapeXml(line)}</w:t>`))
     .join("<w:br/>");
   const run = body === "" ? "" : `<w:r>${rPr}${body}</w:r>`;
-  const at = runs.length ? between.search(RUN) : 0;
-  return xml.slice(0, mark.from) + between.slice(0, at) + run + between.slice(at).replace(RUN, "") + xml.slice(mark.to);
+  const at = runs.length ? segment.search(RUN) : 0;
+  return segment.slice(0, at) + run + segment.slice(at).replace(RUN, "");
+}
+
+function fillBookmark(xml: string, name: string, text: string): string {
+  const mark = findBookmark(xml, name);
+  if (!mark) throw new UnknownBookmarkError(name);
+  const between = replaceRuns(xml.slice(mark.from, mark.to), text, `Bookmark "${name}"`, () => formattingBefore(xml, mark.from, name));
+  return xml.slice(0, mark.from) + between + xml.slice(mark.to);
+}
+
+/**
+ * CREATEDATE fields show the document's creation date. Access's Documents.Add made a NEW document, so they read
+ * the day it was made; Word does not recalculate them on open, so their cached results are rewritten here from the
+ * firm's date. Only the two pictures the templates use; any other CREATEDATE throws rather than keep a stale date.
+ * ponytail: word/document.xml only — no template has a CREATEDATE in a header/footer; scan those parts when one does.
+ */
+function refreshCreateDate(xml: string, firmDate: string): string {
+  if (/<w:fldSimple\b[^>]*\bw:instr="\s*CREATEDATE\b/i.test(xml)) throw new UnsupportedTemplateError("Simple CREATEDATE field is not supported");
+  const [y, m] = firmDate.split("-");
+  const shown: Record<string, string> = {
+    YYYY: y!,
+    "MMMM YYYY": `${new Date(Date.UTC(Number(y), Number(m) - 1)).toLocaleString("en-US", { month: "long", timeZone: "UTC" })} ${y}`,
+  };
+  let out = "", last = 0;
+  for (const ins of xml.matchAll(/<w:instrText\b[^>]*>([^<]*)<\/w:instrText>/g)) {
+    if (!/^\s*CREATEDATE\b/i.test(ins[1]!)) continue;
+    const picture = /\\@\s*"([^"]*)"/.exec(ins[1]!)?.[1] ?? "";
+    const text = shown[picture];
+    if (text === undefined) throw new UnsupportedTemplateError(`CREATEDATE field with picture "${picture}" is not supported`);
+    const after = ins.index + ins[0].length;
+    const sep = xml.indexOf('w:fldCharType="separate"', after), end = xml.indexOf('w:fldCharType="end"', after);
+    const from = xml.indexOf("</w:r>", sep) + "</w:r>".length;
+    const to = Math.max(xml.lastIndexOf("<w:r>", end), xml.lastIndexOf("<w:r ", end));
+    if (sep < 0 || end < sep || to < from || xml.slice(after, to).split("<w:fldChar").length !== 2) {
+      throw new UnsupportedTemplateError("CREATEDATE field is not a plain begin/instr/separate/result/end field");
+    }
+    out += xml.slice(last, from) + replaceRuns(xml.slice(from, to), text, "CREATEDATE result", () => "");
+    last = to;
+  }
+  return out + xml.slice(last);
 }
 
 /**
  * `template`: a `.dotx` file's bytes. `values`: bookmark name → text. Returns `.docx` bytes.
  * A bookmark not named in `values` is left exactly as it is; a name the template lacks throws UnknownBookmarkError.
+ * `now` / `firmDate` (`YYYY-MM-DD`, the firm's today for `now` — firmToday(now)): the new document's creation moment,
+ * stamped into docProps/core.xml (UTC) and shown by CREATEDATE fields (firm date), as Access's Documents.Add did.
  */
-export async function fillTemplate(template: Uint8Array, values: Readonly<Record<string, string>>): Promise<Uint8Array> {
+export async function fillTemplate(template: Uint8Array, values: Readonly<Record<string, string>>, now: Date, firmDate: string): Promise<Uint8Array> {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(firmDate)) throw new TypeError(`firmDate must be YYYY-MM-DD, got "${firmDate}"`);
   const zip = await JSZip.loadAsync(template);
   const read = async (path: string) => {
     const entry = zip.file(path);
@@ -104,7 +146,17 @@ export async function fillTemplate(template: Uint8Array, values: Readonly<Record
 
   let doc = await read("word/document.xml");
   for (const [name, text] of Object.entries(values)) doc = fillBookmark(doc, name, text);
-  write("word/document.xml", doc);
+  write("word/document.xml", refreshCreateDate(doc, firmDate));
+
+  const CORE = "docProps/core.xml";
+  const stamp = `${now.toISOString().slice(0, 16)}:00Z`; // W3CDTF to the minute, as Word writes it
+  let core = await read(CORE);
+  for (const tag of ["dcterms:created", "dcterms:modified"]) {
+    const re = new RegExp(`(<${tag}\\b[^>]*>)[^<]*(</${tag}>)`);
+    if (!re.test(core)) throw new UnsupportedTemplateError(`${CORE} has no ${tag}`);
+    core = core.replace(re, `$1${stamp}$2`);
+  }
+  write(CORE, core);
 
   const RELS = "word/_rels/settings.xml.rels";
   const ATTACHED = /<Relationship\b[^>]*\bType="[^"]*\/attachedTemplate"[^>]*\/>/g;

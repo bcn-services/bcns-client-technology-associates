@@ -5,6 +5,7 @@ import type { Db } from "@/lib/time/entries";
 import { caseDoc, loadCaseDocValues } from "@/lib/case-docs/docs";
 import { fillTemplate } from "@/lib/case-docs/fill";
 import { TEMPLATE_DOTX } from "@/lib/case-docs/templates";
+import { firmToday } from "@/lib/cases/presets";
 
 export const dynamic = "force-dynamic";
 
@@ -22,9 +23,10 @@ export async function GET(_req: Request, { params }: { params: { id: string; doc
   if (!/^\d{1,9}$/.test(params.id)) return text("That case does not exist.", 404);
   const caseId = Number(params.id);
   try {
-    const values = await loadCaseDocValues(createServerClient() as unknown as Db, caseId, kind.slug, new Date());
+    const now = new Date();
+    const values = await loadCaseDocValues(createServerClient() as unknown as Db, caseId, kind.slug, now);
     if (!values) return text("That case does not exist.", 404);
-    const bytes = await fillTemplate(Buffer.from(TEMPLATE_DOTX[kind.template], "base64"), values);
+    const bytes = await fillTemplate(Buffer.from(TEMPLATE_DOTX[kind.template], "base64"), values, now, firmToday(now));
     const name = kind.fileName(caseId);
     return new NextResponse(Buffer.from(bytes), {
       headers: {
