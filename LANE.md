@@ -142,4 +142,4 @@ Test against the fixture, not the producing lane. Do not wait for it to exist.
     - Existing passing tests remain passing
   ui: true
   after: cases
-  status: not started
+  status: done (2026-09-30)
