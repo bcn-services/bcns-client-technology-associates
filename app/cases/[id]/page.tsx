@@ -194,7 +194,7 @@ export default async function CaseRecordPage({ params, searchParams }: { params:
 
       {/* Headed slots for later lanes. */}
       <div className="grid gap-4 md:grid-cols-2">
-        <ServiceAuthsPanel t={first(searchParams.t) ?? "initial"} caseId={id} rows={sas} today={firmToday(new Date())} saved={first(searchParams.sa)} error={first(searchParams.sa_error)} />
+        <ServiceAuthsPanel t={first(searchParams.t) ?? "initial"} caseId={id} rows={sas} today={firmToday(new Date())} saved={first(searchParams.sa)} error={first(searchParams.sa_error)} created={first(searchParams.sa_new)} />
         <BillsPanel caseId={id} />
         <CaseFundsPanel caseId={id} />
         <CaseExpensesPanel caseId={id} />

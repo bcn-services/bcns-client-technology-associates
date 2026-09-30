@@ -114,10 +114,13 @@ test("edit: Modified → Modified and Approved stamps; hand-entered date in the 
   assert.equal(w.srvdateapproved, "2026-02-03");
 });
 
-test("no stamp: approved → other approved, date already in DB, or status unchanged", async () => {
+test("no stamp: date already in DB, or status unchanged; approved → other approved stamps only an empty date (item 7 legacy rule)", async () => {
   const appr = { ...ROW, srvauthstatus: "Approved" };
   const db = fakeDb(base([{ ...appr }]));
-  assert.deepEqual((await saveServiceAuth(db, 90001, editForm(appr, { srvauthstatus: "Modified and Approved" }), TODAY)).written, { srvauthstatus: "Modified and Approved" });
+  assert.deepEqual((await saveServiceAuth(db, 90001, editForm(appr, { srvauthstatus: "Modified and Approved" }), TODAY)).written, { srvauthstatus: "Modified and Approved", srvdateapproved: TODAY });
+  const dated = { ...appr, srvdateapproved: "2026-04-04" };
+  const db1 = fakeDb(base([{ ...dated }]));
+  assert.deepEqual((await saveServiceAuth(db1, 90001, editForm(dated, { srvauthstatus: "Modified and Approved" }), TODAY)).written, { srvauthstatus: "Modified and Approved" });
   // Form rendered before another user set the date: orig blank, DB has it.
   const db2 = fakeDb(base([{ ...ROW, srvdateapproved: "2026-05-05" }]));
   assert.deepEqual((await saveServiceAuth(db2, 90001, editForm(ROW, { srvauthstatus: "Approved" }), TODAY)).written, { srvauthstatus: "Approved" });

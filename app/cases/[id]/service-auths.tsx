@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { Row } from "@/lib/cases/record";
-import { SA_FIELDS, SA_STATUSES, saErrorMessage, saValue, type SaField } from "@/lib/cases/service-auths";
-import { saveServiceAuthAction } from "./actions";
+import { SA_FIELDS, SA_STATUSES, isAppSaFile, saErrorMessage, saValue, type SaField } from "@/lib/cases/service-auths";
+import { createServiceAuthAction, saveServiceAuthAction } from "./actions";
 import { SaSubmit } from "./sa-submit";
 
 const input = "w-full rounded border border-slate-300 px-2 py-1";
@@ -41,11 +41,17 @@ function SaForm({ caseId, row, today, t }: { caseId: number; row: Row | null; to
           {row && <input type="hidden" name={`${f.col}__orig`} value={saValue(f, row)} />}
         </label>
       ))}
-      <div className="flex items-end">
+      <div className="flex items-end gap-3">
         <SaSubmit label={row ? "Update authorization" : "Add authorization"} />
+        {row && isAppSaFile(caseId, row.srvauthfile) && <SaPdfLink row={row} />}
       </div>
     </form>
   );
+}
+
+const saPdfHref = (srvauthid: unknown) => `/cases/service-auths/pdf/${String(srvauthid)}`;
+function SaPdfLink({ row, label = "PDF" }: { row: Row; label?: string }) {
+  return <a href={saPdfHref(row.srvauthid)} download className="text-sm underline" data-testid="sa-pdf">{label}</a>;
 }
 
 /**
@@ -53,13 +59,24 @@ function SaForm({ caseId, row, today, t }: { caseId: number; row: Row | null; to
  * `rows` null = the read failed. `t` is the redirect's timestamp: it goes into every form key, so each
  * save remounts the forms — no row inherits another's DOM state, and the add form resets.
  */
-export function ServiceAuthsPanel({ caseId, rows, today, t, saved, error }: { caseId: number; rows: Row[] | null; today: string; t: string; saved?: string; error?: string }) {
+export function ServiceAuthsPanel({ caseId, rows, today, t, saved, error, created }: { caseId: number; rows: Row[] | null; today: string; t: string; saved?: string; error?: string; created?: string }) {
+  const made = created ? rows?.find((r) => String(r.srvauthid) === created) : undefined;
   return (
     <section id="service-auths" className="space-y-2 rounded border border-slate-200 p-3 md:col-span-2">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h2 className="font-semibold">Service authorizations</h2>
-        <Link href="/cases/service-auths" className="text-sm underline">All unapproved</Link>
+        <div className="flex items-center gap-3">
+          <form action={createServiceAuthAction.bind(null, caseId)}>
+            <SaSubmit label="Create SA" />
+          </form>
+          <Link href="/cases/service-auths" className="text-sm underline">All unapproved</Link>
+        </div>
       </div>
+      {made && (
+        <p role="status" className="text-sm text-emerald-700" data-testid="sa-created">
+          Service authorization created (Awaiting Approval). <SaPdfLink row={made} label={`Download ${String(made.srvauthfile)}.pdf`} />
+        </p>
+      )}
       {saved && <p role="status" className="text-sm text-emerald-700">{saved === "1" ? "Service authorization saved" : "No changes to save"}</p>}
       {error && <p role="alert" className="text-sm text-red-700">{saErrorMessage(error)}</p>}
       <h3 className="text-sm font-medium">Add</h3>

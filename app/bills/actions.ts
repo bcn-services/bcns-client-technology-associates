@@ -10,13 +10,13 @@ import { runCreateBill } from "@/lib/bills/create";
 import { runNoticeAction } from "@/lib/bills/notice";
 import { runRevise } from "@/lib/bills/revise";
 import { runFinalize } from "@/lib/bills/finalize";
-import { runCreatePdf, saveInvoicePdf } from "@/lib/bill-docs/invoice";
+import { docConfig, runCreatePdf, saveInvoicePdf } from "@/lib/bill-docs/invoice";
 import { getStorageAdapter } from "@/lib/storage";
 import { runSend, type SendState } from "@/lib/bills/send";
 import { readStoredFile, writeStoredFile } from "@/lib/bill-docs/send";
 import { getConfig } from "@/lib/env";
 
-const invoiceConfig = () => { const c = getConfig(); return { letterhead: c.billLetterhead, taxId: c.billTaxId }; };
+const invoiceConfig = docConfig;
 
 /** Admin create of one bill on a case, claiming the checked unbilled time rows (see createBill in lib/bills/create.ts). */
 export async function createBill(formData: FormData): Promise<void> {

@@ -7,18 +7,22 @@
  * activity hours `Format(x, "fixed")` (2 decimals), money `#,###` (whole dollars), document date `mmmm dd, yyyy`.
  * Letterhead and TAX ID come from config (BILL_LETTERHEAD / BILL_TAX_ID); unset → that row is not drawn.
  */
-import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from "pdf-lib";
+import type { PDFFont, PDFPage } from "pdf-lib";
 import type { StorageAdapter } from "@/lib/storage";
+import { getConfig } from "@/lib/env";
 import type { Db } from "@/lib/time/entries";
 import type { Session } from "@/lib/auth/session";
 import { toCents, fmtCents } from "@/lib/expenses/list";
+import { INK, W, H, L, R, RCOL, wrap, openDoc, drawLetterhead, ymd, mdyy, dollars, fixed2 } from "./pdf";
 import { labelLines, type LabelAttorney, type LabelFirm } from "@/lib/cases/search";
 import { brokenFinalize, storedLines } from "@/lib/bills/finalize";
 import { summarize, type BillLine } from "@/lib/bills/lines";
-import { billFileName } from "@/lib/bills/rules";
+import { billFileName, keySafe } from "@/lib/bills/rules";
 import { firstFreeName } from "@/lib/bills/create";
 
 export type InvoiceConfig = { letterhead?: string[]; taxId?: string };
+/** Letterhead + TAX ID from config (lazy env), shared by the invoice and the SA. */
+export const docConfig = (): InvoiceConfig => { const c = getConfig(); return { letterhead: c.billLetterhead, taxId: c.billTaxId }; };
 export type InvoiceBill = {
   billid: number; billcaseid: number; billdate: string; billtype: string | null; billhours: number | string;
   billbalance: number | string; billfinalizedat: string | null; billfilename: string | null; billpdfpath: string | null;
@@ -67,19 +71,12 @@ export async function loadInvoice(db: Db, billid: number): Promise<InvoiceData> 
 }
 
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
-const ymd = (d: string) => d.slice(0, 10).split("-").map(Number) as [number, number, number];
-/** VBA `M/D/YY`. */
-export const mdyy = (d: string | null): string => { if (!d) return ""; const [y, m, day] = ymd(d); return `${m}/${day}/${String(y % 100).padStart(2, "0")}`; };
 /** VBA `mm/dd/yy` (the retainer row). */
 export const mmddyy = (d: string | null): string => { if (!d) return ""; const [y, m, day] = ymd(d); return [m, day, y % 100].map((n) => String(n).padStart(2, "0")).join("/"); };
 /** VBA `mmmm dd, yyyy` — "September 07, 2026". */
 export const longDate = (d: string): string => { const [y, m, day] = ymd(d); return `${MONTHS[m - 1]} ${String(day).padStart(2, "0")}, ${y}`; };
-/** VBA `#,###`: cents → whole dollars, half away from zero, with commas; 0 → "0" (VBA would print nothing). */
-export const dollars = (c: number): string => fmtCents(Math.sign(c) * Math.floor((Math.abs(c) + 50) / 100) * 100).slice(0, -3);
 /** Balance due: whole dollars when whole, else dollars and cents — never hides a stored cent. */
 const balanceText = (c: number): string => `${c < 0 ? "-" : ""}$${c % 100 === 0 ? dollars(Math.abs(c)) : fmtCents(Math.abs(c))}`;
-/** VBA `Format(h, "fixed")`: thousandths → 2 decimals, half-up. */
-const fixed2 = (t: number): string => { const h = Math.floor((t + 5) / 10); return `${Math.trunc(h / 100)}.${String(h % 100).padStart(2, "0")}`; };
 
 type Row = { date?: string; ref?: string; hrs?: string; total?: string; charges?: string; credits?: string; gap?: boolean };
 /** Stored lines → table rows, in stored order. Total rows ("<h> hrs x $r/hr") print their stored description + amount. */
@@ -109,50 +106,16 @@ const FOOTER = [
   "PLEASE NOTIFY US PROMPTLY IF THIS INVOICE DOES NOT AGREE WITH YOUR RECORDS",
   "PLEASE RETURN A COPY OF THIS INVOICE WITH YOUR CHECK",
 ];
-const INK = rgb(0.2, 0.2, 0.22);
 // Letter page, points, measured off the legacy Word template. Text margin L; the table runs TL..TR with column rules
 // between DATE | REFERENCE | CHARGES | CREDITS | BALANCE, from under its header down to TABLE_BOTTOM on every page.
-const W = 612, H = 792, L = 58, R = 558, RX = 342, RCOL = 414;
+const RX = 342;
 const TL = 27, TR = 585, COLS = [TL, 94, 355, 437, 509, TR] as const;
 const DATE_X = TL + 5, REF = COLS[1] + 5, HRS_R = COLS[2] - 9, CHG_R = COLS[3] - 5, CRD_R = COLS[4] - 5, BAL = COLS[4] + 4;
 const TABLE_BOTTOM = 110, BOTTOM = 118;
 
-/** Standard fonts are WinAnsi-only: keep what the font encodes, strip accents from the rest, else "?". Control chars → space. */
-function cleaner(font: PDFFont): (s: string) => string {
-  const ok = new Set(font.getCharacterSet());
-  const one = (ch: string) => (ok.has(ch.codePointAt(0)!) ? ch : null);
-  return (s) => [...s.replace(/\p{Cc}/gu, " ")]
-    .map((ch) => one(ch) ?? ([...ch.normalize("NFKD").replace(/\p{M}/gu, "")].map((c) => one(c) ?? "?").join("") || "?"))
-    .join("");
-}
-
-/** Greedy word wrap to `width` (pass CLEANED text — the width lookup throws on non-WinAnsi); a word wider than `width` is split. */
-function wrap(font: PDFFont, size: number, s: string, width: number): string[] {
-  const fits = (t: string) => font.widthOfTextAtSize(t, size) <= width;
-  const out: string[] = [];
-  let cur = "";
-  for (let w of s.split(/\s+/).filter(Boolean)) {
-    const next = cur ? `${cur} ${w}` : w;
-    if (fits(next)) { cur = next; continue; }
-    if (cur) out.push(cur);
-    while (!fits(w) && w.length > 1) {
-      let i = w.length - 1;
-      while (i > 1 && !fits(w.slice(0, i))) i--;
-      out.push(w.slice(0, i));
-      w = w.slice(i);
-    }
-    cur = w;
-  }
-  return out.length || cur ? [...out, cur] : [""];
-}
-
 /** Draw the invoice. Pure: no DB, no clock, no env. */
 export async function renderInvoice(data: InvoiceData, cfg: InvoiceConfig): Promise<Uint8Array> {
-  const doc = await PDFDocument.create();
-  doc.setTitle(`Invoice ${data.bill.billid}`);
-  const reg = await doc.embedFont(StandardFonts.TimesRoman);
-  const bold = await doc.embedFont(StandardFonts.TimesRomanBold);
-  const clean = cleaner(reg);
+  const { doc, reg, bold, clean } = await openDoc(`Invoice ${data.bill.billid}`);
   let page: PDFPage = doc.addPage([W, H]);
   const text = (s: string, x: number, y: number, size = 11, font = reg) => { if (s) page.drawText(clean(s), { x, y, size, font, color: INK }); };
   const right = (s: string, xr: number, y: number, size = 11, font = reg) => text(s, xr - font.widthOfTextAtSize(clean(s), size), y, size, font);
@@ -160,11 +123,7 @@ export async function renderInvoice(data: InvoiceData, cfg: InvoiceConfig): Prom
   const line = (x1: number, y1: number, x2: number, y2: number) => page.drawLine({ start: { x: x1, y: y1 }, end: { x: x2, y: y2 }, thickness: 0.75, color: INK });
 
   // Letterhead as the legacy template: firm name at left, the rest (address, phone, web) in a column at right.
-  let y = H - 58;
-  const [firm, ...rest] = cfg.letterhead ?? [];
-  if (firm) text(firm, L, y, 14, bold);
-  rest.forEach((s, i) => text(s, RCOL, y - i * 13, 11));
-  y -= Math.max(firm ? 16 : 0, rest.length * 13) + 22;
+  let y = drawLetterhead(cfg.letterhead, text, bold);
   text("INVOICE", L, y, 18, bold);
   if (cfg.taxId) text(`TAX ID: ${cfg.taxId}`, RCOL, y, 11);
   y -= 48;
@@ -247,7 +206,7 @@ export async function renderInvoice(data: InvoiceData, cfg: InvoiceConfig): Prom
 
 /** Storage key `bills/<caseid>/<billfilename>.pdf`; storage keys are ASCII-only, so accents are stripped and anything else odd dropped. */
 export const invoiceKey = (caseid: number, filename: string): string =>
-  `bills/${caseid}/${filename.normalize("NFKD").replace(/[^\w .()&$@=;:+,-]/g, "")}.pdf`;
+  `bills/${caseid}/${keySafe(filename)}.pdf`;
 
 /**
  * This bill's file name, never one another bill already owns. The stored name is kept unless another bill on the case

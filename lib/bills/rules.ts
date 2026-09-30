@@ -36,6 +36,9 @@ export const nextNotice = (notice: string): string | null => (Object.hasOwn(NEXT
 export const billFileName = (caseId: number, attyLastName: string, billdate: string, n: number): string =>
   `${`Bill${caseId} ${attyLastName} ${billdate.slice(0, 10).replaceAll("-", " ")}`.replace(/[-_]/g, " ").replaceAll("/", "")}-${n}`;
 
+/** Storage keys are ASCII-only: strip accents, drop anything outside this set (shared by the invoice and SA keys). */
+export const keySafe = (name: string): string => name.normalize("NFKD").replace(/[^\w .()&$@=;:+,-]/g, "");
+
 export const lastNoticeDate = (bill: BillDates): string =>
   bill.billfinalnoticedate ?? bill.billsecondnoticedate ?? bill.billdate;
 

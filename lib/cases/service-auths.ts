@@ -4,6 +4,7 @@
  * /cases/service-auths lists and totals. DB and "today" are injected. No delete (lane rule).
  */
 import { isDate, type Db, type Row } from "./record";
+import { keySafe } from "@/lib/bills/rules";
 
 /** frmCaseServAuth's status value list, in form order. */
 export const SA_STATUSES = ["Awaiting Approval", "Approved without advance", "Declined", "Modified", "Modified and Approved", "Approved", "Replaced"];
@@ -16,6 +17,9 @@ const AWAITING = ["awaiting approval"];
 export const isApproved = (s: unknown) => APPROVED.includes(low(s));
 export const isUnapproved = (s: unknown) => UNAPPROVED.includes(low(s));
 export const isAwaiting = (s: unknown) => AWAITING.includes(low(s));
+/** frmCaseServAuth.SrvAuthStatus_AfterUpdate: these statuses stamp srvdateapproved; every other status clears it. */
+const STAMPING = ["approved", "declined", "modified", "modified and approved"];
+export const stampsApprovalDate = (s: unknown) => STAMPING.includes(low(s));
 
 type Kind = "date" | "hours" | "money" | "status" | "text" | "notes";
 export type SaField = { col: string; label: string; kind: Kind; required?: boolean };
@@ -48,10 +52,17 @@ const TEXT: Record<string, (l: string) => string> = {
 /** Fixed text for a `?sa_error=` code; unknown codes get the generic message, never the raw param. */
 export function saErrorMessage(code: string): string {
   if (code === "notfound") return "That service authorization no longer exists on this case.";
+  if (Object.hasOwn(CREATE_TEXT, code)) return CREATE_TEXT[code]!;
   const [kind = "", col = ""] = code.split(":");
   const f = FIELD.get(col), t = TEXT[kind];
   return f && t ? t(f.label) : "Service authorization not saved; nothing was changed.";
 }
+
+const CREATE_TEXT: Record<string, string> = {
+  "create-storage": "File storage is not configured, so no service authorization was created.",
+  "create-failed": "The service authorization could not be created; nothing was saved.",
+  "create-unknown": "The service authorization may or may not have been saved. Reload the page and check the list before creating another.",
+};
 
 const crlf = (s: string) => s.replace(/\r\n?/g, "\n");
 
@@ -126,9 +137,9 @@ function checkStatus(changes: Row) {
 /**
  * Add (no `srvauthid` in the form) or edit one SA row of case `caseId`. Edits write only the
  * columns that differ from their `__orig`; an untouched save writes nothing.
- * Stamp: a transition from a non-approved status (or a new row) into Approved / Modified and
- * Approved sets srvdateapproved = `today` when it is null in the DB, in `__orig`, and in the
- * submission. A hand-entered date wins. Approved ↔ Modified and Approved is not a transition.
+ * Approval date (legacy SrvAuthStatus_AfterUpdate, run when the status changes or a row is added):
+ * a stamping status (stampsApprovalDate) sets srvdateapproved = `today` when it is null; any other
+ * status clears it. A date typed (or blanked) in the same save wins over both.
  */
 export async function saveServiceAuth(db: Db, caseId: number, form: FormData, today: string): Promise<{ srvauthid: number; written: Row }> {
   const submitted = parseSaForm(form);
@@ -143,7 +154,7 @@ export async function saveServiceAuth(db: Db, caseId: number, form: FormData, to
     if (error) throw new Error(`tblcase read: ${error.message}`);
     if (!kase) throw new SaInputError("case not found", "notfound");
     const row: Row = { ...submitted, srvauthcaseid: caseId };
-    if (isApproved(row.srvauthstatus) && row.srvdateapproved == null) row.srvdateapproved = today;
+    if (stampsApprovalDate(row.srvauthstatus) && row.srvdateapproved == null) row.srvdateapproved = today;
     const ins = await db.from("tblsrvauth").insert(row).select("srvauthid").single();
     if (ins.error) throw new Error(`tblsrvauth insert: ${ins.error.message}`);
     return { srvauthid: ins.data.srvauthid, written: row };
@@ -156,9 +167,10 @@ export async function saveServiceAuth(db: Db, caseId: number, form: FormData, to
   const orig = parseSaOrig(form);
   const changes = diffSa(orig, submitted);
   checkStatus(changes);
-  if ("srvauthstatus" in changes && isApproved(changes.srvauthstatus) && !isApproved(orig.srvauthstatus)
-    && cur.srvdateapproved == null && !orig.srvdateapproved && submitted.srvdateapproved == null)
-    changes.srvdateapproved = today;
+  if ("srvauthstatus" in changes && !("srvdateapproved" in changes)) {
+    if (stampsApprovalDate(changes.srvauthstatus)) { if (cur.srvdateapproved == null) changes.srvdateapproved = today; }
+    else if (cur.srvdateapproved != null) changes.srvdateapproved = null;
+  }
   if (Object.keys(changes).length === 0) return { srvauthid: id, written: changes };
   // ponytail: last-writer-wins per column, as the case record.
   const up = await db.from("tblsrvauth").update(changes).eq("srvauthid", id).eq("srvauthcaseid", caseId);
@@ -267,3 +279,39 @@ export function serviceAuthGrandTotal(totals: SaTotal[]): SaTotal {
   const m = totals.reduce((n, t) => n + milli(t.hours), 0);
   return { status: "All", count: totals.reduce((n, t) => n + t.count, 0), hours: (m / 1000).toFixed(3) };
 }
+
+// ---- the SA document (Create SA): pure text rules; the PDF itself is lib/bill-docs/service-auth.ts ----
+
+/** New SA rows start here (legacy CreateServAuth's record). */
+export const NEW_SA_STATUS = "Awaiting Approval";
+
+/**
+ * CreateServAuth's file name before the `-N`: `SA<caseid> <atty last> <yyyy mm dd>`, then — as the VBA — "-" and "_"
+ * become spaces and "/" and "'" are dropped; finally made storage-key safe (keySafe), so `srvauthfile` IS the key's name.
+ */
+export const saFileBase = (caseId: number, attyLast: string, today: string): string =>
+  keySafe(`SA${caseId} ${attyLast} ${today.slice(0, 10)}`.replace(/[-_]/g, " ").replace(/[/']/g, ""));
+
+/** Where the PDF for `srvauthfile` of case `caseId` is stored. */
+export const saKey = (caseId: number, srvauthfile: string): string => `service-auths/${caseId}/${srvauthfile}.pdf`;
+
+/** True when `srvauthfile` has the shape Create SA gives this case's files (legacy files live on the NAS, not in storage). */
+export const isAppSaFile = (caseId: number, srvauthfile: unknown): boolean =>
+  typeof srvauthfile === "string" && srvauthfile.startsWith(`SA${caseId} `) && /-\d+$/.test(srvauthfile);
+
+/** Sub bookmark: `caption / title / #caseid`, with "/" in the title turned into "-" (VBA). */
+export const saSubject = (caption: unknown, title: unknown, caseId: number): string =>
+  `${str(caption)} / ${str(title).replaceAll("/", "-")} / #${caseId}`;
+
+/** VBA Format$(phone, "(000) 000-0000") for a 10-digit number; anything else prints as stored. */
+export function fmtPhone(v: unknown): string {
+  const d = str(v).replace(/\D/g, "");
+  return d.length === 10 ? `(${d.slice(0, 3)}) ${d.slice(3, 6)}-${d.slice(6)}` : str(v);
+}
+
+/** Atty bookmark: `First Last, Esq. / (000) 000-0000`. */
+export const saContact = (first: unknown, last: unknown, phone: unknown): string =>
+  `${str(first)} ${str(last)}, Esq. / ${fmtPhone(phone)}`;
+
+/** VBA `Short Date` (US): M/D/YYYY. */
+export const shortDate = (d: string): string => { const [y, m, day] = d.slice(0, 10).split("-").map(Number); return `${m}/${day}/${y}`; };
