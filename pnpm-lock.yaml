@@ -23,6 +23,9 @@ importers:
       exceljs:
         specifier: ^4.4.0
         version: 4.4.0
+      jszip:
+        specifier: ^3.10.2
+        version: 3.10.2
       next:
         specifier: 14.2.18
         version: 14.2.18(@playwright/test@1.63.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)

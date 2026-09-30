@@ -16,6 +16,7 @@ import { CaseExpensesPanel } from "@/app/expenses/case-panel";
 import { CaseDocumentsPanel } from "@/app/documents/case-panel";
 import { loadServiceAuths } from "@/lib/cases/service-auths";
 import { firmToday } from "@/lib/cases/presets";
+import { CASE_DOCS } from "@/lib/case-docs/docs";
 
 export const dynamic = "force-dynamic";
 
@@ -124,6 +125,7 @@ export default async function CaseRecordPage({ params, searchParams }: { params:
         {rec.next != null ? <Link href={`/cases/${rec.next}`} className={nav}>Next case</Link> : <span className={`${nav} text-slate-400`}>Next case</span>}
         <Link href={`/cases/${id}/label`} className="underline">Mailing label</Link>
         <Link href={`/cases/${id}/rolodex`} className="underline">Rolodex card</Link>
+        {CASE_DOCS.map((d) => <a key={d.slug} href={`/cases/${id}/documents/${d.slug}`} className="underline">{d.label}</a>)}
       </div>
       <h1 className="text-xl font-semibold">Case {id}: {String(kase.casetitle ?? "")}</h1>
       {rec.badges.length > 0 && (
