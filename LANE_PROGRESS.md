@@ -4,8 +4,8 @@ LANE.md is the contract; this tracks where we are in it — if they disagree, LA
 
 ## Current position
 
-- **Status:** round 2 (items 5–8, autonomous run) in progress — items 1–7 done.
-- **Next:** item 8, wire bill output into the app.
+- **Status:** round 2 complete — items 1–8 done; lane acceptance 4/4 met; full suite 1370/1372 pass (1 pre-existing search failure, 1 skipped).
+- **Next:** /merge-lane — merge PR #19 (lane/billing-output → integration).
 - **Blockers:** none.
 - **Last updated:** 2026-09-30
 
