@@ -19,6 +19,16 @@ jobs:
     # test suite (incl. RLS forbidden-read tests). Only on green does anything
     # touch the real project.
     runs-on: ubuntu-latest
+    services:
+      # Plain Postgres for tests/foundation's harness (it builds its own database
+      # from the migrations with a Supabase stub), as on a developer's machine.
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
     permissions:
       contents: read
       packages: read
@@ -41,11 +51,7 @@ jobs:
           supabase db reset
       - name: Tests against shadow stack
         run: |
-          eval "$(supabase status -o env \
-            --override-name api.url=NEXT_PUBLIC_SUPABASE_URL \
-            --override-name auth.anon_key=NEXT_PUBLIC_SUPABASE_ANON_KEY \
-            --override-name auth.service_role_key=SUPABASE_SERVICE_ROLE_KEY)"
-          export NEXT_PUBLIC_SUPABASE_URL NEXT_PUBLIC_SUPABASE_ANON_KEY SUPABASE_SERVICE_ROLE_KEY
+          . tests/ci-setup.sh
           pnpm test
       - name: Apply to client project
         if: vars.CLIENT_SLUG != ''

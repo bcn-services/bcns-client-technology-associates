@@ -1,0 +1,55 @@
+name: ci
+
+# PR check: the deploy workflow's migrate gate minus the apply — install, replay
+# every migration on a throwaway stack, run the suite. Never touches a hosted
+# project and has no secrets beyond the package-read token.
+
+on:
+  pull_request:
+    branches: [integration, main]
+  workflow_dispatch: {}
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    # Replays ALL migrations from zero on a throwaway local stack and runs the
+    # test suite (incl. RLS forbidden-read tests). Only on green does anything
+    # touch the real project.
+    runs-on: ubuntu-latest
+    services:
+      # Plain Postgres for tests/foundation's harness (it builds its own database
+      # from the migrations with a Supabase stub), as on a developer's machine.
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22 # must match the droplet's Node
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest # pin to the exact version after the first green run
+      - name: Authenticate GitHub Packages
+        run: pnpm config set "//npm.pkg.github.com/:_authToken" "${{ secrets.GH_PACKAGES_TOKEN }}"
+      - name: Install
+        run: pnpm install --frozen-lockfile
+      - name: Shadow stack + replay migrations
+        run: |
+          supabase start
+          supabase db reset
+      - name: Tests against shadow stack
+        run: |
+          . tests/ci-setup.sh
+          pnpm test
