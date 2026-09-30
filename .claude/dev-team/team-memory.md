@@ -450,3 +450,10 @@ client data. Caught before commit. The rule now survives on any branch.
 - **What worked:** engineer captured legacy markup from HEAD before changing anything; QA proved the journey green is real with a no-keys run and a decoy-provider run (both fail), and checked bundles with esbuild.
 - **What failed:** nothing blocking; /bills admin view doesn't degrade if the output read fails.
 - **Remember next run:** journey 07 needs the dev server started with RESEND_API_KEY=re_test_dummy RESEND_API_URL=http://127.0.0.1:4107 BILL_FROM_EMAIL=billing@example.test (BILL_CC_EMAIL unset); journeys run --workers=1 on the LOCAL stack only.
+
+## 2026-09-30 — dev-team-auto (driven top-level) — case-docs round 1 (items 1–3)
+- **Outcome:** DONE — 3 items, 1 attempt each + 2 follow-up fixes — caution: none; item 3 ui: true (dt-engineer opus/high + dt-qa opus/high); items 1–2 dt-engineer opus/high alone with mandated mutation checks — lane/case-docs a4c3dd7, PR #21
+- **What happened:** jszip fill engine over the 4 legacy .dotx (templates shipped as generated base64), legacy FormatAttyName/FormatAddress ports, route + 4 links on the case page. QA caught the CTA Report showing the template's 2023 (CREATEDATE field + core.xml created date); the lane acceptance review caught the Inspection Plan's CaseTitle/CaseID bookmarks sitting in word/header2.xml, which the plan had called missing.
+- **What worked:** textutil as a cheap "a reader accepts this docx" check; rerunning live timeouts against `pnpm build && next start` settled load vs regression in one pass.
+- **What failed:** planning scanned only word/document.xml for bookmarks and wrote a wrong fact into LANE.md and into a question Nate answered; the full suite hit the 1-hour background cap under machine load.
+- **Remember next run:** scan every OOXML part (headers/footers) before stating what a template contains; a generated Word document must stamp docProps/core.xml and refresh CREATEDATE results; run long suites with the 2-hour timeout.

@@ -15,7 +15,7 @@ across rounds — never reset. Per-item detail lives in `progress/<lane>.md`.
 | money | nate | lane/money | done — 12/12 items (11 + check → bill link), merged 2026-09-15 (`075c477`, PR #13; `819ecef`, PR #14) |
 | docs-reports | nate | lane/docs-reports | done — 8/8 items, merged 2026-09-20 (`4fa1973`, PR #15) |
 | billing-output | nate | lane/billing-output | done — 8/8 items, merged 2026-09-30 (`10eceaa`, PR #19) |
-| case-docs | nate | lane/case-docs | not started — waiting on Kris's templates |
+| case-docs | nate | lane/case-docs | done — 3/3 items + 2 fixes, merged 2026-09-30 (`0f65302`, PR #21) |
 | parity | nate | lane/parity | not started — deferred past the v1 share (Nate, 2026-09-29) |
 
 **Journeys:** 3 of 3 re-run green; 6 of 6 green if the three not re-run still hold.
@@ -33,6 +33,10 @@ lane tip, local stack, `--workers=1`; the merged tree is identical to that tip, 
 07 needs the dev server started with `RESEND_API_KEY=re_test_dummy RESEND_API_URL=http://127.0.0.1:4107
 BILL_FROM_EMAIL=billing@example.test`; the spec starts the stub. Suite on the same tree: 1370 of 1372
 pass, 1 skipped, 1 pre-existing failure (search-e2e "advanced AND/OR/date via runSearch").
+
+2026-09-30, case-docs merge: journeys **not re-run** — the lane only adds four links to the case page;
+the case-page live tests (`cases/record-e2e` 8/8, `cases/service-auths-qa` 1/1) and case-docs live tests pass
+against a production build of the lane tip. Journey status stands at the billing-output reading (7 of 7).
 
 **Amendments this round**
 
