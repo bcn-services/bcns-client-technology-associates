@@ -5,13 +5,15 @@
  * shared core (lib/bill-docs/send.ts) guarded by a claim on `billsentat` unchanged since the preview:
  *   claim  = update tblbills set billsentat = <now>, billsentto = <To> where billid and billsentat = <rendered> (and
  *            finalize stamp / PDF / notice as loaded); 0 rows → stale, no provider call (a double submit sends once);
- *   release (provider failed) = restore both columns, guarded on our own stamp.
+ *   release (provider failed or no answer) = restore both columns, guarded on our own stamp.
+ * Idempotency scope = `bill-<id>-<billsentat before this send>`: an unchanged resend after a no-answer (same form, a
+ * reload, or "Email this bill") reuses the Resend key, so it can't send twice; the render token only guards staleness.
  */
 import type { Db } from "@/lib/time/entries";
 import type { Session } from "@/lib/auth/session";
 import { brokenFinalize, storedLines } from "./finalize";
 import { canSendBill } from "./rules";
-import { SendError, emailReady, parseAddresses, sendWithGuard, type EmailConfig } from "@/lib/bill-docs/send";
+import { SendError, checkEmail, emailReady, parseAddresses, sendWithGuard, type EmailConfig } from "@/lib/bill-docs/send";
 
 export type SendBill = {
   billid: number; billcaseid: number; billdate: string; billtype: string | null; billhours: number | string;
@@ -99,7 +101,8 @@ const MESSAGES: Record<string, string> = {
   stale: "This bill changed since the preview opened (it may already have been sent). Nothing was sent — reload the page.",
   storage: "File storage is not configured, so the PDF can't be attached. Nothing was sent.",
   provider: "The email service refused the message. Nothing was sent and the bill is not marked sent.",
-  release: "The email service refused the message, and the bill could not be un-marked — reload and check its sent status.",
+  noanswer: "The email service didn't answer — it may have been sent. The bill is not marked sent. Check before sending again; resending it unchanged (same To, CC, BCC, subject and message, within 24 hours) will not send twice.",
+  release: "The send did not complete, and the bill's sent status could not be restored — reload and check its sent status before sending again.",
   failed: "The bill could not be sent. Nothing was recorded.",
 };
 export const sendErrorMessage = (code: string): string => MESSAGES[code] ?? MESSAGES.failed!;
@@ -118,7 +121,6 @@ export type SendDeps = {
 
 const fail = (code: string, detail?: string): SendState =>
   ({ code, message: detail ? `${sendErrorMessage(code)} (${detail})` : sendErrorMessage(code) });
-const MAX_SUBJECT = 998, MAX_BODY = 50_000;
 
 /**
  * Body of the send server action (useFormState). Every refusal returns a state and calls nothing external; success
@@ -148,10 +150,7 @@ export async function runSend(billid: number, formData: FormData, deps: SendDeps
     if (!to?.length) return fail("to");
     if (!cc) return fail("cc");
     if (!bcc) return fail("bcc");
-    const subject = get("subject").replace(/[\r\n]+/g, " ").trim();
-    const text = get("body");
-    if (!subject || subject.length > MAX_SUBJECT) return fail("subject");
-    if (!text.trim() || text.length > MAX_BODY) return fail("body");
+    const msg = checkEmail({ to, cc, bcc, subject: get("subject"), text: get("body") }); // refuses before the PDF read
 
     const pdf = await deps.readPdf(bill.billpdfpath!);
     const stamp = deps.now().toISOString();
@@ -164,20 +163,25 @@ export async function runSend(billid: number, formData: FormData, deps: SendDeps
       if (r.error) throw new Error(`tblbills send release: ${r.error.message}`);
     };
     await sendWithGuard(cfg, {
-      to, cc, bcc, subject, text,
+      ...msg,
       attachment: { filename: bill.billpdfpath!.slice(bill.billpdfpath!.lastIndexOf("/") + 1), content: pdf },
     }, {
       claim: async () => {
         const c = await (bill.billsentat === null ? claimQ.is("billsentat", null) : claimQ.eq("billsentat", bill.billsentat)).select("billid");
         if (c.error) {
           // The reply can be lost after the claim committed: undo it (a no-op if it never landed), then refuse.
-          await release().catch((e) => console.error("send claim-error release failed:", billid, e));
+          try {
+            await release();
+          } catch (e) {
+            console.error("send claim-error release failed:", billid, e);
+            throw new SendError("release", c.error.message); // the claim may have stuck: "reload and check", not "nothing recorded"
+          }
           throw new Error(`tblbills send claim: ${c.error.message}`);
         }
         return (c.data ?? []).length === 1;
       },
       release,
-    }, `bill-${billid}-${token}`, deps.fetch);
+    }, `bill-${billid}-${bill.billsentat ?? "none"}`, deps.fetch);
   } catch (e) {
     if (e instanceof SendError) return fail(e.code, e.detail);
     console.error("sendBill:", billid, e);

@@ -1,13 +1,18 @@
 /**
  * Email send core (billing-output item 5; item 6's notice resend reuses it): one message with one PDF attachment through
  * the Resend REST API (plain fetch, no SDK), behind a caller-supplied claim/release guard so a double submit sends once:
+ *   0. checkEmail — every caller gets the same refusals: To required, <= 50 per field, valid addresses, subject CR/LF
+ *      folded to one line, subject and body non-empty and bounded;
  *   1. claim — the caller's conditional write (e.g. `billsentat` unchanged since the preview rendered); false → stale, no call;
- *   2. POST /emails with an Idempotency-Key (preview token + payload hash: a same-preview retry is deduped by Resend, an
- *      edited retry is a new key);
- *   3. any provider failure → release (undo the claim) and throw SendError("provider", <provider's message>).
+ *   2. POST /emails with Idempotency-Key = <scope>-<sha256 of the payload>. `scope` MUST come from persisted state (e.g.
+ *      `bill-<id>-<billsentat before this send>`), never from a per-render token: a retry after a lost answer — same
+ *      form, a reloaded page, or another entry point — sends the unchanged payload under the same key, and Resend
+ *      (24h window) returns the first result instead of sending twice. An edited payload is a new key;
+ *   3. provider answered with an error → release, SendError("provider", <provider's message>);
+ *      no answer (timeout / dropped connection) → release, SendError("noanswer"): it MAY have been sent. Releasing
+ *      keeps the state the key is scoped on, so resending unchanged is deduped; the caller must say "may have been sent".
  * The claim IS the record: once the provider accepts, nothing else is written, so "sent but not recorded" can't happen.
- * ponytail: a provider timeout after Resend actually accepted is released as a failure (guardrail: never mark sent on a
- * failure); the Idempotency-Key makes the same-preview retry safe — upgrade to a Resend status lookup if that ever bites.
+ * ponytail: after Resend's 24h key window a no-answer resend could double-send — upgrade to a Resend status lookup then.
  */
 import { createHash } from "node:crypto";
 import type { StorageAdapter } from "@/lib/storage";
@@ -42,7 +47,7 @@ export function parseAddresses(raw: string): string[] | null {
 /** A stored object's bytes (via a short signed URL, as the PDF download route does). */
 export async function readStoredFile(storage: StorageAdapter | null, key: string): Promise<Uint8Array> {
   if (!storage) throw new SendError("storage");
-  const res = await fetch(await storage.getSignedUrl(key, 60), { cache: "no-store" });
+  const res = await fetch(await storage.getSignedUrl(key, 60), { cache: "no-store", signal: AbortSignal.timeout(15_000) });
   if (!res.ok) throw new Error(`storage fetch ${res.status}`);
   return new Uint8Array(await res.arrayBuffer());
 }
@@ -54,22 +59,38 @@ const providerMessage = async (res: Response): Promise<string> => {
   return `${res.status} ${msg}`.trim().slice(0, 300);
 };
 
+export const MAX_SUBJECT = 998, MAX_BODY = 50_000;
+type Message = Omit<OutgoingEmail, "attachment">;
+
+/** The shared refusals (SendError code to/cc/bcc/subject/body); returns the message with its subject on one line. */
+export function checkEmail<T extends Message>(e: T): T {
+  const fields = { to: e.to, cc: e.cc, bcc: e.bcc };
+  for (const [code, list] of Object.entries(fields)) {
+    if (list.length > MAX_RECIPIENTS || !list.every((a) => a.length <= 254 && ADDRESS.test(a))) throw new SendError(code);
+  }
+  if (!e.to.length) throw new SendError("to");
+  const subject = e.subject.replace(/[\r\n]+/g, " ").trim();
+  if (!subject || subject.length > MAX_SUBJECT) throw new SendError("subject");
+  if (!e.text.trim() || e.text.length > MAX_BODY) throw new SendError("body");
+  return { ...e, subject };
+}
+
 /**
- * Validate, claim, send, release on failure. Returns the provider's message id. `token` is the per-preview token the
- * page rendered; `fetchFn` is injectable for tests (they point `apiUrl` at a local stub either way).
+ * Check, claim, send, release on failure. Returns the provider's message id. `scope` is the idempotency scope from
+ * persisted state (see the header); `fetchFn` is injectable for tests (they point `apiUrl` at a local stub either way).
  */
 export async function sendWithGuard(
-  cfg: EmailConfig, email: OutgoingEmail, guard: SendGuard, token: string, fetchFn: typeof fetch = fetch,
+  cfg: EmailConfig, email: OutgoingEmail, guard: SendGuard, scope: string, fetchFn: typeof fetch = fetch,
 ): Promise<string> {
   if (!emailReady(cfg)) throw new SendError("email-off");
-  if (!email.to.length || ![...email.to, ...email.cc, ...email.bcc].every((a) => ADDRESS.test(a))) throw new SendError("to");
+  const m = checkEmail(email);
   const body = JSON.stringify({
-    from: cfg.from, to: email.to, cc: email.cc, bcc: email.bcc, subject: email.subject, text: email.text,
-    attachments: [{ filename: email.attachment.filename, content: Buffer.from(email.attachment.content).toString("base64") }],
+    from: cfg.from, to: m.to, cc: m.cc, bcc: m.bcc, subject: m.subject, text: m.text,
+    attachments: [{ filename: m.attachment.filename, content: Buffer.from(m.attachment.content).toString("base64") }],
   });
-  const key = `${token}-${createHash("sha256").update(body).digest("hex").slice(0, 32)}`.slice(0, 256);
+  const key = `${scope}-${createHash("sha256").update(body).digest("hex").slice(0, 32)}`.slice(-256);
   if (!(await guard.claim())) throw new SendError("stale");
-  let failure: string;
+  let failure: SendError;
   try {
     const res = await fetchFn(`${cfg.apiUrl.replace(/\/+$/, "")}/emails`, {
       method: "POST",
@@ -81,15 +102,16 @@ export async function sendWithGuard(
       const json = (await res.json().catch(() => ({}))) as { id?: string };
       return json.id ?? "";
     }
-    failure = await providerMessage(res);
+    failure = new SendError("provider", await providerMessage(res));
   } catch (e) {
-    failure = `no answer from the email service (${e instanceof Error ? e.message : String(e)})`;
+    console.error("send: no answer from the email service, key", key, e);
+    failure = new SendError("noanswer", e instanceof Error ? e.message : String(e));
   }
   try {
     await guard.release();
   } catch (e) {
     console.error("send release failed after a provider failure:", e);
-    throw new SendError("release", failure);
+    throw new SendError("release", failure.detail);
   }
-  throw new SendError("provider", failure);
+  throw failure;
 }

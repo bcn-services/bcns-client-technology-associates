@@ -21,17 +21,23 @@ const { BillView } = await import("../../app/bills/[id]/bill-view.tsx");
 const { loadBill } = await import("../../lib/bills/edit.ts");
 
 function fakeDb(tables, log = []) {
-  return {
+  const db = {
     tables, log,
+    /** Optional test hook: (table) → "error" (update not applied, {error}) | "commit-error" (applied, then {error}). */
+    onUpdate: null,
     from(table) {
       const q = { filters: [], orders: [], update: null, del: false, single: false, range: null };
       const b = new Proxy({}, {
         get(_, k) {
           if (k === "then") {
             log.push([table, q.update ? "update" : "select"]);
+            const hook = q.update ? db.onUpdate?.(table) : undefined;
+            const lost = (res, rej) => Promise.resolve({ data: null, error: { message: "update reply lost" } }).then(res, rej);
+            if (hook === "error") return lost;
             const all = (tables[table] ??= []);
             let rows = all.filter((r) => q.filters.every((f) => f(r)));
             if (q.update) for (const r of rows) Object.assign(r, q.update);
+            if (hook === "commit-error") return lost;
             for (const [col, asc] of [...q.orders].reverse()) rows = [...rows].sort((x, y) => (x[col] < y[col] ? -1 : x[col] > y[col] ? 1 : 0) * (asc ? 1 : -1));
             if (q.range) rows = rows.slice(q.range[0], q.range[1] + 1);
             const data = q.single ? (rows[0] ? { ...rows[0] } : null) : rows.map((r) => ({ ...r }));
@@ -52,6 +58,7 @@ function fakeDb(tables, log = []) {
       return b;
     },
   };
+  return db;
 }
 
 // --- Resend stub: records every request; `reply` decides the response.
@@ -164,7 +171,7 @@ test("happy path: one provider call with the EDITED To/CC/BCC/subject/body + the
   assert.equal(c.method, "POST");
   assert.equal(c.url, "/emails");
   assert.equal(c.headers.authorization, "Bearer re_test_not_real");
-  assert.match(c.headers["idempotency-key"], new RegExp(`^bill-${B}-${TOKEN}-[0-9a-f]{32}$`));
+  assert.match(c.headers["idempotency-key"], new RegExp(`^bill-${B}-none-[0-9a-f]{32}$`), "key scoped on bill state, not the render token");
   assert.deepEqual(
     { from: c.body.from, to: c.body.to, cc: c.body.cc, bcc: c.body.bcc, subject: c.body.subject, text: c.body.text },
     { from: "billing@example.test", to: ["pat@example.test", "lee@example.test"], cc: ["cc1@example.test"], bcc: ["bcc@example.test"], subject: "Re: Edited subject", text: "Edited body\nline 2" },
@@ -299,13 +306,106 @@ test("Resend failure: provider's error shown, NOTHING recorded (first send and a
   assert.equal(calls.length, 2);
 });
 
-test("provider unreachable (fetch throws) → provider error, nothing recorded", async () => {
+test("no answer (fetch throws / timeout) → its own 'may have been sent' code, bill released so an unchanged resend is deduped", async () => {
+  reset();
+  for (const err of [new TypeError("fetch failed"), new DOMException("The operation was aborted due to timeout", "TimeoutError")]) {
+    const db = world();
+    const r = await send(db, form(), { fetch: async () => { throw err; } });
+    assert.equal(r.state.code, "noanswer");
+    assert.match(r.state.message, /didn't answer — it may have been sent[\s\S]*resending it unchanged[\s\S]*will not send twice/);
+    assert.doesNotMatch(r.state.message, /Nothing was sent/);
+    assert.deepEqual(sentCols(db), [null, null], "released: the key's scope (billsentat) is unchanged for the retry");
+  }
+});
+
+/** A fetch that records the Idempotency-Key and then fails the way `mode` says ("drop" = no answer). */
+const keyed = (keys, mode) => async (url, init) => {
+  keys.push(init.headers["idempotency-key"]);
+  if (mode === "drop") throw new TypeError("fetch failed");
+  return fetch(url, init);
+};
+
+test("retry after a lost answer reuses the SAME Idempotency-Key: same preview, and a reload (new token, same state + payload)", async () => {
   reset();
   const db = world();
-  const r = await send(db, form(), { fetch: async () => { throw new TypeError("fetch failed"); } });
-  assert.equal(r.state.code, "provider");
-  assert.match(r.state.message, /no answer from the email service \(fetch failed\)/);
-  assert.deepEqual(sentCols(db), [null, null]);
+  const keys = [];
+  const f = form();
+  assert.equal((await send(db, f, { fetch: keyed(keys, "drop") })).state.code, "noanswer");
+  assert.equal((await send(db, f, { fetch: keyed(keys, "drop") })).state.code, "noanswer", "same preview retried");
+  const reload = form({ token: "99999999-8888-4777-8666-555555555555" });
+  assert.equal((await send(db, reload, { fetch: keyed(keys) })).url, `/bills/${B}/send?sent=1`, "reload-style retry");
+  assert.equal(keys.length, 3);
+  assert.equal(keys[0], keys[1]);
+  assert.equal(keys[0], keys[2]);
+  assert.equal(calls.at(-1).headers["idempotency-key"], keys[0], "the key actually reached the provider");
+});
+
+test("a changed payload (or a later Send again) gets a DIFFERENT Idempotency-Key", async () => {
+  reset();
+  const keys = [];
+  await send(world(), form(), { fetch: keyed(keys, "drop") });
+  await send(world(), form({ body: "Edited body, changed" }), { fetch: keyed(keys, "drop") });
+  await send(world(), form({ cc: "extra@example.test" }), { fetch: keyed(keys, "drop") });
+  const prior = "2026-09-20T10:00:00.000+00:00";
+  await send(world({ bill: { billsentat: prior, billsentto: "old@example.test" } }), form({ sentat: prior }), { fetch: keyed(keys, "drop") });
+  assert.equal(new Set(keys).size, 4, JSON.stringify(keys));
+  assert.match(keys[3], new RegExp(`^bill-${B}-${prior.replace(/[.+]/g, "\\$&")}-[0-9a-f]{32}$`));
+});
+
+/** world() whose tblbills updates follow `plan` in order ("ok" | "error" | "commit-error"); counts them. */
+function flakyWorld(plan) {
+  const db = world();
+  db.updates = 0;
+  db.onUpdate = (t) => (t === "tblbills" ? plan[db.updates++] ?? "ok" : "ok");
+  return db;
+}
+
+test("claim write errors → the compensating release runs, no provider call, 'failed'", async () => {
+  reset();
+  const db = flakyWorld(["commit-error"]); // the claim committed but its reply was lost
+  const r = await send(db);
+  assert.equal(r.state.code, "failed", JSON.stringify(r.state));
+  assert.equal(db.updates, 2, "claim + compensating release");
+  assert.deepEqual(sentCols(db), [null, null], "the committed claim was undone");
+  assert.equal(calls.length, 0);
+});
+
+test("claim errors AND its release fails → code 'release' (reload and check), not 'nothing recorded'; no provider call", async () => {
+  reset();
+  const db = flakyWorld(["commit-error", "error"]);
+  const r = await send(db);
+  assert.equal(r.state.code, "release");
+  assert.match(r.state.message, /reload and check its sent status/);
+  assert.doesNotMatch(r.state.message, /Nothing was recorded/);
+  assert.equal(calls.length, 0);
+});
+
+test("provider failure and the release fails → code 'release'", async () => {
+  reset();
+  reply = () => [500, { message: "boom" }];
+  const db = flakyWorld(["ok", "error"]);
+  const r = await send(db);
+  assert.equal(r.state.code, "release");
+  assert.equal(calls.length, 1);
+});
+
+test("core checkEmail: caps per field, CR/LF folded, empty/oversize subject and body refused — for every caller", async () => {
+  const ok = { to: ["a@example.test"], cc: [], bcc: [], subject: "Re: x\r\nBcc: evil@example.test", text: "t" };
+  assert.equal(core.checkEmail(ok).subject, "Re: x Bcc: evil@example.test");
+  const many = Array.from({ length: 51 }, (_, i) => `p${i}@example.test`);
+  for (const [o, code] of [[{ to: many }, "to"], [{ cc: many }, "cc"], [{ bcc: many }, "bcc"], [{ cc: ["x@"] }, "cc"], [{ to: [] }, "to"],
+    [{ subject: " \r\n " }, "subject"], [{ subject: "s".repeat(999) }, "subject"], [{ text: " \n" }, "body"], [{ text: "b".repeat(50_001) }, "body"]]) {
+    assert.throws(() => core.checkEmail({ ...ok, ...o }), (e) => e.code === code, JSON.stringify(o).slice(0, 60));
+  }
+  reset();
+  let claimed = 0;
+  const guard = { claim: async () => { claimed++; return true; }, release: async () => {} };
+  const att = { filename: "a.pdf", content: PDF };
+  await assert.rejects(core.sendWithGuard(CFG(), { ...ok, subject: "\n", attachment: att }, guard, "s"), (e) => e.code === "subject");
+  await assert.rejects(core.sendWithGuard(CFG(), { ...ok, cc: many, attachment: att }, guard, "s"), (e) => e.code === "cc");
+  assert.equal(claimed, 0);
+  await core.sendWithGuard(CFG(), { ...ok, attachment: att }, guard, "s");
+  assert.equal(calls[0].body.subject, "Re: x Bcc: evil@example.test", "the provider gets the one-line subject");
 });
 
 test("Send again: a sent bill re-sends from a new preview (its sentat), a stale preview (old sentat / bad token) is refused", async () => {
