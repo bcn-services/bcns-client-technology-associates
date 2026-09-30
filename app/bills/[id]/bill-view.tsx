@@ -1,9 +1,11 @@
 import Link from "next/link";
 import { SaSubmit } from "@/app/cases/[id]/sa-submit";
-import { BILL_TYPES, isOpen, nextNotice } from "@/lib/bills/rules";
+import { BILL_TYPES, canFinalizeBill, canSendBill, canSendNotice, isNoticeStage, isOpen, nextNotice } from "@/lib/bills/rules";
+import { noticeBlockCode, sendErrorMessage } from "@/lib/bills/send";
 import { closeTargets } from "@/lib/bills/notice";
 import { fmtMoney, type BillPageData } from "@/lib/bills/edit";
 import { fmtHours, thousandths } from "@/lib/time/week";
+import { finalizeErrorMessage, finalizedOn } from "@/lib/bills/finalize-model";
 import { RecipientAlert } from "../recipient-alert";
 
 const DASH = "—";
@@ -11,15 +13,19 @@ const show = (v: string | number | null | undefined) => (v == null || v === "" ?
 const input = "rounded border border-slate-300 px-2 py-1";
 
 /** Pure view of one bill. `action` is the bound editBill; passed only for admins, so staff get no form. */
-export function BillView({ data, admin, action, advance, close, revise, error, saved }: {
+export function BillView({ data, admin, action, advance, close, revise, createPdf, error, saved, broken }: {
   data: BillPageData;
   admin: boolean;
   action?: (formData: FormData) => void | Promise<void>;
   advance?: (formData: FormData) => void | Promise<void>;
   close?: (formData: FormData) => void | Promise<void>;
   revise?: (formData: FormData) => void | Promise<void>;
+  /** Bound createBillPdf; admins only. */
+  createPdf?: (formData: FormData) => void | Promise<void>;
   error?: string;
   saved?: boolean;
+  /** Finalized but its stored lines don't add up (lib/bills/finalize.ts brokenFinalize). */
+  broken?: boolean;
 }) {
   const { bill: b, casetitle, activity, revisedBy } = data;
   const fields: [string, React.ReactNode][] = [
@@ -42,12 +48,47 @@ export function BillView({ data, admin, action, advance, close, revise, error, s
   const next = isOpen(b.billnotice) ? nextNotice(b.billnotice) : null;
   const targets = closeTargets(b.billnotice);
   const canRevise = admin && !!revise && isOpen(b.billnotice) && revisedBy.length === 0;
+  const finalized = !!b.billfinalizedat;
+  const canFinalize = admin && canFinalizeBill(b, revisedBy.length > 0);
   const formKey = JSON.stringify([b.billdate, b.billtype, b.billbalance, b.billestimate, b.billcomments, b.billfilename]);
   return (
     <div className="space-y-4">
       {error && <p role="alert" className="text-sm text-red-700">{error}</p>}
       {saved && !error && <p role="status" className="text-sm text-green-700">Bill updated</p>}
       <RecipientAlert alert={data.billingalert} cc={data.billingcc} />
+      {finalized && (
+        <p data-testid="bill-finalized" className="rounded border border-slate-200 bg-slate-50 p-2 text-sm">
+          Finalized {finalizedOn(b.billfinalizedat!)} — the lines are locked; changes go through Revise.{" "}
+          <Link href={`/bills/${b.billid}/finalize`} className="underline">View saved lines</Link>
+        </p>
+      )}
+      {finalized && !broken && (b.billpdfpath ? (
+        <div className="flex items-center gap-3 text-sm">
+          <a href={`/bills/${b.billid}/pdf`} data-testid="bill-pdf" className="underline">Download invoice PDF</a>
+          {createPdf && <form action={createPdf}><SaSubmit label="Re-create PDF" /></form>}
+        </div>
+      ) : createPdf ? (
+        <form action={createPdf} data-testid="bill-create-pdf"><SaSubmit label="Create PDF" /></form>
+      ) : (
+        <p data-testid="bill-no-pdf" className="text-sm text-slate-500">No invoice PDF yet — an admin can create it.</p>
+      ))}
+      {b.billsentat && <p data-testid="bill-sent" className="text-sm">{`Sent ${finalizedOn(b.billsentat)} to ${b.billsentto ?? ""}`}</p>}
+      {admin && canSendBill(b, !!broken) && (
+        <p><Link href={`/bills/${b.billid}/send${b.billsentat ? "?again=1" : ""}`} data-testid="bill-send" className="underline text-sm">{b.billsentat ? "Email again" : "Email this bill"}</Link></p>
+      )}
+      {admin && isNoticeStage(b.billnotice) && (canSendNotice(b) ? (
+        <p><Link href={`/bills/${b.billid}/notice`} data-testid="bill-send-notice" className="underline text-sm">{`Send ${b.billnotice} notice`}</Link></p>
+      ) : (
+        <p data-testid="bill-notice-blocked" className="text-sm text-slate-500">{sendErrorMessage(noticeBlockCode(b))}</p>
+      ))}
+      {broken && revisedBy.length === 0 && (
+        <p role="alert" data-testid="bill-broken" className="rounded border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+          {finalizeErrorMessage("broken")}
+        </p>
+      )}
+      {canFinalize && (
+        <p><Link href={`/bills/${b.billid}/finalize`} data-testid="bill-finalize" className="inline-block rounded bg-slate-800 px-3 py-1 text-sm text-white">Finalize bill</Link></p>
+      )}
       <dl data-testid="bill-fields" className="grid grid-cols-[max-content_1fr] gap-x-4 gap-y-1 text-sm">
         {fields.map(([k, v]) => (
           <div key={k} className="contents">
@@ -110,7 +151,7 @@ export function BillView({ data, admin, action, advance, close, revise, error, s
           )}
         </section>
       )}
-      {admin && action && (
+      {admin && action && !finalized && (
         <form key={formKey} action={action} data-testid="bill-edit" className="max-w-xl space-y-3 rounded border border-slate-200 p-3">
           <h2 className="font-semibold">Edit bill</h2>
           <div className="grid gap-3 sm:grid-cols-2">

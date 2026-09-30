@@ -28,9 +28,16 @@ const NEXT: Readonly<Record<string, string>> = { "1st": "2nd", "2nd": "Final" };
 /** 1st → 2nd → Final → null; anything else → null. */
 export const nextNotice = (notice: string): string | null => (Object.hasOwn(NEXT, notice) ? NEXT[notice]! : null);
 
-/** `Bill<caseid> <last name> <yyyy mm dd>-<n>`, e.g. `Bill2788 Flood 2026 08 14-1`. */
+/**
+ * `Bill<caseid> <last name> <yyyy mm dd>-<n>`, e.g. `Bill123 Example 2026 08 14-0`. As the VBA's Replace calls on the
+ * whole base name: "-" and "_" become spaces, "/" is dropped; then the `-<n>` suffix is appended (n from 0).
+ * Unlike the VBA, "'" is KEPT: tests/billing (guard h) pins "O'Neil"; the PDF's storage key drops it (invoiceKey).
+ */
 export const billFileName = (caseId: number, attyLastName: string, billdate: string, n: number): string =>
-  `Bill${caseId} ${attyLastName} ${billdate.slice(0, 10).replaceAll("-", " ")}-${n}`;
+  `${`Bill${caseId} ${attyLastName} ${billdate.slice(0, 10).replaceAll("-", " ")}`.replace(/[-_]/g, " ").replaceAll("/", "")}-${n}`;
+
+/** Storage keys are ASCII-only: strip accents, drop anything outside this set (shared by the invoice and SA keys). */
+export const keySafe = (name: string): string => name.normalize("NFKD").replace(/[^\w .()&$@=;:+,-]/g, "");
 
 export const lastNoticeDate = (bill: BillDates): string =>
   bill.billfinalnoticedate ?? bill.billsecondnoticedate ?? bill.billdate;
@@ -45,3 +52,42 @@ export const daysSinceNotice = (bill: BillDates, today: string): number => dayNu
 
 export const isDue = (bill: BillDates, today: string): boolean =>
   isOpen(bill.billnotice) && daysSinceNotice(bill, today) >= BILL_DUE_DAYS;
+
+/**
+ * Finalize may write this bill: typed (legacy bills get nothing new), not yet finalized, not revised (a superseded bill
+ * is finalized through its revision), and not closed (Cancelled / Carried Over / Settled are never billed again; Paid and Deadbeat can still be finalized).
+ * The one rule behind the Finalize button, the Finalize page and the save.
+ */
+const NEVER_BILLED_AGAIN: ReadonlySet<string> = new Set(["Cancelled", "Carried Over", "Settled"]);
+export const canFinalizeBill = (
+  b: { billtype: string | null; billfinalizedat?: string | null; billnotice: string }, revised: boolean,
+): boolean => b.billtype != null && !b.billfinalizedat && !revised && !NEVER_BILLED_AGAIN.has(b.billnotice);
+
+/**
+ * Send may email this bill: typed, finalized, its invoice PDF stored, lines intact (not `broken`), and not closed
+ * (a revised bill is Cancelled, so its revision is the one sent). Admin and email-config checks sit beside it.
+ * The one rule behind the bill page's Email link, the Send page and the send action.
+ */
+export const canSendBill = (
+  b: { billtype: string | null; billfinalizedat?: string | null; billpdfpath?: string | null; billnotice: string }, broken: boolean,
+): boolean => b.billtype != null && !!b.billfinalizedat && !!b.billpdfpath && !broken && !NEVER_BILLED_AGAIN.has(b.billnotice);
+
+/** Notices that resend the stored invoice with a stamp → the legacy stamp image / file-name word. */
+export const NOTICE_STAMPS: Readonly<Record<string, "SecondNotice" | "FinalNotice">> = { "2nd": "SecondNotice", Final: "FinalNotice" };
+/** A notice can be resent: 2nd or Final. */
+export const isNoticeStage = (notice: string): boolean => Object.hasOwn(NOTICE_STAMPS, notice);
+
+/**
+ * Send notice may email this bill: at 2nd or Final, typed, finalized and its invoice PDF stored (the notice IS that
+ * stored PDF, stamped). Unlike canSendBill it ignores `broken` — the stored PDF, not the lines, is what goes out.
+ * The one rule behind the bill page's and the unpaid list's Send notice link, the notice page and the send action.
+ */
+export const canSendNotice = (
+  b: { billtype: string | null; billfinalizedat?: string | null; billpdfpath?: string | null; billnotice: string },
+): boolean => isNoticeStage(b.billnotice) && b.billtype != null && !!b.billfinalizedat && !!b.billpdfpath;
+
+/** Why a notice can't be sent (canSendNotice false) — a lib/bills/send-messages code, for the bill page, /bills, the notice page and the action. */
+export function noticeBlockCode(b: { billtype: string | null; billnotice: string }): string {
+  if (!isNoticeStage(b.billnotice)) return "notice-stage";
+  return b.billtype === null ? "notice-legacy" : "notice-nopdf";
+}

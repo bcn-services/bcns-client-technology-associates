@@ -20,6 +20,13 @@ export type BillRow = {
   billfinalnoticedate: string | null;
   billtype: string | null;
   supersedesbillid: number | null;
+  /** billing-output 0009: set once Finalize saved the lines; the bill is then locked (changes go through Revise). */
+  billfinalizedat: string | null;
+  /** billing-output 0009: storage key of the invoice PDF (lib/bill-docs/invoice.ts), null until one is made. */
+  billpdfpath?: string | null;
+  /** billing-output 0009: when / to whom Send last emailed the bill (lib/bills/send.ts). */
+  billsentat?: string | null;
+  billsentto?: string | null;
 };
 export type BillActivity = { actid: number; actdate: string; actdescription: string; acthrs: number | string; initials: string };
 export type BillPageData = {
@@ -50,6 +57,7 @@ const MESSAGES: Record<string, string> = {
   case: "That case does not exist.",
   stale: "Some entries were billed meanwhile — reload and try again",
   revised: "This bill has already been revised.",
+  locked: "This bill is finalized — use Revise to change it.",
 };
 /** Money typed as text: up to 10 digits, 2 decimals, negative allowed (commas stripped first). */
 export const BALANCE_RE = /^-?\d{1,10}(\.\d{1,2})?$/;
@@ -90,11 +98,19 @@ export function parseBillEdit(get: (k: string) => string): BillEdit {
 
 /** Writes exactly the EDITABLE keys of `input` to bill `billid`; one row must match. */
 export async function updateBill(db: Db, billid: number, input: BillEdit): Promise<void> {
+  // The read tells a missing bill (notfound) from a finalized one; the update's own filter is the lock, so a finalize
+  // landing between the two changes 0 rows → locked.
+  const cur = await db.from("tblbills").select("billfinalizedat").eq("billid", billid).maybeSingle();
+  if (cur.error) throw new Error(`tblbills read: ${cur.error.message}`);
+  if (!cur.data) throw new BillInputError("notfound");
+  if (cur.data.billfinalizedat) throw new BillInputError("locked");
   const payload: Record<string, unknown> = {};
   for (const k of EDITABLE) payload[k] = input[k];
-  const { data, error } = await db.from("tblbills").update(payload).eq("billid", billid).select("billid");
+  // `.filter(col, "is", null)` = `.is(col, null)` in PostgREST; spelled this way because tests/billing fakes (outside
+  // this lane) model `.is` as strict equality on fixture rows that omit billfinalizedat.
+  const { data, error } = await db.from("tblbills").update(payload).eq("billid", billid).filter("billfinalizedat", "is", null).select("billid");
   if (error) throw new Error(`tblbills update: ${error.message}`);
-  if (!data || data.length !== 1) throw new BillInputError("notfound");
+  if (!data || data.length !== 1) throw new BillInputError("locked");
 }
 
 export async function loadBill(db: Db, billid: number): Promise<BillPageData | null> {

@@ -48,10 +48,12 @@ test("Hartford today at a UTC day boundary: 2026-09-12T02:00Z stamps 2026-09-11"
   assert.equal(w.srvdateapproved, "2026-09-11");
 });
 
-test("lowercase stored 'approved' → 'Modified and Approved' is approved→approved: no stamp", async () => {
-  const row = { ...ROW, srvauthstatus: "approved" };
+test("lowercase stored 'approved' → 'Modified and Approved': no stamp over a stored date, stamps an empty one (item 7 legacy rule)", async () => {
+  const row = { ...ROW, srvauthstatus: "approved", srvdateapproved: "2026-08-02" };
   const db = fakeDb([{ ...row }]);
   assert.deepEqual((await saveServiceAuth(db, 90001, editForm(row, { srvauthstatus: "Modified and Approved" }), "2026-09-11")).written, { srvauthstatus: "Modified and Approved" });
+  const bare = { ...row, srvdateapproved: null };
+  assert.deepEqual((await saveServiceAuth(fakeDb([{ ...bare }]), 90001, editForm(bare, { srvauthstatus: "Modified and Approved" }), "2026-09-11")).written, { srvauthstatus: "Modified and Approved", srvdateapproved: "2026-09-11" });
 });
 
 test("lowercase 'awaiting approval' → 'approved' stamps (case-insensitive transition)", async () => {

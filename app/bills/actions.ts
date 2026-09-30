@@ -9,6 +9,14 @@ import { runEditBill } from "@/lib/bills/edit";
 import { runCreateBill } from "@/lib/bills/create";
 import { runNoticeAction } from "@/lib/bills/notice";
 import { runRevise } from "@/lib/bills/revise";
+import { runFinalize } from "@/lib/bills/finalize";
+import { docConfig, runCreatePdf, saveInvoicePdf } from "@/lib/bill-docs/invoice";
+import { getStorageAdapter } from "@/lib/storage";
+import { runSend, type SendState } from "@/lib/bills/send";
+import { readStoredFile, writeStoredFile } from "@/lib/bill-docs/send";
+import { getConfig } from "@/lib/env";
+
+const invoiceConfig = docConfig;
 
 /** Admin create of one bill on a case, claiming the checked unbilled time rows (see createBill in lib/bills/create.ts). */
 export async function createBill(formData: FormData): Promise<void> {
@@ -51,4 +59,34 @@ export async function editBill(billid: number, formData: FormData): Promise<void
     revalidatePath,
     redirect,
   });
+}
+
+/** Admin: save the priced lines with hours/balance and stamp billfinalizedat, guarded (see lib/bills/finalize.ts). */
+export async function finalizeBillAction(billid: number, formData: FormData): Promise<void> {
+  await runFinalize(billid, formData, {
+    ...noticeDeps(),
+    afterFinalize: (db, id) => saveInvoicePdf(db, getStorageAdapter(), id, invoiceConfig()),
+  });
+}
+
+/** Admin: (re)create a finalized bill's invoice PDF from its stored lines (see lib/bill-docs/invoice.ts). */
+export async function createBillPdf(billid: number): Promise<void> {
+  await runCreatePdf(billid, { ...noticeDeps(), storage: getStorageAdapter, config: invoiceConfig });
+}
+
+const sendDeps = () => ({
+  ...noticeDeps(),
+  config: () => { const c = getConfig(); return { apiKey: c.resendApiKey, apiUrl: c.resendApiUrl, from: c.billFromEmail }; },
+  readPdf: (key: string) => readStoredFile(getStorageAdapter(), key),
+  writePdf: (key: string, bytes: Uint8Array) => writeStoredFile(getStorageAdapter(), key, bytes),
+});
+
+/** Admin: email a finalized bill's invoice as previewed and edited (see lib/bills/send.ts). useFormState action. */
+export async function sendBillAction(billid: number, _prev: SendState, formData: FormData): Promise<SendState> {
+  return runSend(billid, formData, sendDeps());
+}
+
+/** Admin: email a 2nd / Final bill's stored invoice with its notice stamp, as previewed (see lib/bills/send.ts). */
+export async function sendNoticeAction(billid: number, _prev: SendState, formData: FormData): Promise<SendState> {
+  return runSend(billid, formData, sendDeps(), "notice");
 }

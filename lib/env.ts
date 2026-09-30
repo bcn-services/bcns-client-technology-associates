@@ -15,6 +15,12 @@ function readEnv(name: string): string | undefined {
   return trimmed.length > 0 ? trimmed : undefined;
 }
 
+/** Split a multi-line env value on real newlines or a literal "\\n"; no non-blank line → undefined, never []. */
+function readLines(name: string): string[] | undefined {
+  const lines = readEnv(name)?.split(/\r?\n|\\n/).map((l) => l.trim()).filter(Boolean);
+  return lines?.length ? lines : undefined;
+}
+
 /** Coerce a truthy env flag ("1", "true", "yes", case-insensitive) to boolean. */
 function readFlag(name: string): boolean {
   const v = readEnv(name)?.toLowerCase();
@@ -36,6 +42,23 @@ export interface AppConfig {
   anthropicApiKey?: string;
   /** Master switch for the opt-in AI module. Default OFF. */
   aiEnabled: boolean;
+  /** Resend API key for emailing bills. Unset → sending is disabled, preview still works. */
+  resendApiKey?: string;
+  /** Resend API base URL. Unset/blank → https://api.resend.com; tests point it at a local stub so no real mail goes out. */
+  resendApiUrl: string;
+  /** From address on bill emails. */
+  billFromEmail?: string;
+  /** Always-cc'd address on bill emails (legacy Access db: Kalpna). */
+  billCcEmail?: string;
+  /** Always-bcc'd address on bill/notice emails (legacy Access db: Kris). */
+  noticeBccEmail?: string;
+  /** Firm tax id printed on the invoice. */
+  billTaxId?: string;
+  /**
+   * Invoice letterhead lines (firm name, address, phone, web). One env value; lines split on
+   * real newlines or a literal "\n" so it fits a single-line .env entry.
+   */
+  billLetterhead?: string[];
 }
 
 /**
@@ -51,5 +74,12 @@ export function getConfig(): AppConfig {
     supabaseServiceRoleKey: readEnv("SUPABASE_SERVICE_ROLE_KEY"),
     anthropicApiKey: readEnv("ANTHROPIC_API_KEY"),
     aiEnabled: readFlag("AI_ENABLED"),
+    resendApiKey: readEnv("RESEND_API_KEY"),
+    resendApiUrl: readEnv("RESEND_API_URL") ?? "https://api.resend.com",
+    billFromEmail: readEnv("BILL_FROM_EMAIL"),
+    billCcEmail: readEnv("BILL_CC_EMAIL"),
+    noticeBccEmail: readEnv("NOTICE_BCC_EMAIL"),
+    billTaxId: readEnv("BILL_TAX_ID"),
+    billLetterhead: readLines("BILL_LETTERHEAD"),
   };
 }

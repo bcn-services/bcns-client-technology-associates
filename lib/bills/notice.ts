@@ -18,6 +18,12 @@ const DATE_COL: Readonly<Record<string, "billsecondnoticedate" | "billfinalnotic
 const NOTICE_MESSAGES: Record<string, string> = {
   stale: "This bill changed meanwhile — reload and try again",
   move: "That status change is not allowed for this bill.",
+  "pdf-failed": "The invoice PDF could not be made — try again.",
+  "pdf-storage": "File storage is not configured, so the invoice PDF could not be saved.",
+  "pdf-unfinalized": "Finalize the bill before making its PDF.",
+  "pdf-broken": "This bill's saved lines don't add up, so no PDF was made — revise it.",
+  "pdf-legacy": "This bill has no bill type, so no PDF was made.",
+  "pdf-stale": "This bill changed meanwhile — reload and try again",
 };
 /** Bill page messages: notice codes first, then the shared bill codes. */
 export const noticeErrorMessage = (code: string): string => NOTICE_MESSAGES[code] ?? billErrorMessage(code);
