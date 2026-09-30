@@ -5,22 +5,30 @@ import type { Db } from "@/lib/time/entries";
 import { listCaseBills, type CaseBillRow } from "@/lib/bills/case";
 import { fmtMoney } from "@/lib/bills/edit";
 import { isOpen } from "@/lib/bills/rules";
+import { loadBillOutput, type BillOutput } from "@/lib/bills/output";
 import { listBillChecks, type BillCheck } from "@/lib/funds/case";
 
 // Case-page selector traps: exactly one heading matching /bills/i (journey 01); no text matching /billed/i
 // (journey 03 reads that from the time panel); no buttons, no labelled inputs (tests/cases). Reads only.
+// Bill output (item 8): typed bills get a line with their state and output links below the table; legacy bills get none.
 
 /** Loads the case's bills; a failed read renders a note instead of breaking the case page. */
 export async function BillsPanel({ caseId, db, session }: { caseId: number; db?: Db; session?: Pick<Session, "role"> }) {
   const s = session ?? (await requireSession());
   const d = db ?? (createServerClient() as unknown as Db);
   const bills = await listCaseBills(d, caseId).catch((e) => { console.error("case bills read:", e); return null; });
-  const checks = bills ? await listBillChecks(d, bills.map((b) => b.billid)).catch((e) => { console.error("bill checks read:", e); return null; }) : [];
-  return <BillsPanelView caseId={caseId} bills={bills} admin={s.role === "admin"} checks={checks} />;
+  const admin = s.role === "admin";
+  const [checks, output] = bills ? await Promise.all([
+    listBillChecks(d, bills.map((b) => b.billid)).catch((e) => { console.error("bill checks read:", e); return null; }),
+    loadBillOutput(d, bills, admin).catch((e) => { console.error("bill output read:", e); return null; }),
+  ]) : [[], new Map()];
+  return <BillsPanelView caseId={caseId} bills={bills} admin={admin} checks={checks} output={output} />;
 }
 
 /** `bills` must be newest first (listCaseBills order): the first open one is the latest open bill. */
-export function BillsPanelView({ caseId, bills, admin, checks = [] }: { caseId: number; bills: CaseBillRow[] | null; admin: boolean; checks?: BillCheck[] | null }) {
+export function BillsPanelView({ caseId, bills, admin, checks = [], output = new Map() }: {
+  caseId: number; bills: CaseBillRow[] | null; admin: boolean; checks?: BillCheck[] | null; output?: Map<number, BillOutput> | null;
+}) {
   const open = bills?.filter((b) => isOpen(b.billnotice)) ?? [];
   const latest = open[0];
   return (
@@ -51,6 +59,26 @@ export function BillsPanelView({ caseId, bills, admin, checks = [] }: { caseId: 
                 ))}
               </tbody>
             </table>
+          )}
+          {/* Bill output: one line per typed bill, outside the case-bill rows (each row keeps one link). Staff: state + Download. */}
+          {output == null ? (
+            <p className="text-sm text-red-700">Bill output could not be loaded.</p>
+          ) : output.size > 0 && (
+            <ul aria-label="Bill output" data-testid="bill-output" className="space-y-1 text-sm">
+              {bills.filter((b) => output.has(b.billid)).map((b) => {
+                const o = output.get(b.billid)!;
+                return (
+                  <li key={b.billid} data-testid="bill-output-row" data-billid={b.billid} className="flex flex-wrap gap-x-3">
+                    <span>{`${b.billdate} ${b.billtype}:`}</span>
+                    <span data-testid="bill-state" className="font-medium">{o.state}</span>
+                    {o.download && <a href={`/bills/${b.billid}/pdf`} data-testid="bill-download" className="underline">Download PDF</a>}
+                    {o.finalize && <Link href={`/bills/${b.billid}/finalize`} data-testid="bill-finalize" className="underline">Finalize</Link>}
+                    {o.send && <Link href={`/bills/${b.billid}/send${o.sent ? "?again=1" : ""}`} data-testid="bill-send" className="underline">{o.sent ? "Send again" : "Send"}</Link>}
+                    {o.sendNotice && <Link href={`/bills/${b.billid}/notice`} data-testid="bill-send-notice" className="underline">{`Send ${b.billnotice} notice`}</Link>}
+                  </li>
+                );
+              })}
+            </ul>
           )}
           {/* Checks applied to each bill (reversal rows included), outside the case-bill rows so each row keeps one link. */}
           {checks == null ? (

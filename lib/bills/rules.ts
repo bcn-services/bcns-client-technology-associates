@@ -85,3 +85,9 @@ export const isNoticeStage = (notice: string): boolean => Object.hasOwn(NOTICE_S
 export const canSendNotice = (
   b: { billtype: string | null; billfinalizedat?: string | null; billpdfpath?: string | null; billnotice: string },
 ): boolean => isNoticeStage(b.billnotice) && b.billtype != null && !!b.billfinalizedat && !!b.billpdfpath;
+
+/** Why a notice can't be sent (canSendNotice false) — a lib/bills/send-messages code, for the bill page, /bills, the notice page and the action. */
+export function noticeBlockCode(b: { billtype: string | null; billnotice: string }): string {
+  if (!isNoticeStage(b.billnotice)) return "notice-stage";
+  return b.billtype === null ? "notice-legacy" : "notice-nopdf";
+}

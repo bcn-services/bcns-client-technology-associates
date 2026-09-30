@@ -17,9 +17,14 @@
 import type { Db } from "@/lib/time/entries";
 import type { Session } from "@/lib/auth/session";
 import { brokenFinalize, storedLines } from "./finalize";
-import { NOTICE_STAMPS, canSendBill, canSendNotice, isNoticeStage } from "./rules";
+import { NOTICE_STAMPS, canSendBill, canSendNotice, noticeBlockCode } from "./rules";
+import { sendErrorMessage } from "./send-messages";
 import { SendError, checkEmail, emailReady, parseAddresses, sendWithGuard, type EmailConfig } from "@/lib/bill-docs/send";
 import { saveNoticePdf } from "@/lib/bill-docs/notice";
+
+// Re-exported for existing importers; screens that must not bundle pdf-lib import these from their own modules.
+export { noticeBlockCode } from "./rules";
+export { sendErrorMessage } from "./send-messages";
 
 export type SendBill = {
   billid: number; billcaseid: number; billdate: string; billtype: string | null; billhours: number | string;
@@ -101,12 +106,6 @@ export function noticeEmailDraft(d: SendData, noticeBccEmail: string | undefined
   };
 }
 
-/** Why a notice can't be sent (canSendNotice false) — for the bill page, the unpaid list, the notice page and the action. */
-export function noticeBlockCode(b: { billtype: string | null; billnotice: string }): string {
-  if (!isNoticeStage(b.billnotice)) return "notice-stage";
-  return b.billtype === null ? "notice-legacy" : "notice-nopdf";
-}
-
 /** Why the bill can't be sent (canSendBill false), for the page and the action. */
 export function sendBlockCode(d: SendData): string {
   if (d.bill.billtype === null) return "legacy";
@@ -116,34 +115,6 @@ export function sendBlockCode(d: SendData): string {
   return "closed";
 }
 
-const MESSAGES: Record<string, string> = {
-  forbidden: "Only admins can send bills.",
-  notfound: "That bill does not exist.",
-  "email-off": "Email is not set up yet, so Send is turned off. The preview and the PDF still work.",
-  legacy: "This is a legacy bill: it has no bill type, so it can't be emailed from here.",
-  unfinalized: "Finalize this bill before sending it.",
-  broken: "This bill's saved lines are missing — use Revise to rebuild it before sending.",
-  nopdf: "This bill has no invoice PDF yet — create it on the bill page first.",
-  closed: "This bill is closed (cancelled, carried over, settled or revised), so it can't be sent.",
-  alert: "This case has a bill recipient alert — tick the box to confirm you checked the recipients.",
-  to: "Enter at least one valid To address (separate several with commas).",
-  cc: "One of the CC addresses is not a valid email address.",
-  bcc: "One of the BCC addresses is not a valid email address.",
-  subject: "The subject can't be empty.",
-  body: "The message can't be empty.",
-  stale: "This bill changed since the preview opened (it may already have been sent). Nothing was sent — reload the page.",
-  storage: "File storage is not configured, so the PDF can't be attached. Nothing was sent.",
-  provider: "The email service refused the message. Nothing was sent and the bill is not marked sent.",
-  noanswer: "The email service didn't answer — it may have been sent. The bill is not marked sent. Check before sending again; resending it unchanged (same To, CC, BCC, subject and message, within 24 hours) will not send twice.",
-  "noanswer-release": "The email service didn't answer — it may have been sent, and the bill shows as sent. Check before sending again.",
-  "notice-stage": "A notice can only be sent for a bill at 2nd or Final.",
-  "notice-legacy": "This is a legacy bill with no stored invoice PDF, so its notice can't be sent from here.",
-  "notice-nopdf": "This bill has no stored invoice PDF, so there is no notice to send — finalize it and create its PDF first.",
-  "notice-key": "Another bill's PDF already uses this notice's file name, so nothing was sent.",
-  release: "The send did not complete, and the bill's sent status could not be restored — reload and check its sent status before sending again.",
-  failed: "The bill could not be sent. Nothing was recorded.",
-};
-export const sendErrorMessage = (code: string): string => MESSAGES[code] ?? MESSAGES.failed!;
 
 export type SendState = { code: string; message: string } | null;
 export type SendDeps = {
@@ -198,7 +169,7 @@ export async function runSend(billid: number, formData: FormData, deps: SendDeps
     const msg = checkEmail({ to, cc, bcc, subject: get("subject"), text: get("body") }); // refuses before the PDF read
 
     const attachment = notice
-      ? await saveNoticePdf(db, { billid, billpdfpath: bill.billpdfpath!, billnotice: bill.billnotice }, deps.readPdf,
+      ? await saveNoticePdf(db, { billid, billcaseid: bill.billcaseid, billpdfpath: bill.billpdfpath!, billnotice: bill.billnotice }, deps.readPdf,
         deps.writePdf ?? (() => Promise.reject(new SendError("storage"))))
       : { filename: bill.billpdfpath!.slice(bill.billpdfpath!.lastIndexOf("/") + 1), content: await deps.readPdf(bill.billpdfpath!) };
     const stamp = deps.now().toISOString();

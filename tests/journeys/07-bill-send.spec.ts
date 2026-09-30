@@ -5,6 +5,38 @@ import { test, expect } from '@playwright/test';
 import { createServerClient } from '../../lib/db/client';
 import { STORAGE_BUCKET } from '../../lib/storage';
 import { login, CASE_ID } from './helpers';
+import { createServer, type Server } from 'node:http';
+
+// Local Resend stub (billing-output item 8). The spec starts it on 127.0.0.1:RESEND_STUB_PORT (default 4107), records
+// every request, and answers POST /emails like Resend ({ id }). Nothing leaves the machine. Start the dev server with:
+//   RESEND_API_KEY=re_test_dummy RESEND_API_URL=http://127.0.0.1:4107 BILL_FROM_EMAIL=billing@example.test
+//   (BILL_CC_EMAIL unset or an @example.test address) â€” plus the LOCAL Supabase stack from .env.local.
+// If the port is already taken the journey fails in beforeAll instead of asserting against someone else's server.
+const STUB_PORT = Number(process.env.RESEND_STUB_PORT ?? 4107);
+type StubHit = { method?: string; path?: string; body: any };
+const stubHits: StubHit[] = [];
+let stub: Server | undefined;
+
+test.beforeAll(async () => {
+  stub = createServer((req, res) => {
+    let raw = '';
+    req.on('data', (c) => { raw += c; });
+    req.on('end', () => {
+      let body: any = null;
+      try { body = raw ? JSON.parse(raw) : null; } catch { body = raw; }
+      stubHits.push({ method: req.method, path: req.url, body });
+      res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ id: `journey07-stub-${stubHits.length}` }));
+    });
+  });
+  await new Promise<void>((resolve, reject) => {
+    stub!.once('error', (e) => reject(new Error(`Resend stub could not listen on 127.0.0.1:${STUB_PORT} (${e.message}); free the port or set RESEND_STUB_PORT`)));
+    stub!.listen(STUB_PORT, '127.0.0.1', () => resolve());
+  });
+});
+
+test.afterAll(async () => {
+  await new Promise<void>((resolve) => (stub ? stub.close(() => resolve()) : resolve()));
+});
 
 // Journey 07 finalizes and sends its own timesheet bill on shared case 90001: one bill plus two
 // billed activity rows (fixture people 1 and 2). afterAll removes the bill's lines, its PDF, the
@@ -82,5 +114,15 @@ test.describe("Admin finalizes a timesheet bill with one person's rate changed â
 
     await page.goto(`/cases/${CASE_ID}`);
     await expect(page.getByRole('link', { name: /\.pdf|download|pdf/i }).first()).toBeVisible();
+
+    // The email reached the local stub: exactly one message, to pat@example.test, with the bill PDF attached.
+    const sent = stubHits.filter((h) => h.method === 'POST' && h.path === '/emails');
+    expect(sent).toHaveLength(1);
+    expect(stubHits).toHaveLength(1); // nothing else was called on the "provider"
+    expect(sent[0].body.to).toEqual(['pat@example.test']);
+    const attachments = sent[0].body.attachments ?? [];
+    expect(attachments).toHaveLength(1);
+    expect(attachments[0].filename).toMatch(/\.pdf$/);
+    expect(Buffer.from(attachments[0].content, 'base64').subarray(0, 5).toString('latin1')).toBe('%PDF-');
   });
 });

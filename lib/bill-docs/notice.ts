@@ -39,11 +39,12 @@ export const noticeKey = (pdfpath: string, notice: string): string =>
  * overwritten. `read`/`write` are the storage seam (readStoredFile / writeStoredFile in the app).
  */
 export async function saveNoticePdf(
-  db: Db, bill: { billid: number; billpdfpath: string; billnotice: string },
+  db: Db, bill: { billid: number; billcaseid: number; billpdfpath: string; billnotice: string },
   read: (key: string) => Promise<Uint8Array>, write: (key: string, bytes: Uint8Array) => Promise<void>,
 ): Promise<{ filename: string; content: Uint8Array }> {
   const key = noticeKey(bill.billpdfpath, bill.billnotice);
-  const taken = await db.from("tblbills").select("billid").eq("billpdfpath", key);
+  // Keys are bills/<case>/…, so only a bill on this case can hold one: the lookup is scoped to the case.
+  const taken = await db.from("tblbills").select("billid").eq("billcaseid", bill.billcaseid).eq("billpdfpath", key);
   if (taken.error) throw new Error(`tblbills notice key: ${taken.error.message}`);
   if ((taken.data ?? []).length) throw new SendError("notice-key");
   const content = await stampNotice(await read(bill.billpdfpath), bill.billnotice);

@@ -74,6 +74,17 @@ export const storedLines = (db: Db, billid: number): Promise<BillLine[]> =>
   all<LineRow>(() => db.from("tblbilllines").select(LINE_COLS).eq("billid", billid).order("lineno", { ascending: true }), "tblbilllines")
     .then((rows) => rows.map(fromRow));
 
+/** Several bills' saved lines in one paged read: billid → lines in lineno order (a bill with none maps to []). */
+export async function storedLinesFor(db: Db, billids: number[]): Promise<Map<number, BillLine[]>> {
+  const out = new Map<number, BillLine[]>(billids.map((id) => [id, []]));
+  if (!billids.length) return out;
+  // ponytail: one .in() with every id — fine for a case or the open-bill list; chunk it if it nears URL limits.
+  const rows = await all<LineRow & { billid: number }>(() => db.from("tblbilllines").select(`billid, ${LINE_COLS}`)
+    .in("billid", billids).order("billid", { ascending: true }).order("lineno", { ascending: true }), "tblbilllines");
+  for (const r of rows) out.get(r.billid)?.push(fromRow(r));
+  return out;
+}
+
 /** Integer thousandths → exact numeric(9,3) text ("-2.500"), no float. (Money goes through centsText.) */
 const thousandthsText = (n: number): string => {
   const a = Math.abs(n);
