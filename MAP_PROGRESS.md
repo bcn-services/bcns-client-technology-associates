@@ -14,9 +14,9 @@ across rounds — never reset. Per-item detail lives in `progress/<lane>.md`.
 | billing | nate | lane/billing | done — 9/9 items + suite/seed fixes, merged 2026-09-13 (`c663304`, PR #11; journeys amendment PR #12) |
 | money | nate | lane/money | done — 12/12 items (11 + check → bill link), merged 2026-09-15 (`075c477`, PR #13; `819ecef`, PR #14) |
 | docs-reports | nate | lane/docs-reports | done — 8/8 items, merged 2026-09-20 (`4fa1973`, PR #15) |
-| billing-output | nate | lane/billing-output | not started |
+| billing-output | nate | lane/billing-output | done — 8/8 items, merged 2026-09-30 (`10eceaa`, PR #19) |
 | case-docs | nate | lane/case-docs | not started — waiting on Kris's templates |
-| parity | nate | lane/parity | not started — waiting on PARITY.md + billing-output merge |
+| parity | nate | lane/parity | not started — deferred past the v1 share (Nate, 2026-09-29) |
 
 **Journeys:** 3 of 3 re-run green; 6 of 6 green if the three not re-run still hold.
 01, 02 and 06 re-run 2026-09-20 after docs-reports
@@ -27,6 +27,12 @@ against the practice's hosted project, which needs a human decision before it ha
 `--workers=1` is required: `playwright.config.ts` sets `fullyParallel: false` but no worker
 count, so files still run concurrently and collide on the shared database. A multi-worker run
 reports 02–05 as failures that serialize away. Progress reading, not a merge gate.
+
+2026-09-30, billing-output merge: **7 of 7 green** (01–07) in billing-output item 8's QA run on the
+lane tip, local stack, `--workers=1`; the merged tree is identical to that tip, so it was not re-run.
+07 needs the dev server started with `RESEND_API_KEY=re_test_dummy RESEND_API_URL=http://127.0.0.1:4107
+BILL_FROM_EMAIL=billing@example.test`; the spec starts the stub. Suite on the same tree: 1370 of 1372
+pass, 1 skipped, 1 pre-existing failure (search-e2e "advanced AND/OR/date via runSearch").
 
 **Amendments this round**
 
