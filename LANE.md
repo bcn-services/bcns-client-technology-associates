@@ -322,4 +322,4 @@ named constant or template, not the design.
     - Journeys 01–06 still pass under the same run
     - Existing passing tests remain passing
   ui: true
-  status: not started
+  status: done (2026-09-30)
