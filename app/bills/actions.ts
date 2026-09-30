@@ -12,6 +12,8 @@ import { runRevise } from "@/lib/bills/revise";
 import { runFinalize } from "@/lib/bills/finalize";
 import { runCreatePdf, saveInvoicePdf } from "@/lib/bill-docs/invoice";
 import { getStorageAdapter } from "@/lib/storage";
+import { runSend, type SendState } from "@/lib/bills/send";
+import { readStoredFile } from "@/lib/bill-docs/send";
 import { getConfig } from "@/lib/env";
 
 const invoiceConfig = () => { const c = getConfig(); return { letterhead: c.billLetterhead, taxId: c.billTaxId }; };
@@ -70,4 +72,13 @@ export async function finalizeBillAction(billid: number, formData: FormData): Pr
 /** Admin: (re)create a finalized bill's invoice PDF from its stored lines (see lib/bill-docs/invoice.ts). */
 export async function createBillPdf(billid: number): Promise<void> {
   await runCreatePdf(billid, { ...noticeDeps(), storage: getStorageAdapter, config: invoiceConfig });
+}
+
+/** Admin: email a finalized bill's invoice as previewed and edited (see lib/bills/send.ts). useFormState action. */
+export async function sendBillAction(billid: number, _prev: SendState, formData: FormData): Promise<SendState> {
+  return runSend(billid, formData, {
+    ...noticeDeps(),
+    config: () => { const c = getConfig(); return { apiKey: c.resendApiKey, apiUrl: c.resendApiUrl, from: c.billFromEmail }; },
+    readPdf: (key) => readStoredFile(getStorageAdapter(), key),
+  });
 }

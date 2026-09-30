@@ -59,3 +59,12 @@ const NEVER_BILLED_AGAIN: ReadonlySet<string> = new Set(["Cancelled", "Carried O
 export const canFinalizeBill = (
   b: { billtype: string | null; billfinalizedat?: string | null; billnotice: string }, revised: boolean,
 ): boolean => b.billtype != null && !b.billfinalizedat && !revised && !NEVER_BILLED_AGAIN.has(b.billnotice);
+
+/**
+ * Send may email this bill: typed, finalized, its invoice PDF stored, lines intact (not `broken`), and not closed
+ * (a revised bill is Cancelled, so its revision is the one sent). Admin and email-config checks sit beside it.
+ * The one rule behind the bill page's Email link, the Send page and the send action.
+ */
+export const canSendBill = (
+  b: { billtype: string | null; billfinalizedat?: string | null; billpdfpath?: string | null; billnotice: string }, broken: boolean,
+): boolean => b.billtype != null && !!b.billfinalizedat && !!b.billpdfpath && !broken && !NEVER_BILLED_AGAIN.has(b.billnotice);

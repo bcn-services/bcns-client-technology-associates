@@ -24,6 +24,9 @@ export type BillRow = {
   billfinalizedat: string | null;
   /** billing-output 0009: storage key of the invoice PDF (lib/bill-docs/invoice.ts), null until one is made. */
   billpdfpath?: string | null;
+  /** billing-output 0009: when / to whom Send last emailed the bill (lib/bills/send.ts). */
+  billsentat?: string | null;
+  billsentto?: string | null;
 };
 export type BillActivity = { actid: number; actdate: string; actdescription: string; acthrs: number | string; initials: string };
 export type BillPageData = {

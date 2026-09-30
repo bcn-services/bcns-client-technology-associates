@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { SaSubmit } from "@/app/cases/[id]/sa-submit";
-import { BILL_TYPES, canFinalizeBill, isOpen, nextNotice } from "@/lib/bills/rules";
+import { BILL_TYPES, canFinalizeBill, canSendBill, isOpen, nextNotice } from "@/lib/bills/rules";
 import { closeTargets } from "@/lib/bills/notice";
 import { fmtMoney, type BillPageData } from "@/lib/bills/edit";
 import { fmtHours, thousandths } from "@/lib/time/week";
@@ -71,6 +71,10 @@ export function BillView({ data, admin, action, advance, close, revise, createPd
       ) : (
         <p data-testid="bill-no-pdf" className="text-sm text-slate-500">No invoice PDF yet — an admin can create it.</p>
       ))}
+      {b.billsentat && <p data-testid="bill-sent" className="text-sm">{`Sent ${finalizedOn(b.billsentat)} to ${b.billsentto ?? ""}`}</p>}
+      {admin && canSendBill(b, !!broken) && (
+        <p><Link href={`/bills/${b.billid}/send${b.billsentat ? "?again=1" : ""}`} data-testid="bill-send" className="underline text-sm">{b.billsentat ? "Email again" : "Email this bill"}</Link></p>
+      )}
       {broken && revisedBy.length === 0 && (
         <p role="alert" data-testid="bill-broken" className="rounded border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
           {finalizeErrorMessage("broken")}
