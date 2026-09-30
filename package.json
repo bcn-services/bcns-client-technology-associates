@@ -1,5 +1,5 @@
 {
-  "name": "@nseluga/bcns-client-technology-associates",
+  "name": "@bcn-services/bcns-client-technology-associates",
   "version": "0.0.0",
   "private": true,
   "packageManager": "pnpm@11.15.1",
@@ -17,8 +17,8 @@
     "test:journeys": "playwright test"
   },
   "dependencies": {
-    "@nseluga/app-core": "^0.2.0",
-    "@nseluga/ui": "^0.1.0",
+    "@bcn-services/app-core": "^0.2.0",
+    "@bcn-services/ui": "^0.1.1",
     "@supabase/ssr": "^0.12.7",
     "@supabase/supabase-js": "^2.116.0",
     "exceljs": "^4.4.0",
@@ -28,7 +28,7 @@
     "react-dom": "^18.3.1"
   },
   "devDependencies": {
-    "@nseluga/config": "^0.1.0",
+    "@bcn-services/config": "^0.1.1",
     "@playwright/test": "^1.63.0",
     "@types/node": "^22.9.0",
     "@types/react": "^18.3.12",

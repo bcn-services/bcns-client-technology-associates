@@ -8,12 +8,12 @@ importers:
 
   .:
     dependencies:
-      '@nseluga/app-core':
+      '@bcn-services/app-core':
         specifier: ^0.2.0
         version: 0.2.0
-      '@nseluga/ui':
-        specifier: ^0.1.0
-        version: 0.1.0(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      '@bcn-services/ui':
+        specifier: ^0.1.1
+        version: 0.1.1(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       '@supabase/ssr':
         specifier: ^0.12.7
         version: 0.12.7(@supabase/supabase-js@2.116.0)
@@ -36,9 +36,9 @@ importers:
         specifier: ^18.3.1
         version: 18.3.1(react@18.3.1)
     devDependencies:
-      '@nseluga/config':
-        specifier: ^0.1.0
-        version: 0.1.0(eslint@9.39.5(jiti@1.21.7)(supports-color@7.2.0))(supports-color@7.2.0)(tailwindcss@3.4.19(tsx@4.23.1))(typescript@5.9.3)
+      '@bcn-services/config':
+        specifier: ^0.1.1
+        version: 0.1.1(eslint@9.39.5(jiti@1.21.7)(supports-color@7.2.0))(supports-color@7.2.0)(tailwindcss@3.4.19(tsx@4.23.1))(typescript@5.9.3)
       '@playwright/test':
         specifier: ^1.63.0
         version: 1.63.0
@@ -78,6 +78,21 @@ packages:
 
   '@anthropic-ai/sdk@0.39.0':
     resolution: {integrity: sha512-eMyDIPRZbt1CCLErRCi3exlAvNkBtRe+kW5vvJyef93PmNr/clstYgHhtvmkxN82nlKgzyGPCyGxrm0JQ1ZIdg==}
+
+  '@bcn-services/app-core@0.2.0':
+    resolution: {integrity: sha512-RxIYxvlksHWvVtv32+cenoAHnNS9WQs3Yhzi57le/ZJdFNtZ8UMmqb0Muk3SVtl9xinXeEfDaJ9QSUQqJBwYXA==, tarball: https://npm.pkg.github.com/download/@bcn-services/app-core/0.2.0/d65bea59d2a7945938e47953caa2e5848e8b8637}
+
+  '@bcn-services/config@0.1.1':
+    resolution: {integrity: sha512-bmMjnJAwQwxHdfmXkv762sHfqWqymLO8aTK69S27Sv59UczyTGvRSQrhk4sZF9g0yl+DMYSEkVw4JHrTtF44HA==, tarball: https://npm.pkg.github.com/download/@bcn-services/config/0.1.1/696e5f68caf9d1b0c80ebb3bbaec0b8c79967002}
+    peerDependencies:
+      eslint: '>=9'
+      tailwindcss: '>=3'
+
+  '@bcn-services/ui@0.1.1':
+    resolution: {integrity: sha512-GH/u5iGlIec7mrTlFoF2cqTDR+weaP1vJIHO270oZHKQvKC1NiSZt27vq/1PUBbC7E2oaFD+4l1zPykDvBw2LA==, tarball: https://npm.pkg.github.com/download/@bcn-services/ui/0.1.1/33f4e7e110ef96118d912bac6db189402d2f30f4}
+    peerDependencies:
+      react: ^18.3.1
+      react-dom: ^18.3.1
 
   '@esbuild/aix-ppc64@0.28.1':
     resolution: {integrity: sha512-Svl7tq8k/08+p6CXPpRjQ1fKX+1odH/BQbb48fV6fj3CWHhsoIOoY87w1oHXm0qEpkIK3ZfVgp0hed3XBXzXMQ==}
@@ -387,21 +402,6 @@ packages:
   '@nodelib/fs.walk@1.2.8':
     resolution: {integrity: sha512-oGB+UxlgWcgQkgwo8GcEGwemoTFt3FIO9ababBmaGwXIoBKZ+GTy0pP185beGg7Llih/NSHSV2XAs1lnznocSg==}
     engines: {node: '>= 8'}
-
-  '@nseluga/app-core@0.2.0':
-    resolution: {integrity: sha512-90jRBZlJlgrmWrHpGH3Bupw19RHxL+4omUj38dx3vGQvl2hh7X+KbHfqsxSRNddjNSj00+JFDpxsBiAT6ejtaQ==, tarball: https://npm.pkg.github.com/download/@nseluga/app-core/0.2.0/38134683c57fc3da8157484e8bbf389ec88d417c}
-
-  '@nseluga/config@0.1.0':
-    resolution: {integrity: sha512-9stBoP+3flSddrQtO+l6ut3mpFhG8kix/HG13bXYKckMLYjBGH1meFxxxF6EYNgUZk8khCD9zFLyc0RdTMS0ew==, tarball: https://npm.pkg.github.com/download/@nseluga/config/0.1.0/119ad00751900289ea539ceb862ad26d1efd33a9}
-    peerDependencies:
-      eslint: '>=9'
-      tailwindcss: '>=3'
-
-  '@nseluga/ui@0.1.0':
-    resolution: {integrity: sha512-ZN28lUTuMkcWW24wTgjD1CHZh+Zy+cNJvW8eN6diXiO6qsSy9/fffkHf7O3PSjRjT9lZleCYVK1pHpXrz/sumg==, tarball: https://npm.pkg.github.com/download/@nseluga/ui/0.1.0/a3fa04da5d289cc1321dab5766ffa5de39f7e74d}
-    peerDependencies:
-      react: ^18.3.1
-      react-dom: ^18.3.1
 
   '@pdf-lib/standard-fonts@1.0.0':
     resolution: {integrity: sha512-hU30BK9IUN/su0Mn9VdlVKsWBS6GyhVfqjwl1FjZN4TxP6cCw0jP2w7V3Hf5uX7M0AZJ16vey9yE0ny7Sa59ZA==}
@@ -1699,6 +1699,34 @@ snapshots:
     transitivePeerDependencies:
       - encoding
 
+  '@bcn-services/app-core@0.2.0':
+    dependencies:
+      '@anthropic-ai/sdk': 0.39.0
+    transitivePeerDependencies:
+      - encoding
+
+  '@bcn-services/config@0.1.1(eslint@9.39.5(jiti@1.21.7)(supports-color@7.2.0))(supports-color@7.2.0)(tailwindcss@3.4.19(tsx@4.23.1))(typescript@5.9.3)':
+    dependencies:
+      '@eslint/js': 9.39.5
+      '@next/eslint-plugin-next': 15.5.20
+      eslint: 9.39.5(jiti@1.21.7)(supports-color@7.2.0)
+      eslint-config-prettier: 9.1.2(eslint@9.39.5(jiti@1.21.7)(supports-color@7.2.0))
+      globals: 15.15.0
+      tailwindcss: 3.4.19(tsx@4.23.1)
+      typescript-eslint: 8.65.0(eslint@9.39.5(jiti@1.21.7)(supports-color@7.2.0))(supports-color@7.2.0)(typescript@5.9.3)
+    transitivePeerDependencies:
+      - supports-color
+      - typescript
+
+  '@bcn-services/ui@0.1.1(react-dom@18.3.1(react@18.3.1))(react@18.3.1)':
+    dependencies:
+      class-variance-authority: 0.7.1
+      clsx: 2.1.1
+      lucide-react: 0.454.0(react@18.3.1)
+      react: 18.3.1
+      react-dom: 18.3.1(react@18.3.1)
+      tailwind-merge: 2.6.1
+
   '@esbuild/aix-ppc64@0.28.1':
     optional: true
 
@@ -1916,34 +1944,6 @@ snapshots:
     dependencies:
       '@nodelib/fs.scandir': 2.1.5
       fastq: 1.20.1
-
-  '@nseluga/app-core@0.2.0':
-    dependencies:
-      '@anthropic-ai/sdk': 0.39.0
-    transitivePeerDependencies:
-      - encoding
-
-  '@nseluga/config@0.1.0(eslint@9.39.5(jiti@1.21.7)(supports-color@7.2.0))(supports-color@7.2.0)(tailwindcss@3.4.19(tsx@4.23.1))(typescript@5.9.3)':
-    dependencies:
-      '@eslint/js': 9.39.5
-      '@next/eslint-plugin-next': 15.5.20
-      eslint: 9.39.5(jiti@1.21.7)(supports-color@7.2.0)
-      eslint-config-prettier: 9.1.2(eslint@9.39.5(jiti@1.21.7)(supports-color@7.2.0))
-      globals: 15.15.0
-      tailwindcss: 3.4.19(tsx@4.23.1)
-      typescript-eslint: 8.65.0(eslint@9.39.5(jiti@1.21.7)(supports-color@7.2.0))(supports-color@7.2.0)(typescript@5.9.3)
-    transitivePeerDependencies:
-      - supports-color
-      - typescript
-
-  '@nseluga/ui@0.1.0(react-dom@18.3.1(react@18.3.1))(react@18.3.1)':
-    dependencies:
-      class-variance-authority: 0.7.1
-      clsx: 2.1.1
-      lucide-react: 0.454.0(react@18.3.1)
-      react: 18.3.1
-      react-dom: 18.3.1(react@18.3.1)
-      tailwind-merge: 2.6.1
 
   '@pdf-lib/standard-fonts@1.0.0':
     dependencies:

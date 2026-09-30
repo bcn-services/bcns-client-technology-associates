@@ -1,4 +1,4 @@
-import { createAnthropicClient } from "@nseluga/app-core";
+import { createAnthropicClient } from "@bcn-services/app-core";
 import { getConfig, type AppConfig } from "./env";
 
 type AnthropicClient = ReturnType<typeof createAnthropicClient>;

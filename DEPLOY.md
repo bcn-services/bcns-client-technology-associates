@@ -31,7 +31,7 @@ monorepo under `infra/` — one copy per droplet, not per client repo.
   (`AI_ENABLED=1` + `ANTHROPIC_API_KEY`).
 - Repo Actions secrets: `DEPLOY_HOST`, `DEPLOY_SSH_KEY` (key for the
   `<slug>` user), `SUPABASE_DB_URL` (this client's project), and repo
-  variable `CLIENT_SLUG`. Note: the workflows install `@nseluga/*` with the
+  variable `CLIENT_SLUG`. Note: the workflows install `@bcn-services/*` with the
   default `GITHUB_TOKEN` — each private package must grant this repo read
   access (package settings → manage Actions access), or swap in an
   org-scoped PAT secret.
