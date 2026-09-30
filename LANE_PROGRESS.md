@@ -4,8 +4,8 @@ LANE.md is the contract; this tracks where we are in it — if they disagree, LA
 
 ## Current position
 
-- **Status:** round 1 (autonomous run) in progress — items 1–3 done; one follow-up fix (report year) in progress.
-- **Next:** fix the CTA Report year, then the lane acceptance check and merge.
+- **Status:** round 1 complete — items 1–3 done, plus two fixes from QA and the acceptance review (the CTA Report's year, the Inspection Plan's page header); lane acceptance review 2/3, its one gap (the Inspection Plan header) fixed and tested afterwards, not re-reviewed.
+- **Next:** /merge-lane — merge the case-docs PR into integration; Nate opens the four sample files in Word.
 - **Blockers:** none.
 - **Last updated:** 2026-09-30
 
