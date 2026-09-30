@@ -260,7 +260,7 @@ named constant or template, not the design.
     - Existing passing tests remain passing
   ui: true
   caution: true
-  status: not started
+  status: done (2026-09-30)
 
 - task: Build notice resend on bills at 2nd or Final — from the bill page and the
     unpaid list, a "Send notice" action with the same Preview-then-Send flow.

@@ -4,12 +4,12 @@ LANE.md is the contract; this tracks where we are in it — if they disagree, LA
 
 ## Current position
 
-- **Status:** round 1 (items 1–4, autonomous run) complete — items 1–4 done; stopped at the STOP marker.
-- **Next:** round 2, items 5–8 (Send, notice resend, service authorization, wiring) — autonomous run; the STOP marker is removed.
+- **Status:** round 2 (items 5–8, autonomous run) in progress — items 1–5 done.
+- **Next:** item 6, notice resend.
 - **Blockers:** none.
-- **Last updated:** 2026-09-29
+- **Last updated:** 2026-09-30
 
-## Round 1 — bill output v1
+## Rounds 1–2 — bill output v1
 
 | Item | Status |
 |------|--------|
@@ -17,7 +17,7 @@ LANE.md is the contract; this tracks where we are in it — if they disagree, LA
 | Pricing engine (lines + rates) | done — The app can now work out every bill type's lines and totals the way Access did, with the 2-year rate rise, per-person rates, whole-dollar rounding, and payments credited on timesheet bills. |
 | Finalize page | done — An admin can now review a bill's priced lines, change any person's rate, and finalize it; the charged rates are saved on the bill so later rate changes never alter it, and staff, closed or revised bills are refused. |
 | Invoice PDF | done — Finalizing a bill now produces a PDF invoice laid out like the old Word bill, saved on the case under the legacy file name, and anyone signed in can download it from the bill page. |
-| Preview-then-Send | skipped — below stop marker |
+| Preview-then-Send | done (2026-09-30) — An admin can now preview a finalized bill's email (To, CC, subject, message, PDF attached), edit it, and send it; the bill records when and to whom, a double click sends once, and with no email settings the preview still works and Send is greyed out with a plain message. |
 | Notice resend | skipped — below stop marker |
 | Service authorization document | skipped — below stop marker |
 | Wire bill output into the app | skipped — below stop marker |
