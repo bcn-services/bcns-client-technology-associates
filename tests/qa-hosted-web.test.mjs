@@ -1,7 +1,7 @@
 /**
  * QA value-add tests for the hosted-web template.
  * Complements the ai-optin/health/webhooks suites. Run with:
- *   corepack pnpm --filter @nseluga/hosted-web-template test
+ *   corepack pnpm --filter @bcn-services/hosted-web-template test
  *
  * Covers:
  *  - env module: safe defaults when NO keys are set (never throws, all undefined)

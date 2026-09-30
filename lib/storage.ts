@@ -1,7 +1,7 @@
 /**
  * storage.ts — This app's storage adapter seam.
  *
- * The StorageAdapter interface lives in @nseluga/app-core (platform
+ * The StorageAdapter interface lives in @bcn-services/app-core (platform
  * contract); this file resolves which implementation THIS client uses.
  * Platform default is Supabase Storage in the client's own project; a
  * client-specific backend (e.g. self-hosted Nextcloud over WebDAV)
@@ -10,10 +10,10 @@
  * lookups; private content via signed, expiring URLs.
  */
 
-import type { StorageAdapter } from "@nseluga/app-core";
+import type { StorageAdapter } from "@bcn-services/app-core";
 import { createServerClient, DbNotConfiguredError } from "@/lib/db/client";
 
-export { type StorageAdapter } from "@nseluga/app-core";
+export { type StorageAdapter } from "@bcn-services/app-core";
 
 /**
  * The private bucket holding case documents. It is created by ops (and, for

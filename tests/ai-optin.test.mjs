@@ -1,7 +1,7 @@
 /**
  * Import-boundary test: proves the AI module does NOT invoke the Anthropic
  * client factory when the AI_ENABLED flag is off. Run with:
- *   corepack pnpm --filter @nseluga/hosted-web-template test
+ *   corepack pnpm --filter @bcn-services/hosted-web-template test
  */
 
 import { test } from "node:test";

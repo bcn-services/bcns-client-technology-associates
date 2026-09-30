@@ -1,7 +1,7 @@
 ---
 type: workflow-app
 delivery: hosted-web
-name: "@nseluga/bcns-client-technology-associates"
+name: "@bcn-services/bcns-client-technology-associates"
 status: active
 ---
 
@@ -10,21 +10,21 @@ status: active
 A runnable **Next.js 14 (App Router, TypeScript strict)** app for Technology
 Associates, matching the platform stack in `hosting-reference.md`
 (**DigitalOcean droplet + Supabase per-client project + Cloudflare**). It
-depends on the shared packages `@nseluga/ui`, `@nseluga/config`, and
-`@nseluga/app-core` as **versioned dependencies from GitHub Packages**, and
+depends on the shared packages `@bcn-services/ui`, `@bcn-services/config`, and
+`@bcn-services/app-core` as **versioned dependencies from GitHub Packages**, and
 ships the wiring points a real client build needs — env-driven config, a
 `/api/health` DB probe, webhook hygiene seams, a storage adapter interface,
 an RLS test scaffold, and an opt-in AI module — as safe, keyless stubs.
 
 ## Quick start
 
-The `@nseluga/*` deps come from the private GitHub Packages registry (see `.npmrc`),
+The `@bcn-services/*` deps come from the private GitHub Packages registry (see `.npmrc`),
 so set a token first:
 
 ```bash
 export GITHUB_TOKEN=<PAT with read:packages>   # any machine that installs
 
-pnpm install        # resolves @nseluga/* from GitHub Packages
+pnpm install        # resolves @bcn-services/* from GitHub Packages
 pnpm dev            # serves on :3100
 pnpm build
 pnpm test
@@ -48,7 +48,7 @@ never reach client-side code), and the per-app `ANTHROPIC_API_KEY` plus its
 ## What the template ships (the template contract)
 
 The template is a **pure skeleton**: wiring, env, tests, and docs. The shared
-logic behind these seams lives in `@nseluga/app-core` — the `lib/` files are
+logic behind these seams lives in `@bcn-services/app-core` — the `lib/` files are
 thin re-exports/bindings, so a platform fix reaches every client via a version
 bump, not a per-repo edit. `TEMPLATE.md` is the manifest of everything that
 changes when this becomes a client repo.
@@ -87,7 +87,7 @@ present. The client's Anthropic key is read from env, never from source. See
 
 This standalone repo is the **canonical template** (originally extracted from
 the [`bcns`](https://github.com/nseluga/bcns) platform repo; the old
-`templates/hosted-web/` copy there has been deleted). The shared `@nseluga/*`
+`templates/hosted-web/` copy there has been deleted). The shared `@bcn-services/*`
 packages are developed and published from `bcns`; this template (and every
 client repo generated from it) consumes them by version. To roll out a shared improvement:
 publish a new package version from `bcns`, then bump the range here / in each
