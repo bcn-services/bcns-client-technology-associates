@@ -94,7 +94,7 @@ Test against the fixture, not the producing lane. Do not wait for it to exist.
     - Filling `CTA_Memo` with synthetic values puts each value between its bookmark's start and end markers, a two-line Address becomes two lines split by a `w:br`, and a title containing `&` and `<` extracts back as the same text
     - `textutil -convert txt` on each filled output exits 0 and its text contains every filled value and the template's boilerplate text
     - A test fails if `templates.ts` no longer matches the `.dotx` files on disk
-  status: not started
+  status: done (2026-09-30)
 
 - task: Case values per document — `lib/case-docs/docs.ts` exports the list of
     the four document kinds (slug, label, template, download file name) and a
