@@ -214,6 +214,45 @@ export type Database = {
         }
         Relationships: []
       }
+      tblbilllines: {
+        Row: {
+          lineid: number
+          billid: number
+          lineno: number
+          kind: string
+          linedate: string | null
+          description: string
+          personid: number | null
+          hours: number | null
+          rate: number | null
+          amount: number
+        }
+        Insert: {
+          lineid?: never
+          billid: number
+          lineno: number
+          kind: string
+          linedate?: string | null
+          description: string
+          personid?: number | null
+          hours?: number | null
+          rate?: number | null
+          amount: number
+        }
+        Update: {
+          lineid?: never
+          billid?: number
+          lineno?: number
+          kind?: string
+          linedate?: string | null
+          description?: string
+          personid?: number | null
+          hours?: number | null
+          rate?: number | null
+          amount?: number
+        }
+        Relationships: []
+      }
       tblbills: {
         Row: {
           billid: number
@@ -232,6 +271,10 @@ export type Database = {
           billfinalnoticedate: string | null
           billtype: string | null
           supersedesbillid: number | null
+          billfinalizedat: string | null
+          billpdfpath: string | null
+          billsentat: string | null
+          billsentto: string | null
         }
         Insert: {
           billid?: number
@@ -250,6 +293,10 @@ export type Database = {
           billfinalnoticedate?: string | null
           billtype?: string | null
           supersedesbillid?: number | null
+          billfinalizedat?: string | null
+          billpdfpath?: string | null
+          billsentat?: string | null
+          billsentto?: string | null
         }
         Update: {
           billid?: number
@@ -268,6 +315,10 @@ export type Database = {
           billfinalnoticedate?: string | null
           billtype?: string | null
           supersedesbillid?: number | null
+          billfinalizedat?: string | null
+          billpdfpath?: string | null
+          billsentat?: string | null
+          billsentto?: string | null
         }
         Relationships: []
       }
@@ -610,6 +661,7 @@ export type Database = {
           fndsdatecleared: string | null
           fndsbankaccount: string | null
           fndsclearingnotes: string | null
+          fndsbillid: number | null
         }
         Insert: {
           fndsid?: number
@@ -628,6 +680,7 @@ export type Database = {
           fndsdatecleared?: string | null
           fndsbankaccount?: string | null
           fndsclearingnotes?: string | null
+          fndsbillid?: number | null
         }
         Update: {
           fndsid?: number
@@ -646,6 +699,7 @@ export type Database = {
           fndsdatecleared?: string | null
           fndsbankaccount?: string | null
           fndsclearingnotes?: string | null
+          fndsbillid?: number | null
         }
         Relationships: []
       }

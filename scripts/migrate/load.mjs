@@ -101,6 +101,9 @@ const script = [
   // the RI and audit triggers, so it clears the same rows and touches nothing else.
   // ponytail: row-level DELETE on a one-shot cutover load; revisit only if a table grows
   // past the point where a full DELETE + bloat is slower than the reload itself.
+  // tblbilllines (0009, not one of the 20) holds lines of app-finalized bills; replica mode
+  // skips its restrict FK, so clear it first or the tblbills delete would orphan them.
+  "delete from tblbilllines;",
   ...[...TABLES].reverse().map((t) => `delete from ${t};`),
   ...lines,
   "commit;",

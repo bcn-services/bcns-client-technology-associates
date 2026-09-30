@@ -10,15 +10,33 @@ across rounds — never reset. Per-item detail lives in `progress/<lane>.md`.
 | migration | nate | lane/migration | done — 4/4 items, merged 2026-09-09 (`a3add4b`) |
 | app-shell | nate | lane/app-shell | done — 12/12 items (7 planned + 5 polish), merged 2026-09-10 (`464ab58`) |
 | cases | nate | lane/cases | done — 9/9 items, merged 2026-09-11 (`298b6ac`, PR #4) |
-| time | nate | — | not started — no LANE.md yet |
-| billing | nate | — | not started — no LANE.md yet |
-| money | nate | — | not started — no LANE.md yet |
-| docs-reports | nate | — | not started — no LANE.md yet |
+| time | nate | lane/time | done — 6/6 items + 3 click-through fixes, merged 2026-09-12 (`9b8d68f`, PR #9) |
+| billing | nate | lane/billing | done — 9/9 items + suite/seed fixes, merged 2026-09-13 (`c663304`, PR #11; journeys amendment PR #12) |
+| money | nate | lane/money | done — 12/12 items (11 + check → bill link), merged 2026-09-15 (`075c477`, PR #13; `819ecef`, PR #14) |
+| docs-reports | nate | lane/docs-reports | done — 8/8 items, merged 2026-09-20 (`4fa1973`, PR #15) |
+| billing-output | nate | lane/billing-output | done — 8/8 items, merged 2026-09-30 (`10eceaa`, PR #19) |
+| case-docs | nate | lane/case-docs | done — 3/3 items + 2 fixes, merged 2026-09-30 (`0f65302`, PR #21) |
+| parity | nate | lane/parity | not started — deferred past the v1 share (Nate, 2026-09-29) |
 
-**Journeys:** 1 of 6 green (2026-09-11, after cases). 02 (inquiry → case) passes. 01 now reaches the
-case screen and fails only on an ambiguous `getByText(/bills/i)` (matches nav link + the case's "Bills"
-heading) — protected-path amendment: scope to `main` or use `getByRole('heading')`. 03–06 fail on screens
-later lanes build (time, funds, bank import, dashboard). Progress reading, not a merge gate.
+**Journeys:** 3 of 3 re-run green; 6 of 6 green if the three not re-run still hold.
+01, 02 and 06 re-run 2026-09-20 after docs-reports
+against a **local** Supabase stack with `--workers=1` — all three pass, and **06 passes for the
+first time**: the dashboard it waited on now exists. 03, 04 and 05 were last green 2026-09-15
+(`--workers=1`) and were **not re-run** — they `loadEnvFile('.env.local')` and INSERT/DELETE
+against the practice's hosted project, which needs a human decision before it happens again.
+`--workers=1` is required: `playwright.config.ts` sets `fullyParallel: false` but no worker
+count, so files still run concurrently and collide on the shared database. A multi-worker run
+reports 02–05 as failures that serialize away. Progress reading, not a merge gate.
+
+2026-09-30, billing-output merge: **7 of 7 green** (01–07) in billing-output item 8's QA run on the
+lane tip, local stack, `--workers=1`; the merged tree is identical to that tip, so it was not re-run.
+07 needs the dev server started with `RESEND_API_KEY=re_test_dummy RESEND_API_URL=http://127.0.0.1:4107
+BILL_FROM_EMAIL=billing@example.test`; the spec starts the stub. Suite on the same tree: 1370 of 1372
+pass, 1 skipped, 1 pre-existing failure (search-e2e "advanced AND/OR/date via runSearch").
+
+2026-09-30, case-docs merge: journeys **not re-run** — the lane only adds four links to the case page;
+the case-page live tests (`cases/record-e2e` 8/8, `cases/service-auths-qa` 1/1) and case-docs live tests pass
+against a production build of the lane tip. Journey status stands at the billing-output reading (7 of 7).
 
 **Amendments this round**
 
@@ -30,3 +48,32 @@ later lanes build (time, funds, bank import, dashboard). Progress reading, not a
   `integration` before assuming the frozen shapes.
 - 2026-09-10 — `tests/journeys/helpers.ts` (`966a523` on `main`). `login()` now awaits
   the redirect off /login; the next `page.goto` was aborting the sign-in POST.
+- 2026-09-12 — `MAP.md` migration lane `area:` gains the NAS Excel timesheet history
+  import (per-person workbooks, one sheet per case, columns `[Date, Task, Dec, Sub,
+  Fee($), Billed]`) into `tblactivity`. Surfaced by `/lane time`: the time lane
+  replaces the workbooks going forward but would leave their history unreachable.
+  Gated on Kris's workbook samples and on whether the migrated `tblactivity` rows
+  are real; not an item until then. Expected on the time merge: journey 03's closing
+  `getByText(/billed/i)` becomes ambiguous once the case page shows "Unbilled hours"
+  and per-row billed markers — protected-path amendment for the billing lane, scope
+  it to the bill panel.
+- 2026-09-13 — `tests/journeys/**` (PR #12, `amend/journey-03`, on `integration`: 03
+  needs billing, which main lacks). `login(page,'admin')` now signs in as
+  `E2E_ADMIN_EMAIL` (seeded by `seed-e2e.ts`); it was the staff account. 03 awaits
+  the create-bill redirect, asserts `billed-marker`, and cleans its rows off case
+  90001. 02 asserts the Firm/Attorney/Client headings, not `getByText(/firm/i)`.
+- 2026-09-15 — money lane (PR #14, approved by Nate). `supabase/migrations/0008_funds_bill_link.sql`
+  adds nullable `tblfundsrcvd.fndsbillid` FK → `tblbills.billid`, applied to hosted and local
+  `ta_foundation`; `lib/db/types.ts` regenerated. Every cleanup now deletes funds before bills.
+  Journeys 04/05 are rerun-safe (own fixtures, 05 clicks Import). `tests/foundation/schema.test.mjs`
+  excludes the app-added FK from the legacy "26 NOT VALID" count.
+- 2026-09-21 — `MAP.md` round amendment. The legacy VBA (`modBillingAndServAuth`,
+  `frmCaseBill`, `frmBillUnpaid`, `frmCaseServAuth`, `frmCaseUpdate`) shows the database
+  generates, emails, and re-notices every bill and writes service authorization documents;
+  the 2026-09-08 "client bills from another service" note was wrong. Header rewritten, the
+  unowned bill-PDF line removed, journey 07 (finalize → preview → send) added — its test is
+  a protected-path addition written with billing-output's first item. Three lanes added:
+  billing-output (takes over `app/bills/**`, `lib/bills/**` from billing and the SA files
+  from cases, both done), case-docs (gated on templates), parity (sequenced after
+  billing-output, items from `PARITY.md`). Rate card still deferred: guessed defaults,
+  admin sets the per-person rate at finalize.

@@ -7,6 +7,21 @@ import { createServerClient } from "@/lib/db/client";
 import { CaseInputError, saveCase, type Db } from "@/lib/cases/record";
 import { SaInputError, saveServiceAuth } from "@/lib/cases/service-auths";
 import { firmToday } from "@/lib/cases/presets";
+import { docConfig } from "@/lib/bill-docs/invoice";
+import { runCreateSa, saStore } from "@/lib/bill-docs/service-auth";
+
+/** Create SA (any signed-in user): render the case's service authorization PDF, store it, add its "Awaiting Approval" row. */
+export async function createServiceAuthAction(caseId: number): Promise<void> {
+  await runCreateSa(caseId, {
+    session: () => requireSession(),
+    db: () => createServerClient() as unknown as Db,
+    store: saStore,
+    config: docConfig,
+    now: () => new Date(),
+    revalidatePath,
+    redirect,
+  });
+}
 
 /** Add or edit one service authorization on the case. Only changed columns are written; no delete. */
 export async function saveServiceAuthAction(caseId: number, formData: FormData): Promise<void> {

@@ -21,3 +21,10 @@ scripts/migrate/in/
 
 # Supabase CLI local state (project ref, versions)
 supabase/.temp/
+
+# Golden report expectations — real client figures, never committed
+tests/docs-reports/golden.local.json
+
+# Other lanes' artifacts, swept in accidentally by 7c135f4 — kept on disk, out of the PR
+.claude/dev-team/clickthrough-gifs/
+.claude/dev-team/*-pr-body.md

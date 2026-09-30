@@ -1,0 +1,452 @@
+{
+ "note": "Rendered by app/bills/bills-panel.tsx + bills-list-view.tsx + lib/bills/list.ts at 7801e70 (before item 8), today 2026-09-12. Invented data.",
+ "legacy": [
+  {
+   "billid": 9300,
+   "billcaseid": 990911,
+   "billdate": "2019-01-10",
+   "billtype": null,
+   "billbalance": 104,
+   "billhours": 0,
+   "billnotice": "1st",
+   "billsecondnoticedate": null,
+   "billfinalnoticedate": null,
+   "billpaiddate": null,
+   "billfilename": null,
+   "billfinalizedat": null,
+   "billpdfpath": null,
+   "billsentat": null,
+   "supersedesbillid": null,
+   "tblcase": {
+    "caseid": 990911
+   }
+  },
+  {
+   "billid": 9301,
+   "billcaseid": 990911,
+   "billdate": "2019-02-11",
+   "billtype": null,
+   "billbalance": 105,
+   "billhours": 0,
+   "billnotice": "2nd",
+   "billsecondnoticedate": "2019-10-01",
+   "billfinalnoticedate": null,
+   "billpaiddate": null,
+   "billfilename": "Bill990911 Fixture 1",
+   "billfinalizedat": null,
+   "billpdfpath": null,
+   "billsentat": null,
+   "supersedesbillid": null,
+   "tblcase": {
+    "caseid": 990911
+   }
+  },
+  {
+   "billid": 9302,
+   "billcaseid": 990911,
+   "billdate": "2019-03-12",
+   "billtype": null,
+   "billbalance": 106,
+   "billhours": 0,
+   "billnotice": "Final",
+   "billsecondnoticedate": "2019-10-01",
+   "billfinalnoticedate": "2019-11-01",
+   "billpaiddate": null,
+   "billfilename": null,
+   "billfinalizedat": null,
+   "billpdfpath": null,
+   "billsentat": null,
+   "supersedesbillid": null,
+   "tblcase": {
+    "caseid": 990911
+   }
+  },
+  {
+   "billid": 9303,
+   "billcaseid": 990911,
+   "billdate": "2019-04-13",
+   "billtype": null,
+   "billbalance": 100,
+   "billhours": 0,
+   "billnotice": "Partial Payment",
+   "billsecondnoticedate": null,
+   "billfinalnoticedate": null,
+   "billpaiddate": null,
+   "billfilename": "Bill990911 Fixture 3",
+   "billfinalizedat": null,
+   "billpdfpath": null,
+   "billsentat": null,
+   "supersedesbillid": null,
+   "tblcase": {
+    "caseid": 990911
+   }
+  },
+  {
+   "billid": 9304,
+   "billcaseid": 990911,
+   "billdate": "2019-05-14",
+   "billtype": null,
+   "billbalance": 101,
+   "billhours": 0,
+   "billnotice": "Deadbeat",
+   "billsecondnoticedate": null,
+   "billfinalnoticedate": null,
+   "billpaiddate": null,
+   "billfilename": null,
+   "billfinalizedat": null,
+   "billpdfpath": null,
+   "billsentat": null,
+   "supersedesbillid": null,
+   "tblcase": {
+    "caseid": 990911
+   }
+  },
+  {
+   "billid": 9305,
+   "billcaseid": 990911,
+   "billdate": "2019-06-15",
+   "billtype": null,
+   "billbalance": 102,
+   "billhours": 0,
+   "billnotice": "Paid",
+   "billsecondnoticedate": null,
+   "billfinalnoticedate": null,
+   "billpaiddate": "2019-12-01",
+   "billfilename": "Bill990911 Fixture 5",
+   "billfinalizedat": null,
+   "billpdfpath": null,
+   "billsentat": null,
+   "supersedesbillid": null,
+   "tblcase": {
+    "caseid": 990911
+   }
+  },
+  {
+   "billid": 9306,
+   "billcaseid": 990911,
+   "billdate": "2019-07-16",
+   "billtype": null,
+   "billbalance": 103,
+   "billhours": 0,
+   "billnotice": "Cancelled",
+   "billsecondnoticedate": null,
+   "billfinalnoticedate": null,
+   "billpaiddate": null,
+   "billfilename": null,
+   "billfinalizedat": null,
+   "billpdfpath": null,
+   "billsentat": null,
+   "supersedesbillid": null,
+   "tblcase": {
+    "caseid": 990911
+   }
+  },
+  {
+   "billid": 9307,
+   "billcaseid": 990911,
+   "billdate": "2019-08-17",
+   "billtype": null,
+   "billbalance": 104,
+   "billhours": 0,
+   "billnotice": "Carried Over",
+   "billsecondnoticedate": null,
+   "billfinalnoticedate": null,
+   "billpaiddate": null,
+   "billfilename": "Bill990911 Fixture 7",
+   "billfinalizedat": null,
+   "billpdfpath": null,
+   "billsentat": null,
+   "supersedesbillid": null,
+   "tblcase": {
+    "caseid": 990911
+   }
+  },
+  {
+   "billid": 9308,
+   "billcaseid": 990911,
+   "billdate": "2019-09-18",
+   "billtype": null,
+   "billbalance": 105,
+   "billhours": 0,
+   "billnotice": "Settled",
+   "billsecondnoticedate": null,
+   "billfinalnoticedate": null,
+   "billpaiddate": null,
+   "billfilename": null,
+   "billfinalizedat": null,
+   "billpdfpath": null,
+   "billsentat": null,
+   "supersedesbillid": null,
+   "tblcase": {
+    "caseid": 990911
+   }
+  },
+  {
+   "billid": 9309,
+   "billcaseid": 990911,
+   "billdate": "2019-01-19",
+   "billtype": null,
+   "billbalance": 106,
+   "billhours": 0,
+   "billnotice": "Credit",
+   "billsecondnoticedate": null,
+   "billfinalnoticedate": null,
+   "billpaiddate": null,
+   "billfilename": "Bill990911 Fixture 9",
+   "billfinalizedat": null,
+   "billpdfpath": null,
+   "billsentat": null,
+   "supersedesbillid": null,
+   "tblcase": {
+    "caseid": 990911
+   }
+  },
+  {
+   "billid": 9310,
+   "billcaseid": 990911,
+   "billdate": "2019-02-10",
+   "billtype": null,
+   "billbalance": 100,
+   "billhours": 0,
+   "billnotice": "Refund",
+   "billsecondnoticedate": null,
+   "billfinalnoticedate": null,
+   "billpaiddate": null,
+   "billfilename": null,
+   "billfinalizedat": null,
+   "billpdfpath": null,
+   "billsentat": null,
+   "supersedesbillid": null,
+   "tblcase": {
+    "caseid": 990911
+   }
+  },
+  {
+   "billid": 9320,
+   "billcaseid": 990911,
+   "billdate": "2020-02-02",
+   "billtype": null,
+   "billbalance": 103,
+   "billhours": 0,
+   "billnotice": "2nd",
+   "billsecondnoticedate": "2020-03-03",
+   "billfinalnoticedate": null,
+   "billpaiddate": null,
+   "billfilename": null,
+   "billfinalizedat": "2020-02-03T15:00:00Z",
+   "billpdfpath": "bills/990911/Legacy 9320.pdf",
+   "billsentat": "2020-02-04T15:00:00Z",
+   "supersedesbillid": null,
+   "tblcase": {
+    "caseid": 990911
+   }
+  },
+  {
+   "billid": 9321,
+   "billcaseid": 990911,
+   "billdate": "2020-02-01",
+   "billtype": null,
+   "billbalance": 104,
+   "billhours": 0,
+   "billnotice": "1st",
+   "billsecondnoticedate": null,
+   "billfinalnoticedate": null,
+   "billpaiddate": null,
+   "billfilename": null,
+   "billfinalizedat": null,
+   "billpdfpath": "bills/990911/Legacy 9321.pdf",
+   "billsentat": null,
+   "supersedesbillid": null,
+   "tblcase": {
+    "caseid": 990911
+   }
+  }
+ ],
+ "mixed": [
+  {
+   "billid": 9401,
+   "billcaseid": 990912,
+   "billdate": "2026-09-10",
+   "billtype": "timesheet",
+   "billbalance": 300,
+   "billhours": 1.5,
+   "billnotice": "1st",
+   "billsecondnoticedate": null,
+   "billfinalnoticedate": null,
+   "billpaiddate": null,
+   "billfilename": null,
+   "billfinalizedat": null,
+   "billpdfpath": null,
+   "billsentat": null,
+   "supersedesbillid": null,
+   "tblcase": {
+    "caseid": 990912
+   }
+  },
+  {
+   "billid": 9402,
+   "billcaseid": 990912,
+   "billdate": "2026-09-09",
+   "billtype": "timesheet",
+   "billbalance": 300,
+   "billhours": 1.5,
+   "billnotice": "1st",
+   "billsecondnoticedate": null,
+   "billfinalnoticedate": null,
+   "billpaiddate": null,
+   "billfilename": null,
+   "billfinalizedat": "2026-09-01T15:00:00Z",
+   "billpdfpath": "bills/990912/B 9402.pdf",
+   "billsentat": null,
+   "supersedesbillid": null,
+   "tblcase": {
+    "caseid": 990912
+   }
+  },
+  {
+   "billid": 9403,
+   "billcaseid": 990912,
+   "billdate": "2026-09-08",
+   "billtype": "retainer",
+   "billbalance": 300,
+   "billhours": 1.5,
+   "billnotice": "2nd",
+   "billsecondnoticedate": "2026-09-05",
+   "billfinalnoticedate": null,
+   "billpaiddate": null,
+   "billfilename": null,
+   "billfinalizedat": "2026-09-01T15:00:00Z",
+   "billpdfpath": "bills/990912/B 9403.pdf",
+   "billsentat": "2026-09-02T16:00:00Z",
+   "supersedesbillid": null,
+   "tblcase": {
+    "caseid": 990912
+   }
+  },
+  {
+   "billid": 9404,
+   "billcaseid": 990912,
+   "billdate": "2026-09-07",
+   "billtype": "timesheet",
+   "billbalance": 300,
+   "billhours": 1.5,
+   "billnotice": "Cancelled",
+   "billsecondnoticedate": null,
+   "billfinalnoticedate": null,
+   "billpaiddate": null,
+   "billfilename": null,
+   "billfinalizedat": "2026-09-01T15:00:00Z",
+   "billpdfpath": "bills/990912/B 9404.pdf",
+   "billsentat": null,
+   "supersedesbillid": null,
+   "tblcase": {
+    "caseid": 990912
+   }
+  },
+  {
+   "billid": 9405,
+   "billcaseid": 990912,
+   "billdate": "2019-05-05",
+   "billtype": null,
+   "billbalance": 104,
+   "billhours": 0,
+   "billnotice": "Final",
+   "billsecondnoticedate": "2019-06-06",
+   "billfinalnoticedate": "2019-07-07",
+   "billpaiddate": null,
+   "billfilename": "Bill990912 Fixture 5",
+   "billfinalizedat": null,
+   "billpdfpath": null,
+   "billsentat": null,
+   "supersedesbillid": null,
+   "tblcase": {
+    "caseid": 990912
+   }
+  },
+  {
+   "billid": 9406,
+   "billcaseid": 990912,
+   "billdate": "2019-04-04",
+   "billtype": null,
+   "billbalance": 105,
+   "billhours": 0,
+   "billnotice": "Paid",
+   "billsecondnoticedate": null,
+   "billfinalnoticedate": null,
+   "billpaiddate": "2019-04-20",
+   "billfilename": null,
+   "billfinalizedat": null,
+   "billpdfpath": null,
+   "billsentat": null,
+   "supersedesbillid": null,
+   "tblcase": {
+    "caseid": 990912
+   }
+  },
+  {
+   "billid": 9407,
+   "billcaseid": 990912,
+   "billdate": "2019-03-03",
+   "billtype": null,
+   "billbalance": 106,
+   "billhours": 0,
+   "billnotice": "1st",
+   "billsecondnoticedate": null,
+   "billfinalnoticedate": null,
+   "billpaiddate": null,
+   "billfilename": null,
+   "billfinalizedat": null,
+   "billpdfpath": "bills/990912/Legacy 9407.pdf",
+   "billsentat": null,
+   "supersedesbillid": null,
+   "tblcase": {
+    "caseid": 990912
+   }
+  }
+ ],
+ "lines": [
+  {
+   "billid": 9402,
+   "lineno": 1,
+   "kind": "charge",
+   "linedate": "2026-08-20",
+   "description": "Invented work",
+   "personid": null,
+   "hours": "1.500",
+   "rate": "200.00",
+   "amount": "300.00"
+  },
+  {
+   "billid": 9403,
+   "lineno": 1,
+   "kind": "charge",
+   "linedate": "2026-08-20",
+   "description": "Invented work",
+   "personid": null,
+   "hours": "1.500",
+   "rate": "200.00",
+   "amount": "300.00"
+  },
+  {
+   "billid": 9404,
+   "lineno": 1,
+   "kind": "charge",
+   "linedate": "2026-08-20",
+   "description": "Invented work",
+   "personid": null,
+   "hours": "1.500",
+   "rate": "200.00",
+   "amount": "300.00"
+  }
+ ],
+ "markup": {
+  "legacy-panel-admin": "<section id=\"bills-panel\" data-testid=\"bills-panel\" class=\"space-y-2 rounded border border-slate-200 p-3\"><h2 class=\"font-semibold\">Bills</h2><table class=\"w-full text-sm\"><thead><tr class=\"text-left text-slate-500\"><th class=\"py-1 font-normal\">Date</th><th class=\"font-normal\">Type</th><th class=\"text-right font-normal\">Balance</th><th class=\"pl-3 font-normal\">Status</th></tr></thead><tbody><tr data-testid=\"case-bill\" class=\"border-t border-slate-100\"><td class=\"py-1\"><a class=\"underline\" href=\"/bills/9320\">2020-02-02</a></td><td></td><td class=\"text-right tabular-nums\">103.00</td><td class=\"pl-3\">2nd</td></tr><tr data-testid=\"case-bill\" class=\"border-t border-slate-100\"><td class=\"py-1\"><a class=\"underline\" href=\"/bills/9321\">2020-02-01</a></td><td></td><td class=\"text-right tabular-nums\">104.00</td><td class=\"pl-3\">1st</td></tr><tr data-testid=\"case-bill\" class=\"border-t border-slate-100\"><td class=\"py-1\"><a class=\"underline\" href=\"/bills/9308\">2019-09-18</a></td><td></td><td class=\"text-right tabular-nums\">105.00</td><td class=\"pl-3\">Settled</td></tr><tr data-testid=\"case-bill\" class=\"border-t border-slate-100\"><td class=\"py-1\"><a class=\"underline\" href=\"/bills/9307\">2019-08-17</a></td><td></td><td class=\"text-right tabular-nums\">104.00</td><td class=\"pl-3\">Carried Over</td></tr><tr data-testid=\"case-bill\" class=\"border-t border-slate-100\"><td class=\"py-1\"><a class=\"underline\" href=\"/bills/9306\">2019-07-16</a></td><td></td><td class=\"text-right tabular-nums\">103.00</td><td class=\"pl-3\">Cancelled</td></tr><tr data-testid=\"case-bill\" class=\"border-t border-slate-100\"><td class=\"py-1\"><a class=\"underline\" href=\"/bills/9305\">2019-06-15</a></td><td></td><td class=\"text-right tabular-nums\">102.00</td><td class=\"pl-3\">Paid<span data-testid=\"bill-paid-date\"> 2019-12-01</span></td></tr><tr data-testid=\"case-bill\" class=\"border-t border-slate-100\"><td class=\"py-1\"><a class=\"underline\" href=\"/bills/9304\">2019-05-14</a></td><td></td><td class=\"text-right tabular-nums\">101.00</td><td class=\"pl-3\">Deadbeat</td></tr><tr data-testid=\"case-bill\" class=\"border-t border-slate-100\"><td class=\"py-1\"><a class=\"underline\" href=\"/bills/9303\">2019-04-13</a></td><td></td><td class=\"text-right tabular-nums\">100.00</td><td class=\"pl-3\">Partial Payment</td></tr><tr data-testid=\"case-bill\" class=\"border-t border-slate-100\"><td class=\"py-1\"><a class=\"underline\" href=\"/bills/9302\">2019-03-12</a></td><td></td><td class=\"text-right tabular-nums\">106.00</td><td class=\"pl-3\">Final</td></tr><tr data-testid=\"case-bill\" class=\"border-t border-slate-100\"><td class=\"py-1\"><a class=\"underline\" href=\"/bills/9301\">2019-02-11</a></td><td></td><td class=\"text-right tabular-nums\">105.00</td><td class=\"pl-3\">2nd</td></tr><tr data-testid=\"case-bill\" class=\"border-t border-slate-100\"><td class=\"py-1\"><a class=\"underline\" href=\"/bills/9310\">2019-02-10</a></td><td></td><td class=\"text-right tabular-nums\">100.00</td><td class=\"pl-3\">Refund</td></tr><tr data-testid=\"case-bill\" class=\"border-t border-slate-100\"><td class=\"py-1\"><a class=\"underline\" href=\"/bills/9309\">2019-01-19</a></td><td></td><td class=\"text-right tabular-nums\">106.00</td><td class=\"pl-3\">Credit</td></tr><tr data-testid=\"case-bill\" class=\"border-t border-slate-100\"><td class=\"py-1\"><a class=\"underline\" href=\"/bills/9300\">2019-01-10</a></td><td></td><td class=\"text-right tabular-nums\">104.00</td><td class=\"pl-3\">1st</td></tr></tbody></table><ul class=\"text-sm\"><li><a class=\"underline\" href=\"/funds/new?case=990911&amp;bill=9320\">Record payment (2020-02-02)</a></li><li><a class=\"underline\" href=\"/funds/new?case=990911&amp;bill=9321\">Record payment (2020-02-01)</a></li><li><a class=\"underline\" href=\"/funds/new?case=990911&amp;bill=9304\">Record payment (2019-05-14)</a></li><li><a class=\"underline\" href=\"/funds/new?case=990911&amp;bill=9303\">Record payment (2019-04-13)</a></li><li><a class=\"underline\" href=\"/funds/new?case=990911&amp;bill=9302\">Record payment (2019-03-12)</a></li><li><a class=\"underline\" href=\"/funds/new?case=990911&amp;bill=9301\">Record payment (2019-02-11)</a></li><li><a class=\"underline\" href=\"/funds/new?case=990911&amp;bill=9300\">Record payment (2019-01-10)</a></li></ul><dl class=\"grid grid-cols-[auto_1fr] gap-x-2 text-sm\"><dt class=\"text-slate-500\">Unpaid</dt><dd data-testid=\"unpaid-bill-count\" class=\"font-medium\">7</dd><dt class=\"text-slate-500\">2nd notice</dt><dd data-testid=\"second-notice-date\">2020-03-03</dd><dt class=\"text-slate-500\">Final notice</dt><dd data-testid=\"final-notice-date\"></dd></dl><a class=\"text-sm underline\" href=\"/bills/new?case=990911\">New bill</a></section>",
+  "legacy-list-admin": "<div class=\"space-y-6\"><section data-stage=\"1st\" class=\"space-y-2\"><h2 class=\"text-lg font-semibold\">1st</h2><table class=\"w-full text-sm\"><thead><tr class=\"text-left text-gray-600\"><th class=\"py-1\">Case</th><th>Bill</th><th>Bill date</th><th class=\"text-right\">Balance</th><th class=\"text-right\">Since notice</th><th></th><th></th></tr></thead><tbody><tr data-testid=\"open-bill\" class=\"border-t\"><td class=\"py-1\"><a class=\"text-blue-700 hover:underline\" href=\"/cases/990911\">990911</a></td><td><a class=\"text-blue-700 hover:underline\" href=\"/bills/9300\">Bill #9300</a></td><td>2019-01-10</td><td class=\"text-right\">104.00</td><td class=\"text-right\">2802 days</td><td><span data-testid=\"due-badge\" class=\"rounded bg-red-100 px-2 text-xs font-medium text-red-800\">due</span></td><td></td></tr><tr data-testid=\"open-bill\" class=\"border-t\"><td class=\"py-1\"><a class=\"text-blue-700 hover:underline\" href=\"/cases/990911\">990911</a></td><td><a class=\"text-blue-700 hover:underline\" href=\"/bills/9321\">Bill #9321</a></td><td>2020-02-01</td><td class=\"text-right\">104.00</td><td class=\"text-right\">2415 days</td><td><span data-testid=\"due-badge\" class=\"rounded bg-red-100 px-2 text-xs font-medium text-red-800\">due</span></td><td></td></tr></tbody></table></section><section data-stage=\"2nd\" class=\"space-y-2\"><h2 class=\"text-lg font-semibold\">2nd</h2><table class=\"w-full text-sm\"><thead><tr class=\"text-left text-gray-600\"><th class=\"py-1\">Case</th><th>Bill</th><th>Bill date</th><th class=\"text-right\">Balance</th><th class=\"text-right\">Since notice</th><th></th><th></th></tr></thead><tbody><tr data-testid=\"open-bill\" class=\"border-t\"><td class=\"py-1\"><a class=\"text-blue-700 hover:underline\" href=\"/cases/990911\">990911</a></td><td><a class=\"text-blue-700 hover:underline\" href=\"/bills/9301\">Bill990911 Fixture 1</a></td><td>2019-02-11</td><td class=\"text-right\">105.00</td><td class=\"text-right\">2538 days</td><td><span data-testid=\"due-badge\" class=\"rounded bg-red-100 px-2 text-xs font-medium text-red-800\">due</span></td><td><span data-testid=\"notice-blocked\" title=\"This is a legacy bill with no stored invoice PDF, so its notice can&#x27;t be sent from here.\" class=\"text-xs text-gray-500\">No stored PDF</span></td></tr><tr data-testid=\"open-bill\" class=\"border-t\"><td class=\"py-1\"><a class=\"text-blue-700 hover:underline\" href=\"/cases/990911\">990911</a></td><td><a class=\"text-blue-700 hover:underline\" href=\"/bills/9320\">Bill #9320</a></td><td>2020-02-02</td><td class=\"text-right\">103.00</td><td class=\"text-right\">2384 days</td><td><span data-testid=\"due-badge\" class=\"rounded bg-red-100 px-2 text-xs font-medium text-red-800\">due</span></td><td><span data-testid=\"notice-blocked\" title=\"This is a legacy bill with no stored invoice PDF, so its notice can&#x27;t be sent from here.\" class=\"text-xs text-gray-500\">No stored PDF</span></td></tr></tbody></table></section><section data-stage=\"Final\" class=\"space-y-2\"><h2 class=\"text-lg font-semibold\">Final</h2><table class=\"w-full text-sm\"><thead><tr class=\"text-left text-gray-600\"><th class=\"py-1\">Case</th><th>Bill</th><th>Bill date</th><th class=\"text-right\">Balance</th><th class=\"text-right\">Since notice</th><th></th><th></th></tr></thead><tbody><tr data-testid=\"open-bill\" class=\"border-t\"><td class=\"py-1\"><a class=\"text-blue-700 hover:underline\" href=\"/cases/990911\">990911</a></td><td><a class=\"text-blue-700 hover:underline\" href=\"/bills/9302\">Bill #9302</a></td><td>2019-03-12</td><td class=\"text-right\">106.00</td><td class=\"text-right\">2507 days</td><td><span data-testid=\"due-badge\" class=\"rounded bg-red-100 px-2 text-xs font-medium text-red-800\">due</span></td><td><span data-testid=\"notice-blocked\" title=\"This is a legacy bill with no stored invoice PDF, so its notice can&#x27;t be sent from here.\" class=\"text-xs text-gray-500\">No stored PDF</span></td></tr></tbody></table></section><section data-stage=\"Partial Payment\" class=\"space-y-2\"><h2 class=\"text-lg font-semibold\">Partial Payment</h2><table class=\"w-full text-sm\"><thead><tr class=\"text-left text-gray-600\"><th class=\"py-1\">Case</th><th>Bill</th><th>Bill date</th><th class=\"text-right\">Balance</th><th class=\"text-right\">Since notice</th><th></th><th></th></tr></thead><tbody><tr data-testid=\"open-bill\" class=\"border-t\"><td class=\"py-1\"><a class=\"text-blue-700 hover:underline\" href=\"/cases/990911\">990911</a></td><td><a class=\"text-blue-700 hover:underline\" href=\"/bills/9303\">Bill990911 Fixture 3</a></td><td>2019-04-13</td><td class=\"text-right\">100.00</td><td class=\"text-right\">2709 days</td><td><span data-testid=\"due-badge\" class=\"rounded bg-red-100 px-2 text-xs font-medium text-red-800\">due</span></td><td></td></tr></tbody></table></section><section data-stage=\"Deadbeat\" class=\"space-y-2\"><h2 class=\"text-lg font-semibold\">Deadbeat</h2><table class=\"w-full text-sm\"><thead><tr class=\"text-left text-gray-600\"><th class=\"py-1\">Case</th><th>Bill</th><th>Bill date</th><th class=\"text-right\">Balance</th><th class=\"text-right\">Since notice</th><th></th><th></th></tr></thead><tbody><tr data-testid=\"open-bill\" class=\"border-t\"><td class=\"py-1\"><a class=\"text-blue-700 hover:underline\" href=\"/cases/990911\">990911</a></td><td><a class=\"text-blue-700 hover:underline\" href=\"/bills/9304\">Bill #9304</a></td><td>2019-05-14</td><td class=\"text-right\">101.00</td><td class=\"text-right\">2678 days</td><td><span data-testid=\"due-badge\" class=\"rounded bg-red-100 px-2 text-xs font-medium text-red-800\">due</span></td><td></td></tr></tbody></table></section></div>",
+  "legacy-panel-staff": "<section id=\"bills-panel\" data-testid=\"bills-panel\" class=\"space-y-2 rounded border border-slate-200 p-3\"><h2 class=\"font-semibold\">Bills</h2><table class=\"w-full text-sm\"><thead><tr class=\"text-left text-slate-500\"><th class=\"py-1 font-normal\">Date</th><th class=\"font-normal\">Type</th><th class=\"text-right font-normal\">Balance</th><th class=\"pl-3 font-normal\">Status</th></tr></thead><tbody><tr data-testid=\"case-bill\" class=\"border-t border-slate-100\"><td class=\"py-1\"><a class=\"underline\" href=\"/bills/9320\">2020-02-02</a></td><td></td><td class=\"text-right tabular-nums\">103.00</td><td class=\"pl-3\">2nd</td></tr><tr data-testid=\"case-bill\" class=\"border-t border-slate-100\"><td class=\"py-1\"><a class=\"underline\" href=\"/bills/9321\">2020-02-01</a></td><td></td><td class=\"text-right tabular-nums\">104.00</td><td class=\"pl-3\">1st</td></tr><tr data-testid=\"case-bill\" class=\"border-t border-slate-100\"><td class=\"py-1\"><a class=\"underline\" href=\"/bills/9308\">2019-09-18</a></td><td></td><td class=\"text-right tabular-nums\">105.00</td><td class=\"pl-3\">Settled</td></tr><tr data-testid=\"case-bill\" class=\"border-t border-slate-100\"><td class=\"py-1\"><a class=\"underline\" href=\"/bills/9307\">2019-08-17</a></td><td></td><td class=\"text-right tabular-nums\">104.00</td><td class=\"pl-3\">Carried Over</td></tr><tr data-testid=\"case-bill\" class=\"border-t border-slate-100\"><td class=\"py-1\"><a class=\"underline\" href=\"/bills/9306\">2019-07-16</a></td><td></td><td class=\"text-right tabular-nums\">103.00</td><td class=\"pl-3\">Cancelled</td></tr><tr data-testid=\"case-bill\" class=\"border-t border-slate-100\"><td class=\"py-1\"><a class=\"underline\" href=\"/bills/9305\">2019-06-15</a></td><td></td><td class=\"text-right tabular-nums\">102.00</td><td class=\"pl-3\">Paid<span data-testid=\"bill-paid-date\"> 2019-12-01</span></td></tr><tr data-testid=\"case-bill\" class=\"border-t border-slate-100\"><td class=\"py-1\"><a class=\"underline\" href=\"/bills/9304\">2019-05-14</a></td><td></td><td class=\"text-right tabular-nums\">101.00</td><td class=\"pl-3\">Deadbeat</td></tr><tr data-testid=\"case-bill\" class=\"border-t border-slate-100\"><td class=\"py-1\"><a class=\"underline\" href=\"/bills/9303\">2019-04-13</a></td><td></td><td class=\"text-right tabular-nums\">100.00</td><td class=\"pl-3\">Partial Payment</td></tr><tr data-testid=\"case-bill\" class=\"border-t border-slate-100\"><td class=\"py-1\"><a class=\"underline\" href=\"/bills/9302\">2019-03-12</a></td><td></td><td class=\"text-right tabular-nums\">106.00</td><td class=\"pl-3\">Final</td></tr><tr data-testid=\"case-bill\" class=\"border-t border-slate-100\"><td class=\"py-1\"><a class=\"underline\" href=\"/bills/9301\">2019-02-11</a></td><td></td><td class=\"text-right tabular-nums\">105.00</td><td class=\"pl-3\">2nd</td></tr><tr data-testid=\"case-bill\" class=\"border-t border-slate-100\"><td class=\"py-1\"><a class=\"underline\" href=\"/bills/9310\">2019-02-10</a></td><td></td><td class=\"text-right tabular-nums\">100.00</td><td class=\"pl-3\">Refund</td></tr><tr data-testid=\"case-bill\" class=\"border-t border-slate-100\"><td class=\"py-1\"><a class=\"underline\" href=\"/bills/9309\">2019-01-19</a></td><td></td><td class=\"text-right tabular-nums\">106.00</td><td class=\"pl-3\">Credit</td></tr><tr data-testid=\"case-bill\" class=\"border-t border-slate-100\"><td class=\"py-1\"><a class=\"underline\" href=\"/bills/9300\">2019-01-10</a></td><td></td><td class=\"text-right tabular-nums\">104.00</td><td class=\"pl-3\">1st</td></tr></tbody></table><ul class=\"text-sm\"><li><a class=\"underline\" href=\"/funds/new?case=990911&amp;bill=9320\">Record payment (2020-02-02)</a></li><li><a class=\"underline\" href=\"/funds/new?case=990911&amp;bill=9321\">Record payment (2020-02-01)</a></li><li><a class=\"underline\" href=\"/funds/new?case=990911&amp;bill=9304\">Record payment (2019-05-14)</a></li><li><a class=\"underline\" href=\"/funds/new?case=990911&amp;bill=9303\">Record payment (2019-04-13)</a></li><li><a class=\"underline\" href=\"/funds/new?case=990911&amp;bill=9302\">Record payment (2019-03-12)</a></li><li><a class=\"underline\" href=\"/funds/new?case=990911&amp;bill=9301\">Record payment (2019-02-11)</a></li><li><a class=\"underline\" href=\"/funds/new?case=990911&amp;bill=9300\">Record payment (2019-01-10)</a></li></ul><dl class=\"grid grid-cols-[auto_1fr] gap-x-2 text-sm\"><dt class=\"text-slate-500\">Unpaid</dt><dd data-testid=\"unpaid-bill-count\" class=\"font-medium\">7</dd><dt class=\"text-slate-500\">2nd notice</dt><dd data-testid=\"second-notice-date\">2020-03-03</dd><dt class=\"text-slate-500\">Final notice</dt><dd data-testid=\"final-notice-date\"></dd></dl></section>",
+  "legacy-list-staff": "<div class=\"space-y-6\"><section data-stage=\"1st\" class=\"space-y-2\"><h2 class=\"text-lg font-semibold\">1st</h2><table class=\"w-full text-sm\"><thead><tr class=\"text-left text-gray-600\"><th class=\"py-1\">Case</th><th>Bill</th><th>Bill date</th><th class=\"text-right\">Balance</th><th class=\"text-right\">Since notice</th><th></th></tr></thead><tbody><tr data-testid=\"open-bill\" class=\"border-t\"><td class=\"py-1\"><a class=\"text-blue-700 hover:underline\" href=\"/cases/990911\">990911</a></td><td><a class=\"text-blue-700 hover:underline\" href=\"/bills/9300\">Bill #9300</a></td><td>2019-01-10</td><td class=\"text-right\">104.00</td><td class=\"text-right\">2802 days</td><td><span data-testid=\"due-badge\" class=\"rounded bg-red-100 px-2 text-xs font-medium text-red-800\">due</span></td></tr><tr data-testid=\"open-bill\" class=\"border-t\"><td class=\"py-1\"><a class=\"text-blue-700 hover:underline\" href=\"/cases/990911\">990911</a></td><td><a class=\"text-blue-700 hover:underline\" href=\"/bills/9321\">Bill #9321</a></td><td>2020-02-01</td><td class=\"text-right\">104.00</td><td class=\"text-right\">2415 days</td><td><span data-testid=\"due-badge\" class=\"rounded bg-red-100 px-2 text-xs font-medium text-red-800\">due</span></td></tr></tbody></table></section><section data-stage=\"2nd\" class=\"space-y-2\"><h2 class=\"text-lg font-semibold\">2nd</h2><table class=\"w-full text-sm\"><thead><tr class=\"text-left text-gray-600\"><th class=\"py-1\">Case</th><th>Bill</th><th>Bill date</th><th class=\"text-right\">Balance</th><th class=\"text-right\">Since notice</th><th></th></tr></thead><tbody><tr data-testid=\"open-bill\" class=\"border-t\"><td class=\"py-1\"><a class=\"text-blue-700 hover:underline\" href=\"/cases/990911\">990911</a></td><td><a class=\"text-blue-700 hover:underline\" href=\"/bills/9301\">Bill990911 Fixture 1</a></td><td>2019-02-11</td><td class=\"text-right\">105.00</td><td class=\"text-right\">2538 days</td><td><span data-testid=\"due-badge\" class=\"rounded bg-red-100 px-2 text-xs font-medium text-red-800\">due</span></td></tr><tr data-testid=\"open-bill\" class=\"border-t\"><td class=\"py-1\"><a class=\"text-blue-700 hover:underline\" href=\"/cases/990911\">990911</a></td><td><a class=\"text-blue-700 hover:underline\" href=\"/bills/9320\">Bill #9320</a></td><td>2020-02-02</td><td class=\"text-right\">103.00</td><td class=\"text-right\">2384 days</td><td><span data-testid=\"due-badge\" class=\"rounded bg-red-100 px-2 text-xs font-medium text-red-800\">due</span></td></tr></tbody></table></section><section data-stage=\"Final\" class=\"space-y-2\"><h2 class=\"text-lg font-semibold\">Final</h2><table class=\"w-full text-sm\"><thead><tr class=\"text-left text-gray-600\"><th class=\"py-1\">Case</th><th>Bill</th><th>Bill date</th><th class=\"text-right\">Balance</th><th class=\"text-right\">Since notice</th><th></th></tr></thead><tbody><tr data-testid=\"open-bill\" class=\"border-t\"><td class=\"py-1\"><a class=\"text-blue-700 hover:underline\" href=\"/cases/990911\">990911</a></td><td><a class=\"text-blue-700 hover:underline\" href=\"/bills/9302\">Bill #9302</a></td><td>2019-03-12</td><td class=\"text-right\">106.00</td><td class=\"text-right\">2507 days</td><td><span data-testid=\"due-badge\" class=\"rounded bg-red-100 px-2 text-xs font-medium text-red-800\">due</span></td></tr></tbody></table></section><section data-stage=\"Partial Payment\" class=\"space-y-2\"><h2 class=\"text-lg font-semibold\">Partial Payment</h2><table class=\"w-full text-sm\"><thead><tr class=\"text-left text-gray-600\"><th class=\"py-1\">Case</th><th>Bill</th><th>Bill date</th><th class=\"text-right\">Balance</th><th class=\"text-right\">Since notice</th><th></th></tr></thead><tbody><tr data-testid=\"open-bill\" class=\"border-t\"><td class=\"py-1\"><a class=\"text-blue-700 hover:underline\" href=\"/cases/990911\">990911</a></td><td><a class=\"text-blue-700 hover:underline\" href=\"/bills/9303\">Bill990911 Fixture 3</a></td><td>2019-04-13</td><td class=\"text-right\">100.00</td><td class=\"text-right\">2709 days</td><td><span data-testid=\"due-badge\" class=\"rounded bg-red-100 px-2 text-xs font-medium text-red-800\">due</span></td></tr></tbody></table></section><section data-stage=\"Deadbeat\" class=\"space-y-2\"><h2 class=\"text-lg font-semibold\">Deadbeat</h2><table class=\"w-full text-sm\"><thead><tr class=\"text-left text-gray-600\"><th class=\"py-1\">Case</th><th>Bill</th><th>Bill date</th><th class=\"text-right\">Balance</th><th class=\"text-right\">Since notice</th><th></th></tr></thead><tbody><tr data-testid=\"open-bill\" class=\"border-t\"><td class=\"py-1\"><a class=\"text-blue-700 hover:underline\" href=\"/cases/990911\">990911</a></td><td><a class=\"text-blue-700 hover:underline\" href=\"/bills/9304\">Bill #9304</a></td><td>2019-05-14</td><td class=\"text-right\">101.00</td><td class=\"text-right\">2678 days</td><td><span data-testid=\"due-badge\" class=\"rounded bg-red-100 px-2 text-xs font-medium text-red-800\">due</span></td></tr></tbody></table></section></div>",
+  "mixed-panel-admin": "<section id=\"bills-panel\" data-testid=\"bills-panel\" class=\"space-y-2 rounded border border-slate-200 p-3\"><h2 class=\"font-semibold\">Bills</h2><table class=\"w-full text-sm\"><thead><tr class=\"text-left text-slate-500\"><th class=\"py-1 font-normal\">Date</th><th class=\"font-normal\">Type</th><th class=\"text-right font-normal\">Balance</th><th class=\"pl-3 font-normal\">Status</th></tr></thead><tbody><tr data-testid=\"case-bill\" class=\"border-t border-slate-100\"><td class=\"py-1\"><a class=\"underline\" href=\"/bills/9401\">2026-09-10</a></td><td>timesheet</td><td class=\"text-right tabular-nums\">300.00</td><td class=\"pl-3\">1st</td></tr><tr data-testid=\"case-bill\" class=\"border-t border-slate-100\"><td class=\"py-1\"><a class=\"underline\" href=\"/bills/9402\">2026-09-09</a></td><td>timesheet</td><td class=\"text-right tabular-nums\">300.00</td><td class=\"pl-3\">1st</td></tr><tr data-testid=\"case-bill\" class=\"border-t border-slate-100\"><td class=\"py-1\"><a class=\"underline\" href=\"/bills/9403\">2026-09-08</a></td><td>retainer</td><td class=\"text-right tabular-nums\">300.00</td><td class=\"pl-3\">2nd</td></tr><tr data-testid=\"case-bill\" class=\"border-t border-slate-100\"><td class=\"py-1\"><a class=\"underline\" href=\"/bills/9404\">2026-09-07</a></td><td>timesheet</td><td class=\"text-right tabular-nums\">300.00</td><td class=\"pl-3\">Cancelled</td></tr><tr data-testid=\"case-bill\" class=\"border-t border-slate-100\"><td class=\"py-1\"><a class=\"underline\" href=\"/bills/9405\">2019-05-05</a></td><td></td><td class=\"text-right tabular-nums\">104.00</td><td class=\"pl-3\">Final</td></tr><tr data-testid=\"case-bill\" class=\"border-t border-slate-100\"><td class=\"py-1\"><a class=\"underline\" href=\"/bills/9406\">2019-04-04</a></td><td></td><td class=\"text-right tabular-nums\">105.00</td><td class=\"pl-3\">Paid<span data-testid=\"bill-paid-date\"> 2019-04-20</span></td></tr><tr data-testid=\"case-bill\" class=\"border-t border-slate-100\"><td class=\"py-1\"><a class=\"underline\" href=\"/bills/9407\">2019-03-03</a></td><td></td><td class=\"text-right tabular-nums\">106.00</td><td class=\"pl-3\">1st</td></tr></tbody></table><ul class=\"text-sm\"><li><a class=\"underline\" href=\"/funds/new?case=990912&amp;bill=9401\">Record payment (2026-09-10)</a></li><li><a class=\"underline\" href=\"/funds/new?case=990912&amp;bill=9402\">Record payment (2026-09-09)</a></li><li><a class=\"underline\" href=\"/funds/new?case=990912&amp;bill=9403\">Record payment (2026-09-08)</a></li><li><a class=\"underline\" href=\"/funds/new?case=990912&amp;bill=9405\">Record payment (2019-05-05)</a></li><li><a class=\"underline\" href=\"/funds/new?case=990912&amp;bill=9407\">Record payment (2019-03-03)</a></li></ul><dl class=\"grid grid-cols-[auto_1fr] gap-x-2 text-sm\"><dt class=\"text-slate-500\">Unpaid</dt><dd data-testid=\"unpaid-bill-count\" class=\"font-medium\">5</dd><dt class=\"text-slate-500\">2nd notice</dt><dd data-testid=\"second-notice-date\"></dd><dt class=\"text-slate-500\">Final notice</dt><dd data-testid=\"final-notice-date\"></dd></dl><a class=\"text-sm underline\" href=\"/bills/new?case=990912\">New bill</a></section>",
+  "mixed-list-admin": "<div class=\"space-y-6\"><section data-stage=\"1st\" class=\"space-y-2\"><h2 class=\"text-lg font-semibold\">1st</h2><table class=\"w-full text-sm\"><thead><tr class=\"text-left text-gray-600\"><th class=\"py-1\">Case</th><th>Bill</th><th>Bill date</th><th class=\"text-right\">Balance</th><th class=\"text-right\">Since notice</th><th></th><th></th></tr></thead><tbody><tr data-testid=\"open-bill\" class=\"border-t\"><td class=\"py-1\"><a class=\"text-blue-700 hover:underline\" href=\"/cases/990912\">990912</a></td><td><a class=\"text-blue-700 hover:underline\" href=\"/bills/9407\">Bill #9407</a></td><td>2019-03-03</td><td class=\"text-right\">106.00</td><td class=\"text-right\">2750 days</td><td><span data-testid=\"due-badge\" class=\"rounded bg-red-100 px-2 text-xs font-medium text-red-800\">due</span></td><td></td></tr><tr data-testid=\"open-bill\" class=\"border-t\"><td class=\"py-1\"><a class=\"text-blue-700 hover:underline\" href=\"/cases/990912\">990912</a></td><td><a class=\"text-blue-700 hover:underline\" href=\"/bills/9402\">Bill #9402</a></td><td>2026-09-09</td><td class=\"text-right\">300.00</td><td class=\"text-right\">3 days</td><td></td><td></td></tr><tr data-testid=\"open-bill\" class=\"border-t\"><td class=\"py-1\"><a class=\"text-blue-700 hover:underline\" href=\"/cases/990912\">990912</a></td><td><a class=\"text-blue-700 hover:underline\" href=\"/bills/9401\">Bill #9401</a></td><td>2026-09-10</td><td class=\"text-right\">300.00</td><td class=\"text-right\">2 days</td><td></td><td></td></tr></tbody></table></section><section data-stage=\"2nd\" class=\"space-y-2\"><h2 class=\"text-lg font-semibold\">2nd</h2><table class=\"w-full text-sm\"><thead><tr class=\"text-left text-gray-600\"><th class=\"py-1\">Case</th><th>Bill</th><th>Bill date</th><th class=\"text-right\">Balance</th><th class=\"text-right\">Since notice</th><th></th><th></th></tr></thead><tbody><tr data-testid=\"open-bill\" class=\"border-t\"><td class=\"py-1\"><a class=\"text-blue-700 hover:underline\" href=\"/cases/990912\">990912</a></td><td><a class=\"text-blue-700 hover:underline\" href=\"/bills/9403\">Bill #9403</a></td><td>2026-09-08</td><td class=\"text-right\">300.00</td><td class=\"text-right\">7 days</td><td></td><td><a data-testid=\"send-notice\" class=\"text-blue-700 hover:underline\" href=\"/bills/9403/notice\">Send notice</a></td></tr></tbody></table></section><section data-stage=\"Final\" class=\"space-y-2\"><h2 class=\"text-lg font-semibold\">Final</h2><table class=\"w-full text-sm\"><thead><tr class=\"text-left text-gray-600\"><th class=\"py-1\">Case</th><th>Bill</th><th>Bill date</th><th class=\"text-right\">Balance</th><th class=\"text-right\">Since notice</th><th></th><th></th></tr></thead><tbody><tr data-testid=\"open-bill\" class=\"border-t\"><td class=\"py-1\"><a class=\"text-blue-700 hover:underline\" href=\"/cases/990912\">990912</a></td><td><a class=\"text-blue-700 hover:underline\" href=\"/bills/9405\">Bill990912 Fixture 5</a></td><td>2019-05-05</td><td class=\"text-right\">104.00</td><td class=\"text-right\">2624 days</td><td><span data-testid=\"due-badge\" class=\"rounded bg-red-100 px-2 text-xs font-medium text-red-800\">due</span></td><td><span data-testid=\"notice-blocked\" title=\"This is a legacy bill with no stored invoice PDF, so its notice can&#x27;t be sent from here.\" class=\"text-xs text-gray-500\">No stored PDF</span></td></tr></tbody></table></section></div>",
+  "mixed-panel-staff": "<section id=\"bills-panel\" data-testid=\"bills-panel\" class=\"space-y-2 rounded border border-slate-200 p-3\"><h2 class=\"font-semibold\">Bills</h2><table class=\"w-full text-sm\"><thead><tr class=\"text-left text-slate-500\"><th class=\"py-1 font-normal\">Date</th><th class=\"font-normal\">Type</th><th class=\"text-right font-normal\">Balance</th><th class=\"pl-3 font-normal\">Status</th></tr></thead><tbody><tr data-testid=\"case-bill\" class=\"border-t border-slate-100\"><td class=\"py-1\"><a class=\"underline\" href=\"/bills/9401\">2026-09-10</a></td><td>timesheet</td><td class=\"text-right tabular-nums\">300.00</td><td class=\"pl-3\">1st</td></tr><tr data-testid=\"case-bill\" class=\"border-t border-slate-100\"><td class=\"py-1\"><a class=\"underline\" href=\"/bills/9402\">2026-09-09</a></td><td>timesheet</td><td class=\"text-right tabular-nums\">300.00</td><td class=\"pl-3\">1st</td></tr><tr data-testid=\"case-bill\" class=\"border-t border-slate-100\"><td class=\"py-1\"><a class=\"underline\" href=\"/bills/9403\">2026-09-08</a></td><td>retainer</td><td class=\"text-right tabular-nums\">300.00</td><td class=\"pl-3\">2nd</td></tr><tr data-testid=\"case-bill\" class=\"border-t border-slate-100\"><td class=\"py-1\"><a class=\"underline\" href=\"/bills/9404\">2026-09-07</a></td><td>timesheet</td><td class=\"text-right tabular-nums\">300.00</td><td class=\"pl-3\">Cancelled</td></tr><tr data-testid=\"case-bill\" class=\"border-t border-slate-100\"><td class=\"py-1\"><a class=\"underline\" href=\"/bills/9405\">2019-05-05</a></td><td></td><td class=\"text-right tabular-nums\">104.00</td><td class=\"pl-3\">Final</td></tr><tr data-testid=\"case-bill\" class=\"border-t border-slate-100\"><td class=\"py-1\"><a class=\"underline\" href=\"/bills/9406\">2019-04-04</a></td><td></td><td class=\"text-right tabular-nums\">105.00</td><td class=\"pl-3\">Paid<span data-testid=\"bill-paid-date\"> 2019-04-20</span></td></tr><tr data-testid=\"case-bill\" class=\"border-t border-slate-100\"><td class=\"py-1\"><a class=\"underline\" href=\"/bills/9407\">2019-03-03</a></td><td></td><td class=\"text-right tabular-nums\">106.00</td><td class=\"pl-3\">1st</td></tr></tbody></table><ul class=\"text-sm\"><li><a class=\"underline\" href=\"/funds/new?case=990912&amp;bill=9401\">Record payment (2026-09-10)</a></li><li><a class=\"underline\" href=\"/funds/new?case=990912&amp;bill=9402\">Record payment (2026-09-09)</a></li><li><a class=\"underline\" href=\"/funds/new?case=990912&amp;bill=9403\">Record payment (2026-09-08)</a></li><li><a class=\"underline\" href=\"/funds/new?case=990912&amp;bill=9405\">Record payment (2019-05-05)</a></li><li><a class=\"underline\" href=\"/funds/new?case=990912&amp;bill=9407\">Record payment (2019-03-03)</a></li></ul><dl class=\"grid grid-cols-[auto_1fr] gap-x-2 text-sm\"><dt class=\"text-slate-500\">Unpaid</dt><dd data-testid=\"unpaid-bill-count\" class=\"font-medium\">5</dd><dt class=\"text-slate-500\">2nd notice</dt><dd data-testid=\"second-notice-date\"></dd><dt class=\"text-slate-500\">Final notice</dt><dd data-testid=\"final-notice-date\"></dd></dl></section>",
+  "mixed-list-staff": "<div class=\"space-y-6\"><section data-stage=\"1st\" class=\"space-y-2\"><h2 class=\"text-lg font-semibold\">1st</h2><table class=\"w-full text-sm\"><thead><tr class=\"text-left text-gray-600\"><th class=\"py-1\">Case</th><th>Bill</th><th>Bill date</th><th class=\"text-right\">Balance</th><th class=\"text-right\">Since notice</th><th></th></tr></thead><tbody><tr data-testid=\"open-bill\" class=\"border-t\"><td class=\"py-1\"><a class=\"text-blue-700 hover:underline\" href=\"/cases/990912\">990912</a></td><td><a class=\"text-blue-700 hover:underline\" href=\"/bills/9407\">Bill #9407</a></td><td>2019-03-03</td><td class=\"text-right\">106.00</td><td class=\"text-right\">2750 days</td><td><span data-testid=\"due-badge\" class=\"rounded bg-red-100 px-2 text-xs font-medium text-red-800\">due</span></td></tr><tr data-testid=\"open-bill\" class=\"border-t\"><td class=\"py-1\"><a class=\"text-blue-700 hover:underline\" href=\"/cases/990912\">990912</a></td><td><a class=\"text-blue-700 hover:underline\" href=\"/bills/9402\">Bill #9402</a></td><td>2026-09-09</td><td class=\"text-right\">300.00</td><td class=\"text-right\">3 days</td><td></td></tr><tr data-testid=\"open-bill\" class=\"border-t\"><td class=\"py-1\"><a class=\"text-blue-700 hover:underline\" href=\"/cases/990912\">990912</a></td><td><a class=\"text-blue-700 hover:underline\" href=\"/bills/9401\">Bill #9401</a></td><td>2026-09-10</td><td class=\"text-right\">300.00</td><td class=\"text-right\">2 days</td><td></td></tr></tbody></table></section><section data-stage=\"2nd\" class=\"space-y-2\"><h2 class=\"text-lg font-semibold\">2nd</h2><table class=\"w-full text-sm\"><thead><tr class=\"text-left text-gray-600\"><th class=\"py-1\">Case</th><th>Bill</th><th>Bill date</th><th class=\"text-right\">Balance</th><th class=\"text-right\">Since notice</th><th></th></tr></thead><tbody><tr data-testid=\"open-bill\" class=\"border-t\"><td class=\"py-1\"><a class=\"text-blue-700 hover:underline\" href=\"/cases/990912\">990912</a></td><td><a class=\"text-blue-700 hover:underline\" href=\"/bills/9403\">Bill #9403</a></td><td>2026-09-08</td><td class=\"text-right\">300.00</td><td class=\"text-right\">7 days</td><td></td></tr></tbody></table></section><section data-stage=\"Final\" class=\"space-y-2\"><h2 class=\"text-lg font-semibold\">Final</h2><table class=\"w-full text-sm\"><thead><tr class=\"text-left text-gray-600\"><th class=\"py-1\">Case</th><th>Bill</th><th>Bill date</th><th class=\"text-right\">Balance</th><th class=\"text-right\">Since notice</th><th></th></tr></thead><tbody><tr data-testid=\"open-bill\" class=\"border-t\"><td class=\"py-1\"><a class=\"text-blue-700 hover:underline\" href=\"/cases/990912\">990912</a></td><td><a class=\"text-blue-700 hover:underline\" href=\"/bills/9405\">Bill990912 Fixture 5</a></td><td>2019-05-05</td><td class=\"text-right\">104.00</td><td class=\"text-right\">2624 days</td><td><span data-testid=\"due-badge\" class=\"rounded bg-red-100 px-2 text-xs font-medium text-red-800\">due</span></td></tr></tbody></table></section></div>"
+ }
+}

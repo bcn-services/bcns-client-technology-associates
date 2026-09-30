@@ -3,7 +3,7 @@
  * then creates → edits a firm, an attorney attached to it, and a client through the same
  * parseForm/createContact/updateContact the server action uses, re-reading each from the DB.
  * Rows it creates are named "Contacts Live <tag>" (invented); there is no delete path, so they stay.
- * Skips only when .env.local has no Supabase config.
+ * Skips when .env.local has no Supabase config or no DATABASE_URL (the sequence sync needs it — CI's shadow stack has none).
  */
 import { test, before } from "node:test";
 import assert from "node:assert/strict";
@@ -15,7 +15,7 @@ import { SPECS, parseForm, createContact, updateContact, loadContact, loadAttorn
 import { runPreset } from "../../lib/contacts/presets.ts";
 
 loadEnvLocal();
-const skip = process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY ? false : "no Supabase config in .env.local";
+const skip = process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY && process.env.DATABASE_URL ? false : "no Supabase config or DATABASE_URL in .env.local";
 const tag = randomUUID().slice(0, 8);
 let db;
 

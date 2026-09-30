@@ -9,8 +9,14 @@ import {
 import { saveCaseAction } from "./actions";
 import { LockedForm } from "./locked-form";
 import { ServiceAuthsPanel } from "./service-auths";
+import { TimePanel } from "./time-panel";
+import { BillsPanel } from "@/app/bills/bills-panel";
+import { CaseFundsPanel } from "@/app/funds/case-panel";
+import { CaseExpensesPanel } from "@/app/expenses/case-panel";
+import { CaseDocumentsPanel } from "@/app/documents/case-panel";
 import { loadServiceAuths } from "@/lib/cases/service-auths";
 import { firmToday } from "@/lib/cases/presets";
+import { CASE_DOCS } from "@/lib/case-docs/docs";
 
 export const dynamic = "force-dynamic";
 
@@ -119,6 +125,7 @@ export default async function CaseRecordPage({ params, searchParams }: { params:
         {rec.next != null ? <Link href={`/cases/${rec.next}`} className={nav}>Next case</Link> : <span className={`${nav} text-slate-400`}>Next case</span>}
         <Link href={`/cases/${id}/label`} className="underline">Mailing label</Link>
         <Link href={`/cases/${id}/rolodex`} className="underline">Rolodex card</Link>
+        {CASE_DOCS.map((d) => <a key={d.slug} href={`/cases/${id}/documents/${d.slug}`} className="underline">{d.label}</a>)}
       </div>
       <h1 className="text-xl font-semibold">Case {id}: {String(kase.casetitle ?? "")}</h1>
       {rec.badges.length > 0 && (
@@ -189,10 +196,12 @@ export default async function CaseRecordPage({ params, searchParams }: { params:
 
       {/* Headed slots for later lanes. */}
       <div className="grid gap-4 md:grid-cols-2">
-        <ServiceAuthsPanel t={first(searchParams.t) ?? "initial"} caseId={id} rows={sas} today={firmToday(new Date())} saved={first(searchParams.sa)} error={first(searchParams.sa_error)} />
-        <Slot title="Bills" />
-        <Slot title="Funds received" />
-        <Slot title="Expenses" />
+        <ServiceAuthsPanel t={first(searchParams.t) ?? "initial"} caseId={id} rows={sas} today={firmToday(new Date())} saved={first(searchParams.sa)} error={first(searchParams.sa_error)} created={first(searchParams.sa_new)} />
+        <BillsPanel caseId={id} />
+        <CaseFundsPanel caseId={id} />
+        <CaseExpensesPanel caseId={id} />
+        <TimePanel caseId={id} />
+        <CaseDocumentsPanel caseId={id} />
       </div>
     </main>
   );

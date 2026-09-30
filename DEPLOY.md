@@ -85,3 +85,16 @@ monorepo under `infra/` — one copy per droplet, not per client repo.
   bucket (30-day retention) via `infra/backup.sh` — server-side cron, nothing
   to configure per repo. Signed contracts, when this app grows an e-sign
   flow, must be dual-written to that bucket at signing time.
+- **New or restored Supabase project: grant table access to `service_role`.**
+  The migrations grant no table privileges, so on a project built from this
+  repo alone every server query fails. The hosted project has the grants,
+  added by hand. Run the same statements as
+  `tests/docs-reports/local-stack-setup.sh` (`grant usage on schema public`,
+  `grant all on all tables/sequences/functions in schema public`, plus the
+  matching `alter default privileges`) to `anon, authenticated, service_role`.
+- **Never run `supabase link` or push config (`supabase config push`) against
+  the hosted project.** `supabase/config.toml` is local-stack config only:
+  `site_url = "http://127.0.0.1:3000"` and `enable_signup = true`. Pushed to
+  the hosted project it points the practice's login emails at localhost and
+  opens public sign-up. Change hosted auth settings in the Supabase dashboard
+  only.

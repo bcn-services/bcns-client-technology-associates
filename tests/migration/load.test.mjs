@@ -157,6 +157,25 @@ test("the script never names profiles, bank_transactions or audit_log, and never
   assert.equal(/session_replication_role\s*=\s*replica/.test(code), true, "replica mode is not set");
 });
 
+test("tblbilllines is cleared before the 20, so replica mode cannot orphan lines under a deleted bill", () => {
+  const code = readFileSync(LOAD, "utf8").split("\n").filter((l) => !/^\s*(\/\/|\*|\/\*)/.test(l)).join("\n");
+  const lines = code.indexOf("delete from tblbilllines;");
+  const table = code.indexOf("delete from ${t};");
+  assert.ok(lines >= 0, "load.mjs does not clear tblbilllines");
+  assert.ok(table >= 0 && lines < table, "tblbilllines must be cleared before the table deletes");
+});
+
+test("a reload clears tblbilllines rows (live)", () => {
+  assert.equal(runLoad(SMALL).ok, true);
+  const billid = one("select min(billid) from tblbills;");
+  sql(`insert into tblbilllines (billid, lineno, kind, description, amount) values (${billid}, 1, 'charge', 'fixture line', 1.00);`);
+  try {
+    const r = runLoad(SMALL);
+    assert.equal(r.ok, true, r.stderr);
+    assert.equal(count("tblbilllines"), 0, "a line survived the reload");
+  } finally { sql("delete from tblbilllines;"); }
+});
+
 test("a UTF-16 LE file with a BOM loads identically to the UTF-8 one", () => {
   const utf8 = readFileSync(SMALL);
   const text = utf8.subarray(0, 3).equals(Buffer.from([0xef, 0xbb, 0xbf])) ? utf8.subarray(3).toString("utf8") : utf8.toString("utf8");
