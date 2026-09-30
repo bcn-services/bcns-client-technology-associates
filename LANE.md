@@ -121,7 +121,7 @@ Test against the fixture, not the producing lane. Do not wait for it to exist.
     - With `now` at 03:30 UTC on the 1st of a month, TodayDate is the last day of the prior month (New York), under both `TZ=UTC` and `TZ=America/Los_Angeles`
     - A case with no attorney returns empty Atty, Firm and Address and a filled TitleCaption; an unknown case id returns null
     - Every bookmark name a kind returns exists in that kind's template
-  status: not started
+  status: done (2026-09-30)
 
 - task: Download links on the case page — a GET route
     `app/cases/[id]/documents/[doc]/route.ts` that runs `requireSession()`
