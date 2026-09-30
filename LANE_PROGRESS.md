@@ -4,8 +4,8 @@ LANE.md is the contract; this tracks where we are in it — if they disagree, LA
 
 ## Current position
 
-- **Status:** round 2 (items 5–8, autonomous run) in progress — items 1–5 done.
-- **Next:** item 6, notice resend.
+- **Status:** round 2 (items 5–8, autonomous run) in progress — items 1–6 done.
+- **Next:** item 7, service authorization document.
 - **Blockers:** none.
 - **Last updated:** 2026-09-30
 
@@ -18,6 +18,6 @@ LANE.md is the contract; this tracks where we are in it — if they disagree, LA
 | Finalize page | done — An admin can now review a bill's priced lines, change any person's rate, and finalize it; the charged rates are saved on the bill so later rate changes never alter it, and staff, closed or revised bills are refused. |
 | Invoice PDF | done — Finalizing a bill now produces a PDF invoice laid out like the old Word bill, saved on the case under the legacy file name, and anyone signed in can download it from the bill page. |
 | Preview-then-Send | done (2026-09-30) — An admin can now preview a finalized bill's email (To, CC, subject, message, PDF attached), edit it, and send it; the bill records when and to whom, a double click sends once, and with no email settings the preview still works and Send is greyed out with a plain message. |
-| Notice resend | skipped — below stop marker |
+| Notice resend | done (2026-09-30) — An admin can now email a 2nd or Final notice: the stored invoice goes out with the red notice stamp on page 1, the original file is never changed, the notice dates stay as they were, a double click sends once, and with no email settings the stamped preview still works. |
 | Service authorization document | skipped — below stop marker |
 | Wire bill output into the app | skipped — below stop marker |

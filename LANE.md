@@ -283,7 +283,7 @@ named constant or template, not the design.
     - Existing passing tests remain passing
   ui: true
   caution: true
-  status: not started
+  status: done (2026-09-30)
 
 - task: Service authorization document. On the case's SA panel, "Create SA" (any
     signed-in user) renders a PDF from the case: Sub = caption / title /
