@@ -1,6 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { getConfig } from "@/lib/env";
+import { publicUrl } from "@/lib/public-url";
 
 /** Exact paths reachable without a session. Never a prefix match. */
 // /signout is public so an expired tab's sign-out still clears cookies instead of bouncing to a 405.
@@ -41,7 +42,7 @@ export async function gate(
 ): Promise<NextResponse> {
   if (PUBLIC_PATHS.has(request.nextUrl.pathname)) return NextResponse.next();
 
-  const login = new URL("/login", request.url);
+  const login = publicUrl("/login", request);
   const { pathname, search } = request.nextUrl;
   // A protocol-relative pathname ("//evil.com") would hand the login page an
   // off-site redirect target. Such a path gets no `next` at all — never a rewrite.
