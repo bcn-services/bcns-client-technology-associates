@@ -27,6 +27,7 @@ before(async () => {
   if (skip) return;
   db = createServerClient();
   await cleanup();
+  ok(await db.from("tblstates").upsert({ state: "NY" }, { onConflict: "state" }));   // frmstate FK; an empty stack has no states
   ok(await db.from("tblfirm").insert({ frmid: FIRM, frmname: "Example Firm LLP", frmaddress1: "1 Test St", frmaddress2: "Suite 2", frmcity: "Sampletown", frmstate: "NY", frmzip: "100019999", frmactive: true }));
   ok(await db.from("tblattorney").insert({ attyid: ATTY, attyfirmid: FIRM, attytitle: "Mr.", attyfirstname: "Pat", attymiddlename: "Quinn", attylastname: "Example", attysuffix: "Jr.", attyesq: true, attyemail: "pat@example.test" }));
   const src = ok(await db.from("tblcase").select("*").eq("caseid", 90001).single());
