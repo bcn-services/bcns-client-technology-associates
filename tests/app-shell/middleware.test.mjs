@@ -124,3 +124,12 @@ test("/signout is public: a signed-out POST reaches the route instead of bouncin
   const res = await middleware(new NextRequest(new Request("http://localhost:3100/signout", { method: "POST" })));
   assert.equal(res.headers.get("location"), null);
 });
+
+// Behind nginx the app sees http://127.0.0.1:<port>; the redirect must use the public Host.
+test("login redirect keeps the public host behind the reverse proxy, not the internal origin", async () => {
+  const proxied = new NextRequest(new Request("http://127.0.0.1:3104/cases/90001", {
+    headers: { host: "ta.bcn-services.com", "x-forwarded-proto": "https" },
+  }));
+  const res = await middleware(proxied);
+  assert.equal(res.headers.get("location"), "https://ta.bcn-services.com/login?next=%2Fcases%2F90001");
+});
