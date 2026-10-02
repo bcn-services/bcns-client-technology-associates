@@ -45,6 +45,7 @@ test("createStaffUser: existing email with an active profile → 'already exists
   assert.equal(r.ok, false);
   assert.match(r.error, /already exists/);
   assert.equal(calls.deleted.length, 0);
+  assert.deepEqual(calls.updated, [["u9", { ban_duration: "none" }]], "exactly one unban, nothing else");
 });
 
 test("createStaffUser: existing auth user with no profile (deactivated) → unbanned then reactivated as staff, password untouched", async () => {

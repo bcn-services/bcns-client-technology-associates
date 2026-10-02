@@ -249,7 +249,7 @@ test("item6: billing dropdown writes personid and getSession returns it; none st
   await s.ctx.close();
 });
 
-test("item6: sole admin can't be removed; after promoting B, B deactivates A; re-inserting A's row restores A's sign-in", { skip }, async (t) => {
+test("item6: sole admin can't be removed; after promoting B, B deactivates A (bans the auth user); unban + re-inserting A's row restores A's sign-in", { skip }, async (t) => {
   const { count } = await admin.from("profiles").select("id", { count: "exact", head: true }).eq("role", "admin");
   if (count !== 1) return t.skip(`needs exactly one admin in the shared project, found ${count}`);
 
@@ -274,7 +274,12 @@ test("item6: sole admin can't be removed; after promoting B, B deactivates A; re
   assert.equal(await authUserId(ADMIN_EMAIL), adminId, "auth user was deleted — deactivation must be reversible");
   const dead = await a.ctx.request.get(`${BASE}/users`, { maxRedirects: 0 });
   assert.notEqual(dead.status(), 200, "deactivated admin still reaches /users");
+  // Deactivation also bans the auth user: no new session can be minted, even with the right password.
+  assert.notEqual((await passwordGrant(ADMIN_EMAIL, ADMIN_PASSWORD)).status, 200, "deactivated admin can still get a token — not banned");
 
+  // Reactivate the way the app does: lift the ban first, then restore the row.
+  const unban = await admin.auth.admin.updateUserById(adminId, { ban_duration: "none" });
+  assert.ifError(unban.error);
   const { error } = await admin.from("profiles").insert(saved);
   assert.ifError(error);
   const again = await signIn(ADMIN_EMAIL, ADMIN_PASSWORD);
@@ -325,6 +330,8 @@ test("item6: staff POSTing role/billing/deactivate actions changes nothing (cont
   await replayOn(a.ctx, cap.deactivate, bId, cId);
   assert.equal(await prof(cId), null, "control deactivate replay did nothing");
   assert.equal(await authUserId(C_EMAIL), cId, "deactivate deleted the auth user");
+  // Both deactivations banned their auth users; leave the shared project unbanned.
+  for (const id of [bId, cId]) assert.ifError((await admin.auth.admin.updateUserById(id, { ban_duration: "none" })).error);
   await staff.ctx.close();
   await a.ctx.close();
 });

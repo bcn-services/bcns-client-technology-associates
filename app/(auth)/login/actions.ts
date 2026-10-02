@@ -20,6 +20,8 @@ export async function signIn(formData: FormData): Promise<never> {
   if (!supabase) back("unavailable");
 
   const { data, error } = await supabase!.auth.signInWithPassword({ email, password });
+  // Banned (deactivated) users land here too, on purpose: GoTrue checks the ban BEFORE the password,
+  // so a distinct message for user_banned would reveal which emails are deactivated to anyone typing a wrong password.
   if (error) back("invalid");
 
   // A deactivated account (no profiles row) authenticates fine, then the gate would bounce

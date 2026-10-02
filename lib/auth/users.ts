@@ -180,6 +180,8 @@ export async function deactivateUser(db: Db, actorId: string | null | undefined,
       return refuse(after === null ? RETRY : "You cannot deactivate the last remaining admin.");
     }
   }
+  // ponytail: if another admin re-creates this email between the delete and this ban, the stale
+  // ban lands after reactivate's unban — upgrade: re-check the profile after the ban, unban if it reappeared.
   // 876000h ≈ 100 years. Only reached once the deletion is final (no undo path below here).
   const ban = await db.auth.admin.updateUserById(row.id, { ban_duration: "876000h" });
   if (ban.error) {
