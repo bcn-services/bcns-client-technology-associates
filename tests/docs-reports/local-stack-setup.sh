@@ -7,7 +7,8 @@
 # Why this exists: `supabase start` applies supabase/migrations/* as `postgres`,
 # but the resulting default privileges give anon/authenticated/service_role only
 # REFERENCES,TRIGGER,TRUNCATE — no SELECT/INSERT/UPDATE/DELETE. A hosted Supabase
-# project grants DML to those roles; the local stack does not. Without this the
+# project grants DML to those roles; the local stack does not. anon is deliberately
+# not re-granted: the app only ever queries as authenticated or service_role. Without this the
 # e2e seed fails with "permission denied for table profiles". The migrations are
 # frozen and protected, so the grants live here as test setup instead.
 set -euo pipefail
@@ -21,17 +22,19 @@ fi
 
 psql() { docker exec -i "$DB_CONTAINER" psql -U postgres -d postgres -v ON_ERROR_STOP=1 "$@"; }
 
-echo "granting DML on schema public to anon, authenticated, service_role (local only)"
+echo "granting DML on schema public to authenticated, service_role (local only)"
 psql -q <<'SQL'
-grant usage on schema public to anon, authenticated, service_role;
-grant all on all tables    in schema public to anon, authenticated, service_role;
-grant all on all sequences in schema public to anon, authenticated, service_role;
-grant all on all functions in schema public to anon, authenticated, service_role;
-alter default privileges in schema public grant all on tables    to anon, authenticated, service_role;
-alter default privileges in schema public grant all on sequences to anon, authenticated, service_role;
+grant usage on schema public to authenticated, service_role;
+grant all on all tables    in schema public to authenticated, service_role;
+grant all on all sequences in schema public to authenticated, service_role;
+grant all on all functions in schema public to authenticated, service_role;
+alter default privileges in schema public grant all on tables    to authenticated, service_role;
+alter default privileges in schema public grant all on sequences to authenticated, service_role;
+-- GRANT ... ON ALL TABLES includes views; case_search (0007) is a plain view that bypasses RLS.
+revoke all on public.case_search from anon;
 SQL
 
-echo "done. RLS policies from 0003_profiles_rls.sql still apply to anon/authenticated;"
+echo "done. RLS policies from 0003_profiles_rls.sql still apply to authenticated;"
 echo "service_role bypasses RLS, exactly as on the hosted project."
 
 echo "creating the private case-documents bucket (never public)"

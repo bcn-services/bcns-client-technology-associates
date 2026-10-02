@@ -10,11 +10,14 @@ import { deactivateUser, setUserRole, setBillingPerson, onlyForbidden } from "..
  * Fake db. `countErrorAt` = set of admin-count call numbers that error; `afterDelete` /
  * `afterUpdate` run right after the mutation (to simulate a concurrent removal).
  */
-function fakeDb(rows, { billing = [], countErrorAt = new Set(), afterDelete, afterUpdate, beforeMutate, insertError = null } = {}) {
+function fakeDb(rows, { billing = [], countErrorAt = new Set(), afterDelete, afterUpdate, beforeMutate, insertError = null, banError = null } = {}) {
   const tables = { profiles: rows.map((r) => ({ createdat: "t0", personid: null, ...r })), tblbillingnames: billing };
-  const calls = { authDelete: 0, inserts: [], counts: 0, deletes: 0, updates: 0 };
+  const calls = { authDelete: 0, bans: [], inserts: [], counts: 0, deletes: 0, updates: 0 };
   const db = {
-    auth: { admin: { deleteUser: async () => (calls.authDelete++, { error: null }) } },
+    auth: { admin: {
+      deleteUser: async () => (calls.authDelete++, { error: null }),
+      updateUserById: async (id, attrs) => (calls.bans.push([id, attrs.ban_duration]), { error: banError ? { message: banError } : null }),
+    } },
     from(table) {
       const filters = [];
       let op = "select", payload, countMode = false;
@@ -75,6 +78,7 @@ test("deactivate: self refused, row kept", async () => {
   assert.match(r.error, /own account/);
   assert.deepEqual(ids(tables), ["a", "b"]);
   assert.equal(calls.deletes, 0);
+  assert.deepEqual(calls.bans, []);
 });
 
 test("deactivate: missing actor or target id refused", async () => {
@@ -92,12 +96,14 @@ test("deactivate: exactly one admin → refused; promote second, then deactivati
   assert.match(r.error, /last remaining admin/);
   assert.deepEqual(ids(tables), ["a", "b"]);
   assert.equal(calls.deletes, 0, "pre-check did not stop the delete");
+  assert.deepEqual(calls.bans, [], "last-admin refusal banned the user");
 
   assert.equal((await setUserRole(db, "b", "admin")).ok, true);
   const r2 = await deactivateUser(db, "b", "a");
   assert.equal(r2.ok, true, JSON.stringify(r2));
   assert.deepEqual(ids(tables), ["b"]);
   assert.equal(calls.authDelete, 0, "auth.users delete was called");
+  assert.deepEqual(calls.bans, [["a", "876000h"]]);
 });
 
 test("deactivate: admin count error → refused, row kept", async () => {
@@ -116,15 +122,35 @@ test("deactivate: race — post-delete recount is zero → row restored intact, 
   const r = await deactivateUser(db, "s", "b");
   assert.equal(r.ok, false);
   assert.deepEqual(calls.inserts.map((x) => x.id), ["b"], "deleted row not re-inserted");
+  assert.deepEqual(calls.bans, [], "recount-undo path banned the user");
   assert.ok(tables.profiles.some((x) => x.id === "b" && x.role === "admin"));
   assert.equal(calls.authDelete, 0);
 });
 
-test("deactivate: post-delete recount errors → row restored, refused", async () => {
-  const { db, tables } = fakeDb([{ id: "a", role: "admin" }, { id: "b", role: "admin" }], { countErrorAt: new Set([2]) });
+test("deactivate: post-delete recount errors → row restored, refused, never banned", async () => {
+  const { db, tables, calls } = fakeDb([{ id: "a", role: "admin" }, { id: "b", role: "admin" }], { countErrorAt: new Set([2]) });
   const r = await deactivateUser(db, "a", "b");
   assert.equal(r.ok, false);
   assert.deepEqual(ids(tables), ["a", "b"]);
+  assert.deepEqual(calls.bans, []);
+});
+
+test("deactivate: not found / changed-meanwhile / no-op refusals never ban", async () => {
+  const missing = fakeDb([{ id: "a", role: "admin" }]);
+  assert.equal((await deactivateUser(missing.db, "a", "zzz")).ok, false);
+  const promoted = fakeDb([{ id: "a", role: "admin" }, { id: "s", role: "staff" }], { beforeMutate: (t) => { t.profiles.find((r) => r.id === "s").role = "admin"; } });
+  assert.equal((await deactivateUser(promoted.db, "a", "s")).ok, false);
+  assert.deepEqual([...missing.calls.bans, ...promoted.calls.bans], []);
+});
+
+test("deactivate: ban failure keeps the profile deleted and surfaces a warning", async () => {
+  const { db, tables, calls } = fakeDb([{ id: "a", role: "admin" }, { id: "s", role: "staff", email: "s@x" }], { banError: "boom" });
+  const r = await deactivateUser(db, "a", "s");
+  assert.equal(r.ok, true);
+  assert.match(r.message, /blocking their login failed/);
+  assert.deepEqual(ids(tables), ["a"], "profile must stay deleted after ban failure");
+  assert.deepEqual(calls.inserts, []);
+  assert.deepEqual(calls.bans, [["s", "876000h"]]);
 });
 
 test("deactivate: staff target skips admin guard and never touches auth.users", async () => {
@@ -132,6 +158,7 @@ test("deactivate: staff target skips admin guard and never touches auth.users", 
   assert.equal((await deactivateUser(db, "a", "s")).ok, true);
   assert.deepEqual(ids(tables), ["a"]);
   assert.equal(calls.authDelete, 0);
+  assert.deepEqual(calls.bans, [["s", "876000h"]], "target not banned after delete");
 });
 
 test("role: only admin|staff accepted", async () => {

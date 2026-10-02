@@ -13,18 +13,18 @@ test("generateTempPassword: 24 base64url chars, differs each call, uses randomBy
   assert.ok(!src.includes("Math.random"), "Math.random used");
 });
 
-function fakeAdmin({ createError = null, insertError = null, insertCode, users = [] } = {}) {
-  const calls = { create: [], insert: [], deleted: [], updated: [] };
+function fakeAdmin({ createError = null, insertError = null, insertCode, users = [], unbanError = null } = {}) {
+  const calls = { create: [], insert: [], deleted: [], updated: [], order: [] };
   const admin = {
     auth: {
       admin: {
         createUser: async (a) => (calls.create.push(a), createError ? { data: { user: null }, error: { message: createError } } : { data: { user: { id: "u1" } }, error: null }),
         deleteUser: async (id) => (calls.deleted.push(id), { error: null }),
-        updateUserById: async (...a) => (calls.updated.push(a), { error: null }),
+        updateUserById: async (...a) => (calls.updated.push(a), calls.order.push("unban"), { error: unbanError ? { message: unbanError } : null }),
         listUsers: async () => ({ data: { users }, error: null }),
       },
     },
-    from: () => ({ insert: async (row) => (calls.insert.push(row), { error: insertError ? { message: insertError, code: insertCode } : null }) }),
+    from: () => ({ insert: async (row) => (calls.insert.push(row), calls.order.push("insert"), { error: insertError ? { message: insertError, code: insertCode } : null }) }),
   };
   return { admin, calls };
 }
@@ -44,15 +44,25 @@ test("createStaffUser: existing email with an active profile → 'already exists
   const r = await createStaffUser(admin, "dup@example.test");
   assert.equal(r.ok, false);
   assert.match(r.error, /already exists/);
-  assert.equal(calls.deleted.length + calls.updated.length, 0);
+  assert.equal(calls.deleted.length, 0);
 });
 
-test("createStaffUser: existing auth user with no profile (deactivated) → reactivated as staff, password untouched", async () => {
+test("createStaffUser: existing auth user with no profile (deactivated) → unbanned then reactivated as staff, password untouched", async () => {
   const { admin, calls } = fakeAdmin({ createError: DUP, users: [{ id: "other", email: "x@example.test" }, { id: "u9", email: "Gone@Example.test" }] });
   const r = await createStaffUser(admin, "gone@example.test", () => "pw123");
   assert.deepEqual(r, { ok: true, email: "gone@example.test", password: null });
   assert.deepEqual(calls.insert, [{ id: "u9", email: "gone@example.test", role: "staff", personid: null }]);
-  assert.equal(calls.deleted.length + calls.updated.length, 0, "auth user modified");
+  assert.deepEqual(calls.updated, [["u9", { ban_duration: "none" }]], "only the ban is lifted");
+  assert.deepEqual(calls.order, ["unban", "insert"], "unban must precede the profiles insert");
+  assert.equal(calls.deleted.length, 0);
+});
+
+test("createStaffUser: reactivation unban fails → error, no profiles insert", async () => {
+  const { admin, calls } = fakeAdmin({ createError: DUP, users: [{ id: "u9", email: "gone@example.test" }], unbanError: "boom" });
+  const r = await createStaffUser(admin, "gone@example.test");
+  assert.equal(r.ok, false);
+  assert.match(r.error, /Could not reactivate/);
+  assert.deepEqual(calls.insert, []);
 });
 
 test("createStaffUser: reactivation insert fails for another reason → error, not 'already exists'", async () => {
