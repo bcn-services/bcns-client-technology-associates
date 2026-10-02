@@ -20,6 +20,7 @@ export interface AdminClient {
         error: { message: string } | null;
       }>;
       deleteUser(id: string): PromiseLike<{ error: { message: string } | null }>;
+      updateUserById(id: string, attrs: { ban_duration: string }): PromiseLike<{ error: { message: string } | null }>;
       listUsers(a: { page: number; perPage: number }): PromiseLike<{
         data: { users: { id: string; email?: string | null }[] };
         error: { message: string } | null;
@@ -77,13 +78,16 @@ export async function createStaffUser(
 }
 
 /**
- * The auth user exists. Deactivation deletes only the profiles row, so re-inserting it as
- * staff reactivates the account. The auth user is never modified — its password stays untouched.
- * A primary-key conflict means the row is still there: an active account, reported as a duplicate.
+ * The auth user exists. Deactivation deletes the profiles row and bans the auth user, so
+ * reactivation lifts the ban (before the insert: a failed unban must not leave an account
+ * that looks active but cannot sign in), then re-inserts the row as staff. The password is
+ * never touched. A primary-key conflict means the row is still there: an active account, reported as a duplicate.
  */
 async function reactivate(admin: AdminClient, email: string): Promise<CreateResult> {
   const id = await findAuthUserId(admin, email);
   if (!id) return { ok: false, error: "Could not create the account. Please try again." };
+  const unban = await admin.auth.admin.updateUserById(id, { ban_duration: "none" });
+  if (unban.error) return { ok: false, error: "Could not reactivate the account. Please try again." };
   const { error } = await admin.from("profiles").insert({ id, email, role: "staff", personid: null });
   if (error?.code === "23505") return { ok: false, error: `An account for ${email} already exists.` };
   if (error) return { ok: false, error: "Could not reactivate the account. Please try again." };
@@ -93,8 +97,10 @@ async function reactivate(admin: AdminClient, email: string): Promise<CreateResu
 // ---------------------------------------------------------------------------
 // LANE item 6: role change, deactivation, billing person.
 //
-// Deactivation = delete the `profiles` row only (FOUNDATION: no profiles row ⇒ no
-// session). auth.users is never touched, so re-inserting the row restores sign-in.
+// Deactivation = delete the `profiles` row (FOUNDATION: no profiles row ⇒ no session),
+// then ban the auth user so it cannot mint a JWT at all. The ban runs last, after the
+// last-admin recount passes; if it fails the deactivation stands (the profiles gate holds)
+// and the success message carries a warning. Reactivation unbans, then re-inserts the row.
 //
 // Last-admin guard, no migration allowed, so no DB-side lock or trigger. Approach:
 // pre-check (≥2 admins incl. target) → mutate → RE-COUNT admins. If the recount
@@ -173,6 +179,14 @@ export async function deactivateUser(db: Db, actorId: string | null | undefined,
       }
       return refuse(after === null ? RETRY : "You cannot deactivate the last remaining admin.");
     }
+  }
+  // ponytail: if another admin re-creates this email between the delete and this ban, the stale
+  // ban lands after reactivate's unban — upgrade: re-check the profile after the ban, unban if it reappeared.
+  // 876000h ≈ 100 years. Only reached once the deletion is final (no undo path below here).
+  const ban = await db.auth.admin.updateUserById(row.id, { ban_duration: "876000h" });
+  if (ban.error) {
+    console.error(`deactivateUser: ban of auth user ${row.id} FAILED: ${ban.error.message}`);
+    return { ok: true, message: `Deactivated ${row.email}, but blocking their login failed — they cannot use the app, but tell support so the sign-in ban can be applied.` };
   }
   return { ok: true, message: `Deactivated ${row.email}.` };
 }

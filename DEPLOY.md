@@ -91,10 +91,30 @@ monorepo under `infra/` — one copy per droplet, not per client repo.
   added by hand. Run the same statements as
   `tests/docs-reports/local-stack-setup.sh` (`grant usage on schema public`,
   `grant all on all tables/sequences/functions in schema public`, plus the
-  matching `alter default privileges`) to `anon, authenticated, service_role`.
+  matching `alter default privileges`) to `authenticated, service_role` —
+  **not `anon`**. `authenticated` must stay: `middleware.ts` reads `profiles`
+  with the user's JWT. `GRANT ... ON ALL TABLES` also covers views, and
+  `case_search` (migration 0007) is a plain view that bypasses RLS, so follow
+  the grants with `revoke all on public.case_search from anon;`. Check:
+  `select has_table_privilege('anon','public.case_search','select');` must
+  return `false`. Also list any remaining anon privileges in `public` (expected
+  empty on a new project; on an existing project, revoke whatever shows up that
+  the app doesn't need — RLS, the `to authenticated` policies, is what protects
+  the tables today):
+  `select table_name, privilege_type from information_schema.role_table_grants where grantee='anon' and table_schema='public' union all select routine_name, privilege_type from information_schema.routine_privileges where grantee='anon' and routine_schema='public';`
 - **Never run `supabase link` or push config (`supabase config push`) against
   the hosted project.** `supabase/config.toml` is local-stack config only:
   `site_url = "http://127.0.0.1:3000"` and `enable_signup = true`. Pushed to
   the hosted project it points the practice's login emails at localhost and
   opens public sign-up. Change hosted auth settings in the Supabase dashboard
   only.
+- **Hosted sign-up stays OFF.** Supabase dashboard → Authentication → Sign In /
+  Providers → "Allow new users to sign up" off. Staff are created through the
+  admin `createUser` API, which that switch does not gate. Check:
+  `curl "$SUPABASE_URL/auth/v1/settings" -H "apikey: $ANON_KEY"` shows
+  `"disable_signup": true`.
+- **Deactivation bans the auth user, with a lag.** A ban stops new sign-ins and
+  token refresh, but an already-issued access token stays valid until it
+  expires (JWT expiry, default 1h), and the middleware `profiles` gate covers
+  only app routes. Shorten JWT expiry in the hosted Auth settings if that
+  window matters.
