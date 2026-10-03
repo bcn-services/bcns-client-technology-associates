@@ -48,14 +48,15 @@ test.beforeEach(() => { session.state.calls = 0; session.state.redirect = false;
 
 // --- criterion 1: P&L renders twelve month columns and a year total -------------------------------
 
-test("filling both dates and choosing P&L renders a non-empty panel with twelve month columns and a year total", async () => {
+test("filling both dates and choosing P&L renders a non-empty panel with a column per month in the range and a total", async () => {
   const markup = await render(fakeDb(world()), q("pnl"));
   const body = panel(markup);
   assert.ok(texts(body).length > 2, "panel must not be empty");
-  for (const m of MONTHS) assert.ok(new RegExp(`>${m}<`).test(body), `missing month column ${m}`);
+  for (const m of MONTHS.slice(0, 6)) assert.ok(new RegExp(`>${m}<`).test(body), `missing month column ${m}`);
+  for (const m of MONTHS.slice(6)) assert.ok(!new RegExp(`>${m}<`).test(body), `${m} is outside Jan..Jun and must not be a column`);
   assert.match(body, /data-testid="report-total"/);
-  const want = await pnl(fakeDb(world()), 2026, 12);
-  assert.equal(want.months.length, 12);
+  const want = await pnl(fakeDb(world()), 2026, 6);
+  assert.equal(want.months.length, 6);
   assert.match(body, new RegExp(`data-testid="report-total"[^>]*>${want.total.net.replace("-", "-")}<`));
   for (const row of ["Income", "Expenses", "Net", "Withdrawals"]) assert.ok(body.includes(`>${row}<`), `missing line ${row}`);
 });
@@ -127,8 +128,8 @@ test("the matrix panel renders the engine's rows positionally — every row, eve
 
 test("the P&L panel renders each line positionally against the engine's months and totals", async () => {
   const body = panel(await render(fakeDb(world()), q("pnl")));
-  const want = await pnl(fakeDb(world()), 2026, 12);
-  assert.deepEqual(tableRows(body, "thead")[0], ["", ...MONTHS, want.total.label]);
+  const want = await pnl(fakeDb(world()), 2026, 6);
+  assert.deepEqual(tableRows(body, "thead")[0], ["", ...MONTHS.slice(0, 6), want.total.label]);
   assert.deepEqual(
     tableRows(body, "tbody"),
     [
@@ -218,9 +219,9 @@ test("each preset hands its engine exactly the parameters its row declares — n
     "monthly-income": { start: START, end: END },
     "yearly-expense": { year: 2026, dimension: "exptype" },
     "yearly-income": { year: 2026, dimension: "branch" },
-    pnl: { year: 2026, asOfMonth: 12 },
+    pnl: { start: START, end: END },
     "consultant-fees": { start: START, end: END, description: "consultant" },
-    "accountant-export": { year: 2026, asOfMonth: 12 },
+    "accountant-export": { start: START, end: END },
   };
   assert.deepEqual(PRESETS.map((p) => p.key).sort(), Object.keys(want).sort());
   for (const p of PRESETS) assert.deepEqual(p.params(RANGE), want[p.key], `${p.key} params drifted`);
@@ -234,20 +235,25 @@ test("a detail preset reads only the submitted range — the rows read, not just
 });
 
 test("adding a preset needs neither a new engine nor a new route", async () => {
-  const extra = { key: "q1-pnl", label: "Q1 P&L", engine: "pnl", params: () => ({ year: 2026, asOfMonth: 3 }), period: () => "2026 Q1" };
+  const extra = { key: "q1-pnl", label: "Q1 P&L", engine: "pnl", params: () => ({ start: "2026-01-01", end: "2026-03-31" }), period: () => "2026 Q1" };
   const { engine, data } = await runPreset(fakeDb(world()), extra, RANGE);
   assert.equal(engine, "pnl");
   assert.equal(data.months.length, 3);
 });
 
-test("the three per-year presets take the year the range OPENS in, and the caption says so", async () => {
+test("the two per-year rollups take the year the range OPENS in; P&L and the export take the whole range", async () => {
   const cross = { start: "2026-11-01", end: "2027-02-28" };
-  for (const key of ["yearly-expense", "yearly-income", "pnl", "accountant-export"]) {
+  for (const key of ["yearly-expense", "yearly-income"]) {
     assert.equal(findPreset(key).params(cross).year, 2026, `${key} must use the opening year`);
     assert.equal(findPreset(key).period(cross), "2026");
   }
+  for (const key of ["pnl", "accountant-export"]) {
+    assert.deepEqual(findPreset(key).params(cross), cross, `${key} must take the range as submitted`);
+    assert.equal(findPreset(key).period(cross), "2026-11-01 to 2027-02-28");
+  }
   const body = panel(await render(fakeDb(world()), { ...cross, preset: "pnl" }));
-  assert.ok(texts(body).some((t) => t.includes("2026") && !t.includes("2027")), "the caption must state the year actually rendered");
+  assert.ok(texts(body).some((t) => t.includes("2026-11-01") && t.includes("2027-02-28")), "the caption must state the range rendered");
+  assert.deepEqual(tableRows(body, "thead")[0], ["", "Nov 2026", "Dec 2026", "Jan 2027", "Feb 2027", "Total For Period"]);
 });
 
 test("findPreset resolves an exact key only — no prefix, no case folding", () => {

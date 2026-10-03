@@ -78,10 +78,12 @@ the merge. They are written up in the pull request.
   see every document in the practice from the `/documents` screen. That matches how bills
   and funds already work, but for legal case files it should be an explicit decision rather
   than an inherited one.
-- **Two report buttons ignore the end date.** P&L and the accountant export always produce a
-  full calendar year, even when a narrower range is entered. The underlying engine already
-  supports stopping at a chosen month — that is how the quarterly tax snapshots are made —
-  but no button on the screen uses it yet.
+- **Fixed (contract D5): P&L and the accountant export now follow the chosen start and end
+  dates.** They used to always produce a full calendar year. P&L shows one column per month the
+  range touches (a quarterly snapshot is just Jan 1 to Mar 31); the accountant export gives a
+  monthly income and expense sheet per month touched, yearly rollups clipped to the range, and
+  one P&L. A full calendar year still gives the usual 27 sheets. The standalone Yearly Income
+  and Yearly Expense buttons are still whole-calendar-year reports.
 
 ## Run summary — autonomous session, 2026-09-19
 

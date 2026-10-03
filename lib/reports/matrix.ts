@@ -54,9 +54,12 @@ const toRow = (key: string, label: string, monthCents: (number | null)[]): Matri
  * `year` is read as the inclusive `yyyy-01-01`..`yyyy-12-31` range and the month column comes from the date
  * string itself, so December and the following January can never be conflated by a boundary or a timezone.
  */
-export async function monthMatrix(db: Db, year: number, dimension: Dimension): Promise<MonthMatrix> {
-  const start = `${year}-01-01`;
-  const end = `${year}-12-31`;
+export async function monthMatrix(db: Db, year: number, dimension: Dimension, clip?: { start: string; end: string }): Promise<MonthMatrix> {
+  // `clip` narrows the year to a chosen date range (the accountant export); yyyy-mm-dd compares lexically.
+  const yStart = `${year}-01-01`;
+  const yEnd = `${year}-12-31`;
+  const start = clip && clip.start > yStart ? clip.start : yStart;
+  const end = clip && clip.end < yEnd ? clip.end : yEnd;
 
   const buckets = new Map<string, { label: string; months: (number | null)[] }>();
   const add = (key: string, label: string, month: number, cents: number) => {

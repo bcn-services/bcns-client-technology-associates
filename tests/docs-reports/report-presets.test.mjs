@@ -65,10 +65,10 @@ test("the six legacy report names are present and journey 06's three selectors e
 
 // --- parameter derivation: what the page HANDS the engine ----------------------------------------
 
-test("detail presets pass the submitted range verbatim; yearly presets pass the start date's year", () => {
+test("detail and P&L presets pass the submitted range verbatim; yearly presets pass the start date's year", () => {
   for (const p of PRESETS) {
     const a = p.params(RANGE);
-    if (p.engine === "expenseDetail" || p.engine === "incomeDetail") {
+    if (p.engine === "expenseDetail" || p.engine === "incomeDetail" || p.engine === "pnl") {
       assert.equal(a.start, RANGE.start);
       assert.equal(a.end, RANGE.end);
     } else {
@@ -76,7 +76,6 @@ test("detail presets pass the submitted range verbatim; yearly presets pass the 
       assert.equal(yearOf(RANGE), 2025);
     }
     if (p.engine === "matrix") assert.ok(a.dimension === "exptype" || a.dimension === "branch");
-    if (p.engine === "pnl") assert.equal(a.asOfMonth, 12); // twelve month columns, per the acceptance criterion
   }
 });
 
@@ -117,15 +116,15 @@ test("a yearly preset reads the whole calendar year, not the submitted range", a
   assert.equal(db.writes, 0);
 });
 
-test("the P&L preset renders twelve month columns and a year total for the start date's year", async () => {
+test("the P&L preset covers exactly the submitted range: one column per month touched, only in-range rows", async () => {
   const db = fakeDb(world());
   const { engine, data } = await runPreset(db, findPreset("pnl"), RANGE);
   assert.equal(engine, "pnl");
-  assert.equal(data.months.length, 12);
-  assert.deepEqual(data.months.map((m) => m.month), [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
-  assert.equal(data.total.expenses, "508.59");
-  assert.equal(data.total.income, "306.66"); // 1.11 + 2.22 + 300.00 + 3.33
-  assert.equal(data.total.net, "-201.93");
+  assert.equal(data.months.length, 6);
+  assert.deepEqual(data.months.map((m) => m.month), [1, 2, 3, 4, 5, 6]);
+  assert.equal(data.total.expenses, "8.58"); // 0.28 + 0.01 + 8.29; the 500.00 on 07-01 is out of range
+  assert.equal(data.total.income, "3.33"); // 1.11 + 2.22; the 300.00 on 07-01 is out of range
+  assert.equal(data.total.net, "-5.25");
   assert.equal(db.writes, 0);
 });
 
@@ -135,7 +134,7 @@ test("the accountant-export preset still produces a rendered result this step", 
   assert.match(p.label, /accountant export/i);
   assert.ok(p.note && p.note.length > 0, "an inert preset must say why");
   const { data } = await runPreset(db, p, RANGE);
-  assert.equal(data.months.length, 12);
+  assert.equal(data.months.length, 6);
 });
 
 test("the filtered-expense preset narrows by description without touching the range", async () => {

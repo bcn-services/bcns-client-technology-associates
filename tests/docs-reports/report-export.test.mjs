@@ -50,12 +50,12 @@ test("C1 accountant export builds 27 sheets named for report and period", async 
 
 // C1b — each monthly sheet is that month alone: the plan's ranges cover the year with no overlap or gap.
 test("C1b the twelve monthly sheets cover the year, one calendar month each", () => {
-  const plan = accountantPlan(YEAR);
+  const plan = accountantPlan({ start: `${YEAR}-01-01`, end: `${YEAR}-12-31` });
   const income = plan.filter((p) => p.preset.key === "monthly-income").map((p) => p.range);
   assert.deepEqual(income[0], { start: "2025-01-01", end: "2025-01-31" });
   assert.deepEqual(income[1], { start: "2025-02-01", end: "2025-02-28" }, "February must end on the real last day");
   assert.deepEqual(income[11], { start: "2025-12-01", end: "2025-12-31" });
-  assert.deepEqual(accountantPlan(2024)[1].range, { start: "2024-02-01", end: "2024-02-29" }, "leap February");
+  assert.deepEqual(accountantPlan({ start: "2024-01-01", end: "2024-12-31" })[1].range, { start: "2024-02-01", end: "2024-02-29" }, "leap February");
 });
 
 // C2 — a single report's export matches the on-screen panel to the cent, as NUMBERS with a currency format.

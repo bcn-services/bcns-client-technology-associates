@@ -6,7 +6,7 @@ import {
   MONTHS,
   PRESETS,
   findPreset,
-  isRange,
+  isRangeFor,
   runPreset,
   type Preset,
   type PresetResult,
@@ -159,7 +159,7 @@ function PnlView({ data }: { data: Extract<PresetResult, { engine: "pnl" }>["dat
         <thead>
           <tr className={head}>
             <th />
-            {data.months.map((m) => <th key={m.month} className="text-right">{MONTHS[m.month - 1]}</th>)}
+            {data.months.map((m) => <th key={`${m.year}-${m.month}`} className="text-right">{m.label}</th>)}
             <th className="text-right">{data.total.label}</th>
           </tr>
         </thead>
@@ -167,7 +167,7 @@ function PnlView({ data }: { data: Extract<PresetResult, { engine: "pnl" }>["dat
           {lines.map((l) => (
             <tr key={l.label} className={l.label === "Net" ? "font-semibold" : undefined}>
               <td>{l.label}</td>
-              {data.months.map((m) => <td key={m.month}>{l.cell(m)}</td>)}
+              {data.months.map((m) => <td key={`${m.year}-${m.month}`}>{l.cell(m)}</td>)}
               <td data-testid={l.label === "Net" ? "report-total" : undefined}>{l.total}</td>
             </tr>
           ))}
@@ -197,7 +197,7 @@ function Results({ result }: { result: PresetResult }) {
 export default async function ReportsPage({ searchParams }: { searchParams: Params }) {
   const range: Range = { start: first(searchParams.start), end: first(searchParams.end) };
   const preset = findPreset(first(searchParams.preset));
-  const ready = preset != null && isRange(range);
+  const ready = preset != null && isRangeFor(preset, range);
   // Session check and the read run together (saves the auth round trip); nothing renders unless requireSession resolves.
   const [, result] = await Promise.all([
     requireSession(),
