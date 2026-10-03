@@ -15,7 +15,6 @@ import {
   MONTHS,
   findPreset,
   runPreset,
-  yearOf,
   type Preset,
   type PresetResult,
   type Range,
@@ -38,7 +37,7 @@ const lastDay = (year: number, month: number): string => new Date(Date.UTC(year,
 const monthRange = (year: number, month: number): Range => ({ start: `${year}-${String(month).padStart(2, "0")}-01`, end: lastDay(year, month) });
 
 /** One row of the workbook plan: which preset to run, over which range, onto which sheet. */
-export type SheetPlan = { name: string; preset: Preset; range: Range };
+export type SheetPlan = { name: string; preset: Preset; range: Range; /** Yearly rollups only: clip the year to this range. */ clip?: Range };
 
 const need = (key: string): Preset => {
   const p = findPreset(key);
@@ -46,28 +45,49 @@ const need = (key: string): Preset => {
   return p;
 };
 
+const compact = (d: string) => d.slice(2).replace(/-/g, "");
+
 /**
- * The set the client hands the accountant each January: twelve monthly income sheets, twelve monthly
- * expense sheets, then the Yearly Income, Yearly Expense and P&L rollups. 27 sheets, always.
+ * The hand-over for a date range: a monthly income and a monthly expense sheet for every month the range
+ * touches (first and last clipped to the range), then a Yearly Income and Yearly Expense rollup for every
+ * calendar year it touches (clipped to the range), then one P&L over the range. A full calendar year is the
+ * classic January set: 12 + 12 + 3 = 27 sheets, unclipped.
  */
-export function accountantPlan(year: number): SheetPlan[] {
-  const monthly = (key: string) =>
-    MONTHS.map((m, i) => {
+export function accountantPlan(range: Range): SheetPlan[] {
+  const sy = Number(range.start.slice(0, 4));
+  const ey = Number(range.end.slice(0, 4));
+  const first = sy * 12 + Number(range.start.slice(5, 7)) - 1;
+  const last = ey * 12 + Number(range.end.slice(5, 7)) - 1;
+  const months: { year: number; month: number }[] = [];
+  for (let k = first; k <= last; k++) months.push({ year: Math.floor(k / 12), month: (k % 12) + 1 });
+  // yyyy-mm-dd compares lexically, so min/max are plain string comparisons.
+  const clipTo = (r: Range): Range => ({ start: r.start > range.start ? r.start : range.start, end: r.end < range.end ? r.end : range.end });
+
+  const monthly = (key: string): SheetPlan[] =>
+    months.map(({ year, month }) => {
       const preset = need(key);
-      const range = monthRange(year, i + 1);
-      return { name: sheetName(preset.label, `${m} ${year}`), preset, range };
+      return { name: sheetName(preset.label, `${MONTHS[month - 1]} ${year}`), preset, range: clipTo(monthRange(year, month)) };
     });
-  const yearly = (key: string): SheetPlan => {
+  const yearly = (key: string): SheetPlan[] => {
     const preset = need(key);
-    const range: Range = { start: `${year}-01-01`, end: `${year}-12-31` };
-    return { name: sheetName(preset.label, preset.period(range)), preset, range };
+    const out: SheetPlan[] = [];
+    for (let year = sy; year <= ey; year++) {
+      const full: Range = { start: `${year}-01-01`, end: `${year}-12-31` };
+      const r = clipTo(full);
+      if (r.start === full.start && r.end === full.end) out.push({ name: sheetName(preset.label, preset.period(r)), preset, range: r });
+      // Clipped year: the sheet name says so (31-char limit, hence "Yearly Income 250315-250630").
+      else out.push({ name: sheetName(preset.label.replace(/ Report$/, ""), `${compact(r.start)}-${compact(r.end)}`), preset, range: r, clip: r });
+    }
+    return out;
   };
-  return [...monthly("monthly-income"), ...monthly("monthly-expense"), yearly("yearly-income"), yearly("yearly-expense"), yearly("pnl")];
+  const pnlPreset = need("pnl");
+  const pnlPlan: SheetPlan = { name: sheetName(pnlPreset.label, pnlPreset.period(range)), preset: pnlPreset, range };
+  return [...monthly("monthly-income"), ...monthly("monthly-expense"), ...yearly("yearly-income"), ...yearly("yearly-expense"), pnlPlan];
 }
 
-/** The plan for a chosen preset: the accountant row fans out to 27 sheets, every other row is one sheet. */
+/** The plan for a chosen preset: the accountant row fans out to a sheet per month plus rollups, every other row is one sheet. */
 export function planFor(preset: Preset, range: Range): SheetPlan[] {
-  if (preset.key === "accountant-export") return accountantPlan(yearOf(range));
+  if (preset.key === "accountant-export") return accountantPlan(range);
   return [{ name: sheetName(preset.label, preset.period(range)), preset, range }];
 }
 
@@ -120,7 +140,7 @@ function writeSheet(ws: Worksheet, result: PresetResult): void {
     }
     case "pnl": {
       const { months, total } = result.data;
-      header(ws, ["", ...months.map((m) => MONTHS[m.month - 1] ?? ""), total.label], [16, ...months.map(() => 13), 15]);
+      header(ws, ["", ...months.map((m) => m.label), total.label], [16, ...months.map(() => 13), 15]);
       const lines: [string, (m: (typeof months)[number]) => number, number][] = [
         ["Income", (m) => m.incomeCents, total.incomeCents],
         ["Expenses", (m) => m.expensesCents, total.expensesCents],
@@ -146,7 +166,7 @@ export async function buildWorkbook(db: Db, preset: Preset, range: Range): Promi
   const wb = new Workbook();
   wb.created = new Date();
   for (const plan of planFor(preset, range)) {
-    writeSheet(wb.addWorksheet(plan.name), await runPreset(db, plan.preset, plan.range));
+    writeSheet(wb.addWorksheet(plan.name), await runPreset(db, plan.preset, plan.range, plan.clip));
   }
   return wb;
 }

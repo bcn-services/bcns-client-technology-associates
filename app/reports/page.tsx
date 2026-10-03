@@ -159,7 +159,7 @@ function PnlView({ data }: { data: Extract<PresetResult, { engine: "pnl" }>["dat
         <thead>
           <tr className={head}>
             <th />
-            {data.months.map((m) => <th key={m.month} className="text-right">{MONTHS[m.month - 1]}</th>)}
+            {data.months.map((m) => <th key={m.month} className="text-right">{m.label}</th>)}
             <th className="text-right">{data.total.label}</th>
           </tr>
         </thead>
