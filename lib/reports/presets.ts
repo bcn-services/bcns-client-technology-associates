@@ -10,6 +10,7 @@ import type { Db } from "@/lib/time/entries";
 import { expenseDetail, incomeDetail, type DetailFilter, type ExpenseDetail, type IncomeDetail } from "@/lib/reports/detail";
 import { monthMatrix, type Dimension, type MonthMatrix } from "@/lib/reports/matrix";
 import { pnlRange, type Pnl } from "@/lib/reports/pnl";
+import { checkbook, type Checkbook } from "@/lib/reports/checkbook";
 
 /** Inclusive `yyyy-mm-dd` range, exactly as the two date inputs submit it. */
 export type Range = { start: string; end: string };
@@ -44,7 +45,8 @@ type Spec =
   | { engine: "expenseDetail"; params: (r: Range) => DetailFilter }
   | { engine: "incomeDetail"; params: (r: Range) => DetailFilter }
   | { engine: "matrix"; params: (r: Range) => { year: number; dimension: Dimension } }
-  | { engine: "pnl"; params: (r: Range) => { start: string; end: string } };
+  | { engine: "pnl"; params: (r: Range) => { start: string; end: string } }
+  | { engine: "checkbook"; params: (r: Range) => Range };
 
 export type Preset = Spec & {
   /** Submitted as `?preset=`. */
@@ -61,7 +63,8 @@ export type PresetResult =
   | { engine: "expenseDetail"; data: ExpenseDetail }
   | { engine: "incomeDetail"; data: IncomeDetail }
   | { engine: "matrix"; data: MonthMatrix }
-  | { engine: "pnl"; data: Pnl };
+  | { engine: "pnl"; data: Pnl }
+  | { engine: "checkbook"; data: Checkbook };
 
 const span = (r: Range) => `${r.start} to ${r.end}`;
 const year = (r: Range) => String(yearOf(r));
@@ -90,6 +93,14 @@ export const PRESETS: Preset[] = [
     period: spanOrYear,
     note: "The P&L below previews the chosen range. Export to Excel downloads the hand-over for that range: a monthly income and a monthly expense sheet for each month it touches, then the Yearly Income and Yearly Expense rollups and the P&L. A full calendar year gives the usual 27 sheets.",
   },
+  {
+    key: "checkbook",
+    label: "Checkbook Comparison",
+    engine: "checkbook",
+    params: (r) => ({ start: r.start, end: r.end }),
+    period: span,
+    note: "Legacy ClearedExpensesAndIncome: every expense and receipt dated in the range, cleared or not.",
+  },
 ];
 
 export const findPreset = (key: string): Preset | undefined => PRESETS.find((p) => p.key === key);
@@ -111,6 +122,10 @@ export async function runPreset(db: Db, p: Preset, r: Range, clip?: Range): Prom
     case "pnl": {
       const a = p.params(r);
       return { engine: "pnl", data: await pnlRange(db, a.start, a.end) };
+    }
+    case "checkbook": {
+      const a = p.params(r);
+      return { engine: "checkbook", data: await checkbook(db, a.start, a.end) };
     }
   }
 }

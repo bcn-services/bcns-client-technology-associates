@@ -222,6 +222,7 @@ test("each preset hands its engine exactly the parameters its row declares — n
     pnl: { start: START, end: END },
     "consultant-fees": { start: START, end: END, description: "consultant" },
     "accountant-export": { start: START, end: END },
+    checkbook: { start: START, end: END },
   };
   assert.deepEqual(PRESETS.map((p) => p.key).sort(), Object.keys(want).sort());
   for (const p of PRESETS) assert.deepEqual(p.params(RANGE), want[p.key], `${p.key} params drifted`);

@@ -127,16 +127,15 @@ The four frmCaseUpdate auto-rules:
 | frmExpenseCase, subFrmExpenseCase, qryExpenseCase | A case's expenses and their total | BUILT | CaseExpensesPanel on the case page |
 | frmIncomeCase, subFrmIncomeCase, qryIncomeCase, tblFundsRcvdByCase Query | A case's income and its total | BUILT | `lib/funds/case.ts`, `app/funds/case-panel.tsx` |
 | frmExpenseAndIncomeCase | Both panels together | BUILT | Case page |
-| ClearedExpensesAndIncome (+ qryForCheckbookComparisonExpense/Income) | Checkbook reconciliation over a date range: Expenses, Non-profit, Income, Net, CheckBook, Total withdrawals | PARTIAL | `lib/bank-import/clearing.ts` and `app/bank-review` mark rows cleared per account. The date-range totals (list below) are missing |
+| ClearedExpensesAndIncome (+ qryForCheckbookComparisonExpense/Income) | Checkbook reconciliation over a date range: Expenses, Non-profit, Income, Net, CheckBook, Total withdrawals | BUILT | `lib/reports/checkbook.ts`, the "Checkbook Comparison" preset in `lib/reports/presets.ts` on `/reports` (+ Excel export). Filters ExpDate/FndsDate, inclusive, cleared or not, all accounts — the legacy cleared/Bank_Of_America DSums are commented out. Row clearing stays in `lib/bank-import/clearing.ts` and `app/bank-review` |
 | sum_by_check | Expense total per check number | LIKELY-DEAD | No VBA or query reference; ad-hoc |
 
 frmIncomeEntry gaps in the app:
 - Entering a case # does not autofill Source (the formatted attorney), Payee (the firm) or the case title.
 - There is no remaining balance (the bill's balance − this payment).
-- The Cleared box does not stamp today's date; the date is typed by hand.
 - There are no open-bill, open-SA-file or open-scan buttons.
 
-ClearedExpensesAndIncome totals missing from the app:
+ClearedExpensesAndIncome totals (built, `lib/reports/checkbook.ts`; each sums rows whose ExpDate/FndsDate is in the range):
 - Expenses = Σ ExpAmount
 - Non-profit = Σ Exp_NotCountedInProfit
 - Income = Σ FndsPmt
@@ -224,10 +223,10 @@ ClearedExpensesAndIncome totals missing from the app:
 | 13 | Retainer bill defaults to $4500, "Initial Advance" | not handled → billing-output | |
 | 14 | SrvDateApproved is stamped when empty for Approved, Declined, Modified and "Modified and Approved"; any other status sets it Null (frmCaseServAuth) | partly → billing-output | `lib/cases/service-auths.ts` stamps only Approved / Modified and Approved, and never clears |
 | 15 | SA lists: unapproved = Awaiting Approval + Modified; awaiting = Awaiting Approval; approved = Approved + Modified and Approved; case-insensitive | handled | `SA_LISTS` |
-| 16 | Income Cleared checkbox sets FndsDateCleared to today; unchecking clears it (frmIncomeEntry) | not handled | `lib/funds/save.ts` takes the date as typed. Bank-review clearing stamps its own date (`lib/bank-import/clearing.ts`) |
+| 16 | Income Cleared checkbox sets FndsDateCleared to today; unchecking clears it (frmIncomeEntry) | BUILT | `clearedDateOnToggle` in `lib/funds/save.ts`, wired by `app/funds/cleared-box.tsx` into the funds form (new and edit). Fills the field only; the date stays editable, as in Access. Not on expenses: frmExpenseEntry/frmExpenseView have the same handler with both lines commented out |
 | 17 | P&L: Net = Income − ExpAmount; Exp_NotCountedInProfit is shown separately and **not** subtracted (frmYearlyReport) | handled | `lib/reports/pnl.ts` (withdrawals memo row) |
 | 18 | Monthly and yearly expense totals sum ExpAmount only; the not-counted amount is outside them (frmExpenseByMonth, xtabExpenses) | handled | `lib/reports/detail.ts`, `lib/reports/matrix.ts` sum `expamount` |
-| 19 | Checkbook = Income − Expenses − NotCounted; Withdrawals = Expenses + NotCounted (ClearedExpensesAndIncome) | not handled | No reconciliation totals |
+| 19 | Checkbook = Income − Expenses − NotCounted; Withdrawals = Expenses + NotCounted (ClearedExpensesAndIncome) | BUILT | `lib/reports/checkbook.ts` `checkbookLines`; `/reports` "Checkbook Comparison" preset |
 | 20 | Consultant fees = expense type 18 for Jan 1 – Dec 31; Liberum = type 18 + description "Liberum" (frmMainMenu tax docs) | not handled | The `consultant-fees` preset filters description "consultant" |
 | 21 | Expense find: description matches ExpDscr OR ExpReason; check # is used only when description and type are blank (frmFinancialRptBasic) | not handled | `expenseDetail`: `expdscr` only, no check # |
 | 22 | 1099 total = Σ FndsPmt where UCase(FndsPayee) LIKE the payer, over the calendar year | not handled | |
@@ -301,9 +300,9 @@ Each item is one logical change. None is owned by billing-output or case-docs.
 8. **Income entry helpers.**
    - Case # autofills source, payee and title.
    - Remaining balance against the chosen bill.
-   - Cleared stamps today (rule 16).
+   - ~~Cleared stamps today (rule 16).~~ Built.
 9. **Income list date-range filter** (frmIncomeVIEW/Edit).
-10. **Checkbook reconciliation totals** for a date range (rule 19), on bank-review or reports.
+10. ~~**Checkbook reconciliation totals** for a date range (rule 19), on bank-review or reports.~~ Built on reports.
 11. **Report filter inputs.**
     - Expense: type, description over dscr + reason, check #.
     - Income: case #, attorney/source, payee, branch.
