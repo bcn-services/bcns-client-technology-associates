@@ -40,9 +40,14 @@ function Header({ session }: { session: Session }) {
           <RunningIndicator />
           {/* Server-side decision: staff markup never contains this link. */}
           {session.role === "admin" && (
-            <Link href="/users" className={navLink}>
-              Users
-            </Link>
+            <>
+              <Link href="/users" className={navLink}>
+                Users
+              </Link>
+              <Link href="/audit" className={navLink}>
+                Audit log
+              </Link>
+            </>
           )}
         </nav>
         <div className="flex items-center gap-3 text-sm text-slate-600">
