@@ -946,6 +946,13 @@ export type Database = {
           frmphone: string | null
           clientname: string | null
           otherexperts: string | null
+          casesubject: string | null
+          status: string | null
+          casestatpriority: string | null
+          casestatpointman: string | null
+          casestatwaitingfor: string | null
+          casestatdescription: string | null
+          casestatduedatedescription: string | null
         }
         Relationships: []
       }

@@ -12,10 +12,16 @@ export default async function AdvancedSearchPage({ searchParams }: { searchParam
   await requireSession();
   const db = createServerClient();
   const submitted = searchParams.go !== undefined;
-  const [{ data: statuses, error: statusError }] = await Promise.all([
+  const [{ data: statuses, error: statusError }, { data: priorities, error: priorityError }] = await Promise.all([
     db.from("tblcasestatus").select("casestatus").order("casestatus"),
+    db.from("tblcasepriority").select("priority").order("priority"),
   ]);
   if (statusError) console.error(`/cases/search: tblcasestatus read failed: ${statusError.message}`);
+  if (priorityError) console.error(`/cases/search: tblcasepriority read failed: ${priorityError.message}`);
+  const options: Record<string, string[]> = {
+    status: (statuses ?? []).map((s) => s.casestatus),
+    priority: (priorities ?? []).map((p) => p.priority),
+  };
   const parsed = submitted ? advancedSpec(searchParams) : null;
   const result = parsed && "spec" in parsed ? await runSearch(db, parsed.spec) : null;
   const input = "min-w-0 flex-1 rounded border border-slate-300 px-2 py-1 text-sm";
@@ -36,7 +42,7 @@ export default async function AdvancedSearchPage({ searchParams }: { searchParam
               {f.kind === "exact" ? (
                 <select name={f.key} id={`adv-${f.key}`} defaultValue={searchParams[f.key] ?? ""} className={input}>
                   <option value="" />
-                  {(statuses ?? []).map((s) => <option key={s.casestatus} value={s.casestatus}>{s.casestatus}</option>)}
+                  {(options[f.key] ?? []).map((v) => <option key={v} value={v}>{v}</option>)}
                 </select>
               ) : (
                 <input name={f.key} id={`adv-${f.key}`} type={f.kind === "date" ? "date" : "text"}

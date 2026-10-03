@@ -2,7 +2,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-  quickSpec, advancedSpec, orElement, escapeLike, runSearch, listCases, labelLines, NO_VALUES,
+  quickSpec, advancedSpec, orElement, escapeLike, describeError, runSearch, listCases, labelLines, NO_VALUES,
 } from "../../lib/cases/search.ts";
 
 /** Chainable fake: records ops per query; `respond(q)` returns { data, error } for the awaited query. */
@@ -38,12 +38,47 @@ test("quickSpec: blank is null; digits add an exact case # match; text is a subs
   assert.ok(t.preds.every((p) => p.source === "view"));
   assert.ok(!t.preds.some((p) => p.column === "caseid"));
   assert.deepEqual(t.preds.find((p) => p.column === "clientname"), { source: "view", column: "clientname", op: "ilike", value: "%Sam Sample%" });
-  assert.equal(t.preds.length, 10);
+  assert.equal(t.preds.length, 17);
+});
+
+// Contract A1: quick search reaches every case text field, each through case_search (widened in 0011).
+const A1_FIELDS = ["casesubject", "status", "casestatpriority", "casestatpointman", "casestatwaitingfor",
+  "casestatdescription", "casestatduedatedescription"];
+
+test("quickSpec ORs a substring match on subject, status, priority, point man, waiting for, description, event description", () => {
+  const t = quickSpec("KJS");
+  assert.equal(t.mode, "or");
+  for (const column of A1_FIELDS) assert.deepEqual(t.preds.find((p) => p.column === column), { source: "view", column, op: "ilike", value: "%KJS%" }, column);
+});
+
+test("advancedSpec: priority is exact, point man and description are substring matches; all on case_search", () => {
+  const { spec } = advancedSpec({ priority: "1", pointman: "kjs", description: "depo", mode: "and" });
+  assert.deepEqual(spec.preds, [
+    { source: "view", column: "casestatpriority", op: "ilike", value: "1" },
+    { source: "view", column: "casestatpointman", op: "ilike", value: "%kjs%" },
+    { source: "view", column: "casestatdescription", op: "ilike", value: "%depo%" },
+  ]);
+  const orQ = orElement(advancedSpec({ pointman: "KJS", mode: "or" }).spec.preds[0]);
+  assert.equal(orQ, 'casestatpointman.ilike."%KJS%"');
 });
 
 test("escapeLike makes % _ \\ literal", () => {
   assert.equal(escapeLike("50%_off\\x"), "50\\%\\_off\\\\x");
   assert.equal(quickSpec("50%_off").preds[0].value, "%50\\%\\_off%");
+});
+
+test("escapeLike turns * into a one-char _ so PostgREST can't read it as a multi-char wildcard", () => {
+  assert.equal(escapeLike("a*b"), "a_b");
+  assert.equal(escapeLike("*_*"), "_\\__");
+  assert.equal(quickSpec("*").preds[0].value, "%_%");
+  assert.equal(advancedSpec({ status: "Open*" }).spec.preds[0].value, "Open_");
+  assert.ok(!orElement(quickSpec("x*y").preds[0]).includes("*"), "no * reaches PostgREST");
+});
+
+test("describeError: a case_search missing a 0011 column (PostgREST 42703) gets the friendly message", () => {
+  assert.match(describeError("case_search", { code: "42703", message: "column case_search.casesubject does not exist" }),
+    /case_search view is missing or out of date.*0011/);
+  assert.equal(describeError("tblcase", { code: "42703", message: "column tblcase.x does not exist" }), "tblcase: column tblcase.x does not exist");
 });
 
 test("orElement double-quotes values so , ( ) . \" cannot extend the filter", () => {
@@ -54,6 +89,11 @@ test("orElement double-quotes values so , ( ) . \" cannot extend the filter", ()
 test("advancedSpec: empty or blank fields say No search values selected", () => {
   assert.deepEqual(advancedSpec({}), { message: NO_VALUES });
   assert.deepEqual(advancedSpec({ title: "  ", client: "" }), { message: NO_VALUES });
+});
+
+test("advancedSpec: subject and status come from case_search, start date alone from tblcase", () => {
+  const { spec } = advancedSpec({ subject: "s", status: "Active", startdate: "2026-01-01" });
+  assert.deepEqual(spec.preds.map((p) => [p.column, p.source]), [["casesubject", "view"], ["status", "view"], ["casestartdate", "case"]]);
 });
 
 test("advancedSpec: a filled field counts with no checkbox param (hand-test: Sample + Sam returned nothing)", () => {
@@ -71,7 +111,7 @@ test("advancedSpec: kinds map to exact / substring / after-date predicates", () 
   assert.deepEqual(spec.preds, [
     { source: "view", column: "caseid", op: "eq", value: "90001" },
     { source: "view", column: "casetitle", op: "ilike", value: "%Sam%" },
-    { source: "case", column: "status", op: "ilike", value: "Open\\_1" },
+    { source: "view", column: "status", op: "ilike", value: "Open\\_1" },
     { source: "case", column: "casestartdate", op: "gt", value: "2026-02-01" },
   ]);
   assert.equal(advancedSpec({ use_title: "1", title: "x" }).spec.mode, "and");
@@ -86,7 +126,7 @@ test("runSearch AND across view + tblcase pages every id and intersects", async 
     if (q.table === "case_search") return { data: rangeOf(q)[0] === 0 ? page1 : [{ caseid: 1001 }], error: null };
     return { data: [{ caseid: 2 }, { caseid: 1001 }, { caseid: 5000 }], error: null };
   });
-  const { spec } = advancedSpec({ use_title: "1", title: "a", use_status: "1", status: "Open" });
+  const { spec } = advancedSpec({ title: "a", startdate: "2020-01-01" });
   const r = await runSearch(db, spec);
   assert.deepEqual(r.rows.map((x) => x.caseid), [2, 1001]);
   assert.equal(r.more, false);
@@ -100,7 +140,7 @@ test("runSearch OR across sources merges, orders by case #, and flags more", asy
     if (op(q, "in").length) return hydrateRows(q);
     return { data: q.table === "case_search" ? [{ caseid: 1 }, { caseid: 3 }] : [{ caseid: 2 }], error: null };
   });
-  const { spec } = advancedSpec({ use_title: "1", title: "a", use_status: "1", status: "Open", mode: "or" });
+  const { spec } = advancedSpec({ title: "a", startdate: "2020-01-01", mode: "or" });
   const r = await runSearch(db, spec, 2);
   assert.deepEqual(r.rows.map((x) => x.caseid), [1, 2]);
   assert.equal(r.more, true);
