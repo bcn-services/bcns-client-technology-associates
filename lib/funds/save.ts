@@ -4,6 +4,7 @@
  */
 import type { Session } from "../auth/session";
 import type { Db } from "../time/entries";
+import { firmToday } from "../cases/presets";
 import { parseMoney } from "./money";
 
 export class FundsError extends Error {
@@ -75,6 +76,13 @@ export function parseFunds(get: (k: string) => string) {
     fndsclearingnotes: text(get("clearingnotes")),
   };
 }
+
+/**
+ * Rule 16 (frmIncomeEntry `CheckCleared_Click`): ticking Cleared puts today's date in Date cleared, unticking
+ * blanks it. Like the Access form it only fills the field; the date stays editable and is saved as submitted.
+ * Income only: frmExpenseEntry's same handler has both lines commented out.
+ */
+export const clearedDateOnToggle = (checked: boolean, now: Date): string => (checked ? firmToday(now) : "");
 
 async function requireCase(db: Db, caseid: number): Promise<void> {
   const found = await db.from("tblcase").select("caseid").eq("caseid", caseid).maybeSingle();
