@@ -38,6 +38,7 @@ export const FIELDS: Field[] = [
   fld("casestatdescription", "Description", "text", "textarea"),
   fld("casestatduedate", "Event Date", "date"),
   fld("casestatduedatedescription", "Event Description", "text", "eventdesc"),
+  fld("casestatharddeadline", "Hard Deadline", "bool"),
   fld("casestatpointman", "Point Man", "text", "pointman"),
   fld("caseinquiry", "Inquiry", "int", "inquiry"),
   fld("otherexperts", "Other Experts", "text"),

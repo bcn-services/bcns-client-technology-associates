@@ -187,6 +187,7 @@ export default async function CaseRecordPage({ params, searchParams }: { params:
             <Labeled col="casestatpointman" row={kase} o={o} />
             <Labeled col="casestatduedate" row={kase} o={o} />
             <Labeled col="casestatduedatedescription" row={kase} o={o} />
+            <Labeled col="casestatharddeadline" row={kase} o={o} />
             <Labeled col="casestatdescription" row={kase} o={o} wide />
           </div>
           <datalist id="event-desc">{EVENT_SUGGESTIONS.map((s) => <option key={s} value={s} />)}</datalist>
