@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 const table = "w-full text-sm [&_a]:underline [&_td]:py-1 [&_td]:pr-3 [&_th]:py-1 [&_th]:pr-3 [&_tr]:border-b";
 
 /**
- * Read-only dashboard: four count tiles over the Work Status Sheet. Column headings deliberately avoid the
+ * Read-only dashboard: five count tiles over the Work Status Sheet. Column headings deliberately avoid the
  * words the tiles use, so each tile label stays the only element carrying its word.
  */
 export default async function DashboardPage() {
@@ -23,7 +23,7 @@ export default async function DashboardPage() {
   return (
     <main className="mx-auto max-w-6xl space-y-4 px-4 py-6">
       <h1 className="text-xl font-semibold">Dashboard</h1>
-      <div data-testid="dashboard-tiles" className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <div data-testid="dashboard-tiles" className="grid grid-cols-2 gap-3 sm:grid-cols-5">
         {data.tiles.map((t) => (
           <Link key={t.key} href={t.href} className="rounded border border-slate-200 bg-white p-4 hover:bg-slate-50">
             <span className="block text-2xl font-semibold tabular-nums" data-testid={`tile-${t.key}`}>{t.count ?? "—"}</span>
