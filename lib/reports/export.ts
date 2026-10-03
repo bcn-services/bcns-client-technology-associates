@@ -160,6 +160,12 @@ function writeSheet(ws: Worksheet, result: PresetResult): void {
       currencyColumns(ws, months.map((_, i) => i + 2).concat(months.length + 2));
       return;
     }
+    case "checkbook": {
+      header(ws, ["", "Amount"], [20, 15]);
+      for (const l of result.data.lines) ws.addRow([l.label, money(l.cents)]);
+      currencyColumns(ws, [2]);
+      return;
+    }
   }
 }
 

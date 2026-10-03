@@ -1,4 +1,5 @@
 import { fundsErrorMessage, type FundsValues } from "@/lib/funds/save";
+import { ClearedBox } from "./cleared-box";
 
 const input = "rounded border border-slate-300 px-2 py-1";
 
@@ -56,10 +57,7 @@ export function FundsForm({ values, error, action, submitLabel, bill }: {
       </label>
       <fieldset className="grid gap-3 rounded border border-slate-200 p-3 sm:grid-cols-3">
         <legend className="px-1 text-sm text-slate-700">Bank clearing</legend>
-        <label htmlFor="f-cleared" className="flex items-center gap-2 text-sm">
-          <input id="f-cleared" name="cleared" type="checkbox" defaultChecked={values.cleared === "on" || values.cleared === "true"} />
-          Cleared
-        </label>
+        <ClearedBox defaultChecked={values.cleared === "on" || values.cleared === "true"} />
         {text("datecleared", "Date cleared", { type: "date" })}
         {text("clearingnotes", "Clearing notes")}
       </fieldset>

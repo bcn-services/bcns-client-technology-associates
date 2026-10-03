@@ -22,6 +22,7 @@ const first = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v
 // Written out rather than built from a variable: Tailwind only emits arbitrary variants it can see as literals.
 const T7 = "w-full text-sm [&_a]:underline [&_td:nth-child(7)]:text-right [&_td:nth-child(7)]:tabular-nums [&_td]:py-1 [&_td]:pr-3 [&_th]:py-1 [&_th]:pr-3 [&_tr]:border-b";
 const T3 = "w-full text-sm [&_a]:underline [&_td:nth-child(3)]:text-right [&_td:nth-child(3)]:tabular-nums [&_td]:py-1 [&_td]:pr-3 [&_th]:py-1 [&_th]:pr-3 [&_tr]:border-b";
+const T2 = "max-w-sm text-sm [&_td:nth-child(2)]:text-right [&_td:nth-child(2)]:tabular-nums [&_td]:py-1 [&_td]:pr-3 [&_tr]:border-b";
 const gridTable = "w-full text-sm [&_td:not(:first-child)]:text-right [&_td:not(:first-child)]:tabular-nums [&_td]:py-1 [&_td]:pr-3 [&_th]:py-1 [&_th]:pr-3 [&_tr]:border-b";
 const head = "text-left text-slate-700";
 
@@ -177,6 +178,21 @@ function PnlView({ data }: { data: Extract<PresetResult, { engine: "pnl" }>["dat
   );
 }
 
+function CheckbookView({ data }: { data: Extract<PresetResult, { engine: "checkbook" }>["data"] }) {
+  return (
+    <table className={T2}>
+      <tbody>
+        {data.lines.map((l) => (
+          <tr key={l.label} className={l.label === "CheckBook" ? "font-semibold" : undefined}>
+            <td>{l.label}</td>
+            <td data-testid={l.label === "CheckBook" ? "report-total" : undefined}>{l.amount}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
 function Results({ result }: { result: PresetResult }) {
   switch (result.engine) {
     case "expenseDetail":
@@ -187,6 +203,8 @@ function Results({ result }: { result: PresetResult }) {
       return <MatrixView data={result.data} />;
     case "pnl":
       return <PnlView data={result.data} />;
+    case "checkbook":
+      return <CheckbookView data={result.data} />;
   }
 }
 

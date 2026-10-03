@@ -68,7 +68,7 @@ test("the six legacy report names are present and journey 06's three selectors e
 test("detail and P&L presets pass the submitted range verbatim; yearly presets pass the start date's year", () => {
   for (const p of PRESETS) {
     const a = p.params(RANGE);
-    if (p.engine === "expenseDetail" || p.engine === "incomeDetail" || p.engine === "pnl") {
+    if (p.engine === "expenseDetail" || p.engine === "incomeDetail" || p.engine === "pnl" || p.engine === "checkbook") {
       assert.equal(a.start, RANGE.start);
       assert.equal(a.end, RANGE.end);
     } else {
