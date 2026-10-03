@@ -26,7 +26,7 @@ ${kase(90003, "Firmless v. Case", { caseatty: 2, caseclient: 2, casestartdate: "
 ${kase(91001, "Alpha v. Beta", { casestartdate: "2026-03-01" })}
 ${kase(91002, "Alpha v. Gamma", { caseclient: 2, casestartdate: "2026-02-01", status: "Closed" })}
 ${kase(91004, "100% Widgets_Co", { caseclient: 2 })}
-${kase(91005, "1000 WidgetsXCo", { caseclient: 2 })}
+${kase(91005, "1000 WidgetsXCo", { caseclient: 2, casestatpointman: "Qpman" })}
 ${extra}
 set session_replication_role = origin;`);
 before(() => {
@@ -86,6 +86,7 @@ live("quick search via runSearch: 90001 by number, title substring, client name;
   assert.ok((await quick("ple v. Exam")).includes(CASE_ID), "by substring of Sample v. Example");
   assert.ok((await quick("Sam Sample")).includes(CASE_ID), "by client name");
   assert.deepEqual(await quick("Orphan v"), [90002], "orphan (caseatty points at no attorney) found by title");
+  assert.deepEqual(await quick("qpma"), [91005], "by point man (case_search column added in 0011)");
   const orphan = (await runSearch(pgDb, quickSpec("Orphan v"))).rows[0];
   assert.equal(orphan.attyname, "", "orphan row still hydrates (empty concat_ws name)");
 });
@@ -95,14 +96,18 @@ live("user-typed % and _ match literally; or-grammar characters cannot widen the
   assert.deepEqual(await quick("s_C"), [91004], "_");
   assert.deepEqual(await quick('Alpha"),caseid.gt.0,casetitle.ilike.(%'), [], "quote/comma/paren injection stays one literal value");
   assert.deepEqual(await quick("a\\"), [], "trailing backslash is escaped, not a broken pattern");
+  assert.deepEqual(await quick("Alpha*Gamma"), [], "* is not a multi-char wildcard (PostgREST would read it as %)");
+  assert.deepEqual(await quick("1000*Widgets"), [91005], "* still matches one character");
 });
 
 live("advanced AND/OR/date via runSearch, incl. mixed view+tblcase sources", async () => {
   assert.deepEqual(await adv({ use_title: "1", title: "Alpha", use_client: "1", client: "Sam", mode: "and" }), [91001], "AND narrows");
   assert.deepEqual(await adv({ use_title: "1", title: "Alpha", use_client: "1", client: "Sam", mode: "or" }), [CASE_ID, 91001, 91002], "OR widens");
   assert.deepEqual(await adv({ use_startdate: "1", startdate: "2026-02-01" }), [90002, 91001], "strictly after");
-  assert.deepEqual(await adv({ use_title: "1", title: "Alpha", use_status: "1", status: "closed", mode: "and" }), [91002], "mixed AND intersects");
-  assert.deepEqual(await adv({ use_title: "1", title: "Orphan", use_status: "1", status: "closed", mode: "or" }), [90002, 91002], "mixed OR unions");
+  assert.deepEqual(await adv({ use_title: "1", title: "Alpha", use_status: "1", status: "closed", mode: "and" }), [91002], "status (view) AND");
+  assert.deepEqual(await adv({ use_title: "1", title: "Orphan", use_status: "1", status: "closed", mode: "or" }), [90002, 91002], "status (view) OR");
+  assert.deepEqual(await adv({ title: "Alpha", startdate: "2026-02-15", mode: "and" }), [91001], "mixed view+tblcase AND intersects");
+  assert.deepEqual(await adv({ title: "Orphan", startdate: "2026-02-15", mode: "or" }), [90002, 91001], "mixed view+tblcase OR unions");
   assert.deepEqual(await adv({ use_title: "1", title: "Alpha", use_firm: "", mode: "and" }), [91001, 91002], "unchecked field ignored");
   assert.deepEqual(advancedSpec({ title: "  " }), { message: "No search values selected" }, "blank fields only");
 });
@@ -137,7 +142,7 @@ function hostedEnv() {
     return env.NEXT_PUBLIC_SUPABASE_URL && env.SUPABASE_SERVICE_ROLE_KEY ? env : null;
   } catch { return null; }
 }
-test("hosted PostgREST accepts hostile .or() values on tblcase (grammar check)", async (t) => {
+test("hosted PostgREST accepts hostile .or() values (grammar check; needs 0011 pushed)", async (t) => {
   const env = hostedEnv();
   if (!env) return t.skip("no .env.local");
   const db = createClient(env.NEXT_PUBLIC_SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY.replace(/^"|"$/g, ""), { auth: { persistSession: false } });

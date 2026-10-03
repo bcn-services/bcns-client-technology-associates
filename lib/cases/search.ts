@@ -4,7 +4,7 @@
  *
  * Sources: `view` = case_search (LEFT JOINs, so orphan cases stay visible; widened in 0011 with
  * subject/status/priority/point man/waiting for/description/event description); `case` = tblcase,
- * which advanced search still uses for subject, status and start date.
+ * only for start date (the one column the view lacks).
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/db/types";
@@ -26,9 +26,14 @@ export type SearchResult = { rows: CaseRow[]; more: boolean } | { error: string 
 
 export const LIMIT = 200;
 
-/** Escape LIKE metacharacters so user-typed `%`, `_`, `\` match literally (backslash is ILIKE's default escape). */
+/**
+ * Escape LIKE metacharacters so user-typed `%`, `_`, `\` match literally (backslash is ILIKE's default escape).
+ * PostgREST rewrites every `*` in a like/ilike value to `%`, quoted or not, and has no escape for it.
+ */
 export function escapeLike(s: string): string {
-  return s.replace(/[\\%_]/g, "\\$&");
+  // ponytail: `*` becomes `_` (any ONE char, which includes `*`), so a typed `*` can't act as a multi-char
+  // wildcard; "a*b" can also match "a-b". Exact-literal `*` would need an RPC instead of the ilike operator.
+  return s.replace(/[\\%_]/g, "\\$&").replace(/\*/g, "_");
 }
 const contains = (s: string) => `%${escapeLike(s)}%`;
 
@@ -54,10 +59,10 @@ export function quickSpec(q: string): Spec | null {
 export const ADVANCED_FIELDS = [
   { key: "caseid", label: "Case #", source: "view", column: "caseid", kind: "number" },
   { key: "title", label: "Title", source: "view", column: "casetitle", kind: "text" },
-  { key: "subject", label: "Subject", source: "case", column: "casesubject", kind: "text" },
+  { key: "subject", label: "Subject", source: "view", column: "casesubject", kind: "text" },
   { key: "notes", label: "Notes", source: "view", column: "casenotes", kind: "text" },
-  { key: "status", label: "Status", source: "case", column: "status", kind: "exact" },
-  { key: "priority", label: "Priority", source: "view", column: "casestatpriority", kind: "text" },
+  { key: "status", label: "Status", source: "view", column: "status", kind: "exact" },
+  { key: "priority", label: "Priority", source: "view", column: "casestatpriority", kind: "exact" },
   { key: "pointman", label: "Point man", source: "view", column: "casestatpointman", kind: "text" },
   { key: "description", label: "Description", source: "view", column: "casestatdescription", kind: "text" },
   { key: "startdate", label: "Start date after", source: "case", column: "casestartdate", kind: "date" },
