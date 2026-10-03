@@ -7,8 +7,8 @@ import { sendErrorMessage } from "@/lib/bills/send-messages";
  * link when one is stored; for admins a row links to Finalize / Send and a 2nd / Final row to its Send notice preview,
  * or says why it can't (no stored PDF). Legacy rows render exactly as before item 8.
  */
-export function BillsListView({ groups, admin = false }: { groups: BillGroup[]; admin?: boolean }) {
-  if (groups.every((g) => g.rows.length === 0)) return <p className="text-sm text-gray-600">No open bills.</p>;
+export function BillsListView({ groups, admin = false, due = false }: { groups: BillGroup[]; admin?: boolean; due?: boolean }) {
+  if (groups.every((g) => g.rows.length === 0)) return <p className="text-sm text-gray-600">{due ? "No bills are due." : "No open bills."}</p>;
   return (
     <div className="space-y-6">
       {groups.filter((g) => g.rows.length > 0).map((g) => (

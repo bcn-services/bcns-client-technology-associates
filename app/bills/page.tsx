@@ -14,7 +14,7 @@ export default async function BillsPage({ searchParams }: { searchParams?: Recor
   return (
     <main className="mx-auto max-w-5xl space-y-4 px-4 py-6">
       <h1 className="text-xl font-semibold">{due ? "Due bills" : "Open bills"}</h1>
-      <BillsListView groups={groups} admin={session.role === "admin"} />
+      <BillsListView groups={groups} due={due}admin={session.role === "admin"} />
     </main>
   );
 }

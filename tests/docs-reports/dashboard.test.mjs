@@ -3,11 +3,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { fakeDb } from "./fakedb.mjs";
-import { renderDashboard, pageModule, session, dbclient, texts } from "./render-dashboard.mjs";
+import { renderToStaticMarkup } from "react-dom/server";
+import { renderDashboard, pageModule, session, dbclient, texts, React } from "./render-dashboard.mjs";
 
 const { loadDashboard, WORK_STATUS_HREF } = await import("../../lib/reports/dashboard.ts");
 const { loadOpenBills, runBillsList } = await import("../../lib/bills/list.ts");
 const { loadUnbilled } = await import("../../lib/reports/unbilled.ts");
+const { BillsListView } = await import("../../app/bills/bills-list-view.tsx");
 const { firmToday, waitingFor, workStatus } = await import("../../lib/cases/presets.ts");
 
 const NOW = new Date("2026-09-19T16:00:00Z");
@@ -63,7 +65,7 @@ test("due equals the length of the /bills?due=1 list, and every row in it is due
   assert.equal(all.length, tile(d, "unpaid").count, "plain /bills stays the unfiltered open list");
 });
 
-// Unbilled := time with actbilled=false AND actbillid null, plus case expenses with expbillid null.
+// Unbilled := time with actbilled=false AND actbillid null.
 const unbilledWorld = () => ({
   ...world(),
   tblactivity: [
@@ -71,29 +73,56 @@ const unbilledWorld = () => ({
     { actid: 2, actcaseid: 1, actdate: "2026-09-02", actdescription: "billed on a bill", acthrs: 2, actbilled: true, actbillid: 5 },
     { actid: 3, actcaseid: 2, actdate: "2026-09-03", actdescription: "legacy billed, no bill id", acthrs: 1, actbilled: true, actbillid: null },
     { actid: 4, actcaseid: 2, actdate: "2026-09-04", actdescription: "unbilled too", acthrs: 0.5, actbilled: false, actbillid: null },
+    { actid: 5, actcaseid: 2, actdate: "2026-09-05", actdescription: "attached to a bill, flag still false", acthrs: 1, actbilled: false, actbillid: 5 },
   ],
-  tblexpenses: [
-    { expid: 1, expcaseid: 1, expbillid: null, expdate: "2026-09-01", expdscr: "filing fee", expamount: 50 },
-    { expid: 2, expcaseid: 1, expbillid: 5, expdate: "2026-09-02", expdscr: "on a bill", expamount: 75 },
-    { expid: 3, expcaseid: null, expbillid: null, expdate: "2026-09-03", expdscr: "firm overhead, no case", expamount: 99 },
-  ],
+  // Expenses are deliberately not counted (nothing writes expbillid); an unbilled-looking expense must not move the tile.
+  tblexpenses: [{ expid: 1, expcaseid: 1, expbillid: null, expdate: "2026-09-01", expdscr: "filing fee", expamount: 50 }],
 });
 
-test("unbilled counts only unbilled time and case expenses, and equals the rows /unbilled lists", async () => {
+test("unbilled counts only unbilled time, and the tile count equals the /unbilled row count", async () => {
   const d = await loadDashboard(fakeDb(unbilledWorld()), NOW);
   const u = await loadUnbilled(fakeDb(unbilledWorld()));
   assert.deepEqual(u.time.map((r) => r.actid), [1, 4], "billed (flag or bill id) time is excluded");
-  assert.deepEqual(u.expenses.map((r) => r.expid), [1], "billed and no-case expenses are excluded");
-  assert.equal(tile(d, "unbilled").count, 3);
-  assert.equal(tile(d, "unbilled").count, u.time.length + u.expenses.length);
+  assert.equal(tile(d, "unbilled").count, 2, "the unbilled expense is not counted");
+  assert.equal(tile(d, "unbilled").count, u.time.length);
   assert.equal(tile(d, "unbilled").href, "/unbilled");
 });
 
 test("unbilled is zero when everything is billed", async () => {
   const w = unbilledWorld();
   w.tblactivity.forEach((r) => { r.actbilled = true; });
-  w.tblexpenses.forEach((r) => { r.expbillid = 5; });
   assert.equal(tile(await loadDashboard(fakeDb(w), NOW), "unbilled").count, 0);
+});
+
+// A failed unbilled read blanks only its own tile; the page still renders (like Waiting / Overdue).
+const failingUnbilled = (w) => {
+  const db = fakeDb(w);
+  const realFrom = db.from.bind(db);
+  db.from = (t) => {
+    if (t !== "tblactivity") return realFrom(t);
+    const b = realFrom(t);
+    b.then = (res) => res({ data: null, error: { message: "boom" } });
+    return b;
+  };
+  return db;
+};
+
+test("a failed unbilled read gives a null tile and the dashboard still renders", async () => {
+  const origErr = console.error;
+  console.error = () => {};
+  try {
+    const d = await loadDashboard(failingUnbilled(unbilledWorld()), NOW);
+    assert.equal(tile(d, "unbilled").count, null);
+    assert.equal(tile(d, "unpaid").count, 4, "the other tiles are unaffected");
+    const markup = await renderDashboard(failingUnbilled(unbilledWorld()));
+    assert.match(markup, /data-testid="tile-unbilled"[^>]*>—</);
+  } finally { console.error = origErr; }
+});
+
+test("/bills?due=1 with nothing due says 'No bills are due.'; plain /bills keeps 'No open bills.'", () => {
+  const view = (due) => renderToStaticMarkup(React.createElement(BillsListView, { groups: [], due }));
+  assert.match(view(true), /No bills are due\./);
+  assert.match(view(false), /No open bills\./);
 });
 
 test("waiting equals every row /cases/lists/waiting-for displays", async () => {

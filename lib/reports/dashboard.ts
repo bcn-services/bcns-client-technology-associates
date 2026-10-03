@@ -6,7 +6,7 @@
  */
 import type { Db } from "@/lib/time/entries";
 import { dueOnly, loadOpenBills } from "@/lib/bills/list";
-import { loadUnbilled } from "@/lib/reports/unbilled";
+import { countUnbilled } from "@/lib/reports/unbilled";
 import { firmToday, waitingFor, workStatus, type WorkStatusRow } from "@/lib/cases/presets";
 
 /** The client type `lib/cases/presets.ts` takes — distinct alias from `Db`, so call sites cast. */
@@ -15,7 +15,7 @@ type CaseDb = Parameters<typeof waitingFor>[0];
 export type Tile = { key: string; label: string; href: string; count: number | null };
 export type Dashboard = { tiles: Tile[]; rows: WorkStatusRow[]; error: string | null };
 
-/** Due tile target: /bills filtered by `dueOnly`, the predicate the tile counts. Unbilled tile target: lists `loadUnbilled`'s rows. */
+/** Due tile target: /bills filtered by `dueOnly`, the predicate the tile counts. Unbilled tile target: lists `loadUnbilled`'s rows (time only; `countUnbilled` shares its filter). */
 export const DUE_HREF = "/bills?due=1";
 export const UNBILLED_HREF = "/unbilled";
 
@@ -32,7 +32,7 @@ export async function loadDashboard(db: Db, now: Date): Promise<Dashboard> {
     loadOpenBills(db, today),
     waitingFor(cdb),
     workStatus(cdb, "", "priority"),
-    loadUnbilled(db),
+    countUnbilled(db).catch((e) => (console.error(e), null)), // a failed read blanks only this tile, like Waiting / Overdue
   ]);
   const bills = groups.flatMap((g) => g.rows);
   const rows = "error" in work ? [] : work.rows;
@@ -41,7 +41,7 @@ export async function loadDashboard(db: Db, now: Date): Promise<Dashboard> {
     { key: "overdue", label: "Overdue", href: WORK_STATUS_HREF, count: "error" in work ? null : rows.filter((r) => isPast(r, today)).length },
     { key: "waiting", label: "Waiting", href: "/cases/lists/waiting-for", count: "error" in waiting ? null : waiting.rows.length },
     { key: "unpaid", label: "Unpaid", href: "/bills", count: bills.length },
-    { key: "unbilled", label: "Unbilled", href: UNBILLED_HREF, count: unbilled.time.length + unbilled.expenses.length },
+    { key: "unbilled", label: "Unbilled", href: UNBILLED_HREF, count: unbilled },
   ];
   return { tiles, rows, error: "error" in work ? work.error : null };
 }
