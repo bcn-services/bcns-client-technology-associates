@@ -53,36 +53,53 @@ export function parseDate(raw: string): string | null {
  * Parse a BoA checking/savings export. The header is the first line whose cells include Date, Description and Amount
  * (any case/order; extra columns like "Running Bal." ignored); everything above it is BoA's summary preamble, skipped.
  * Whole file first: any bad line → every error (physical file line numbers) and no rows, so the caller can refuse the
- * file all-or-nothing. BOM, CRLF and blank lines tolerated. BoA's "Beginning balance as of …" row (empty amount) is
+ * file all-or-nothing. BOM, CRLF, blank and comma-only lines tolerated. A preamble line with a date cell plus a money
+ * cell (a transaction above the header) is an error, not skipped. With a "Running Bal." column, its cell must be empty
+ * or money (money on the beginning-balance row) and amounts must carry cents. BoA's "Beginning balance as of …" row (empty amount) is
  * skipped; any other empty amount stays an error.
  */
 export function parseBoaCsv(text: string): ParseResult {
   const lines = text.replace(/^\uFEFF/, "").split(/\r?\n/);
+  const blank = (s: string) => /^[\s,]*$/.test(s); // Excel re-saves pad empty rows to ",,,"
   const errors: string[] = [];
   const rows: BankRow[] = [];
   let h = -1;
   let width = 0;
   let col: number[] = [];
+  let bi = -1;
   for (let i = 0; i < lines.length && h < 0; i++) {
-    const cells = (splitCsvLine(lines[i]!) ?? []).map((c) => c.trim().toLowerCase());
+    const raw = splitCsvLine(lines[i]!) ?? [];
+    const cells = raw.map((c) => c.trim().toLowerCase());
     col = HEADER.map((name) => cells.indexOf(name));
-    if (col.every((c) => c >= 0)) [h, width] = [i, cells.length];
+    if (col.every((c) => c >= 0)) {
+      [h, width, bi] = [i, cells.length, cells.findIndex((c) => c.startsWith("running bal"))];
+      continue;
+    }
+    const d = raw.findIndex((c) => parseDate(c));
+    if (d >= 0 && raw.some((c, j) => j !== d && parseMoney(c))) errors.push(`Line ${i + 1}: transaction above the header row`);
   }
   if (h < 0) return { ok: false, errors: ["No header row found: expected columns Date, Description, Amount"] };
   const [di, dsi, ai] = col as [number, number, number];
+  const isBalance = (s: string) => parseMoney(s) !== null || /^-?\$?0+(\.0{1,2})?$/.test(s); // parseMoney refuses 0
   for (let i = h + 1; i < lines.length; i++) {
     const raw = lines[i]!;
-    if (raw.trim() === "") continue;
+    if (blank(raw)) continue;
     const n = i + 1;
     const f = splitCsvLine(raw);
     if (!f) { errors.push(`Line ${n}: unbalanced quotes`); continue; }
     if (f.length !== width) { errors.push(`Line ${n}: expected ${width} fields, found ${f.length}`); continue; }
     const description = f[dsi]!.trim();
-    if (f[ai]!.trim() === "" && /^beginning balance as of\b/i.test(description)) continue;
+    const opening = f[ai]!.trim() === "" && /^beginning balance as of\b/i.test(description);
+    if (bi >= 0) {
+      const bal = f[bi]!.trim();
+      if ((bal !== "" || opening) && !isBalance(bal)) errors.push(`Line ${n}: bad running balance "${bal}"`);
+    }
+    if (opening) continue;
     const postedon = parseDate(f[di]!);
     const amount = parseMoney(f[ai]!);
     if (!postedon) errors.push(`Line ${n}: bad date "${f[di]!.trim()}"`);
-    if (!amount) errors.push(`Line ${n}: bad amount "${f[ai]!.trim()}"`);
+    // With a balance column, cents are required: an unquoted "-1,500.00" splits into "-1" + "500.00".
+    if (!amount || (bi >= 0 && !/\.\d{2}$/.test(f[ai]!.trim()))) errors.push(`Line ${n}: bad amount "${f[ai]!.trim()}"`);
     if (!description) errors.push(`Line ${n}: missing description`);
     if (postedon && amount && description) rows.push({ line: n, postedon, description, amount });
   }
