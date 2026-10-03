@@ -2,8 +2,9 @@
  * Case search and lists. Predicate building is pure (a Spec of Preds); runSearch/listCases
  * turn a Spec into PostgREST calls. Tests render the same Spec as SQL against local Postgres.
  *
- * Sources: `view` = case_search (LEFT JOINs, so orphan cases stay visible); `case` = tblcase,
- * only for the three columns the view lacks (subject, status, start date).
+ * Sources: `view` = case_search (LEFT JOINs, so orphan cases stay visible; widened in 0011 with
+ * subject/status/priority/point man/waiting for/description/event description); `case` = tblcase,
+ * which advanced search still uses for subject, status and start date.
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/db/types";
@@ -35,6 +36,8 @@ const contains = (s: string) => `%${escapeLike(s)}%`;
 export const QUICK_COLUMNS = [
   "casetitle", "casenotes", "casecaption", "attyname", "attyemail", "attyphone",
   "frmname", "frmphone", "clientname", "otherexperts",
+  "casesubject", "status", "casestatpriority", "casestatpointman", "casestatwaitingfor",
+  "casestatdescription", "casestatduedatedescription",
 ] as const;
 
 export function quickSpec(q: string): Spec | null {
@@ -54,6 +57,9 @@ export const ADVANCED_FIELDS = [
   { key: "subject", label: "Subject", source: "case", column: "casesubject", kind: "text" },
   { key: "notes", label: "Notes", source: "view", column: "casenotes", kind: "text" },
   { key: "status", label: "Status", source: "case", column: "status", kind: "exact" },
+  { key: "priority", label: "Priority", source: "view", column: "casestatpriority", kind: "text" },
+  { key: "pointman", label: "Point man", source: "view", column: "casestatpointman", kind: "text" },
+  { key: "description", label: "Description", source: "view", column: "casestatdescription", kind: "text" },
   { key: "startdate", label: "Start date after", source: "case", column: "casestartdate", kind: "date" },
   { key: "attorney", label: "Attorney", source: "view", column: "attyname", kind: "text" },
   { key: "client", label: "Client", source: "view", column: "clientname", kind: "text" },
@@ -99,10 +105,10 @@ type Db = SupabaseClient<Database>;
 type Loose = SupabaseClient;
 const TABLE: Record<Source, string> = { view: "case_search", case: "tblcase" };
 
-/** Clear, non-crashing message when the view is absent (migration 0007 not applied). */
+/** Clear, non-crashing message when the view is absent or predates 0011 (missing column). */
 export function describeError(where: string, e: { message: string; code?: string }): string {
   if (where === "case_search" && (e.code === "PGRST205" || e.code === "42P01" || /case_search/.test(e.message)))
-    return "Case search is unavailable: the case_search view is missing from this database (migration 0007 not applied).";
+    return "Case search is unavailable: the case_search view is missing or out of date in this database (migrations 0007/0011 not applied).";
   return `${where}: ${e.message}`;
 }
 

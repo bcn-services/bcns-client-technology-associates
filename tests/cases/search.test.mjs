@@ -38,7 +38,28 @@ test("quickSpec: blank is null; digits add an exact case # match; text is a subs
   assert.ok(t.preds.every((p) => p.source === "view"));
   assert.ok(!t.preds.some((p) => p.column === "caseid"));
   assert.deepEqual(t.preds.find((p) => p.column === "clientname"), { source: "view", column: "clientname", op: "ilike", value: "%Sam Sample%" });
-  assert.equal(t.preds.length, 10);
+  assert.equal(t.preds.length, 17);
+});
+
+// Contract A1: quick search reaches every case text field, each through case_search (widened in 0011).
+const A1_FIELDS = ["casesubject", "status", "casestatpriority", "casestatpointman", "casestatwaitingfor",
+  "casestatdescription", "casestatduedatedescription"];
+
+test("quickSpec ORs a substring match on subject, status, priority, point man, waiting for, description, event description", () => {
+  const t = quickSpec("KJS");
+  assert.equal(t.mode, "or");
+  for (const column of A1_FIELDS) assert.deepEqual(t.preds.find((p) => p.column === column), { source: "view", column, op: "ilike", value: "%KJS%" }, column);
+});
+
+test("advancedSpec: priority, point man, description are substring matches on case_search", () => {
+  const { spec } = advancedSpec({ priority: "1", pointman: "kjs", description: "depo", mode: "and" });
+  assert.deepEqual(spec.preds, [
+    { source: "view", column: "casestatpriority", op: "ilike", value: "%1%" },
+    { source: "view", column: "casestatpointman", op: "ilike", value: "%kjs%" },
+    { source: "view", column: "casestatdescription", op: "ilike", value: "%depo%" },
+  ]);
+  const orQ = orElement(advancedSpec({ pointman: "KJS", mode: "or" }).spec.preds[0]);
+  assert.equal(orQ, 'casestatpointman.ilike."%KJS%"');
 });
 
 test("escapeLike makes % _ \\ literal", () => {

@@ -9,7 +9,7 @@ import { quickSpec, advancedSpec } from "../../lib/cases/search.ts";
 
 let reachable = true;
 before(() => {
-  try { if (one("select to_regclass('case_search')") !== "case_search") resetDb(); } catch { reachable = false; }
+  try { if (one("select count(*) from information_schema.columns where table_name = 'case_search' and column_name = 'casestatduedatedescription'") !== "1") resetDb(); } catch { reachable = false; }
 });
 const live = (name, fn) => test(name, (t) => (reachable ? fn() : t.skip("local Postgres unreachable")));
 
@@ -71,6 +71,24 @@ live("quick search, advanced AND/OR/date, literal wildcards, orphans — against
   assert.deepEqual(r.orphanAtty, [90002], "blank attorney value is dropped, orphan found by title");
   assert.ok(r.newest.includes(90002), "orphan appears in lists");
   assert.deepEqual(r.newest.slice(0, 2), [91001, 90002], "newest first; same start date -> case # desc");
+});
+
+// Contract A1: each widened field is reachable — quick search on all seven, advanced on priority/point man/description.
+const A1 = { casesubject: "Qsubj", status: "Qstat", casestatpriority: "Qprio", casestatpointman: "Qpman",
+  casestatwaitingfor: "Qwait", casestatdescription: "Qdesc", casestatduedatedescription: "Qevnt" };
+live("quick + advanced search match subject, status, priority, point man, waiting for, description, event description", () => {
+  const r = inTx(`${SEED}\n${kase(91006, "Zeta", A1)}`, {
+    ...Object.fromEntries(Object.entries(A1).map(([c, v]) => [c, specSql(quickSpec(v.toLowerCase().slice(1)))])),
+    advPriority: adv({ priority: "qprio" }),
+    advPointman: adv({ pointman: "QPMAN" }),
+    advDescription: adv({ description: "desc", pointman: "pma", mode: "and" }),
+    advEventNotDesc: adv({ description: "qevnt" }),
+  });
+  for (const c of Object.keys(A1)) assert.deepEqual(r[c], [91006], c);
+  assert.deepEqual(r.advPriority, [91006]);
+  assert.deepEqual(r.advPointman, [91006]);
+  assert.deepEqual(r.advDescription, [91006]);
+  assert.deepEqual(r.advEventNotDesc, [], "advanced Description is casestatdescription only");
 });
 
 live("median of 5 quick searches under 1s with 5,000 cases", () => {
