@@ -43,6 +43,8 @@ test("parseFilters: valid values pass, malformed ones are dropped", () => {
   assert.deepEqual(parseFilters({ actor: "none" }), { actor: "none" });
   assert.deepEqual(parseFilters({ actor: "x; drop", from: "2026-02-30", to: "yesterday", before: "-1" }), {});
   assert.deepEqual(parseFilters({ before: "0" }), {});
+  assert.deepEqual(parseFilters({ before: "999999999999999" }), { before: 999999999999999 }, "15 digits is the cap");
+  assert.deepEqual(parseFilters({ before: "1000000000000000" }), {}, "16 digits is dropped (beyond Number's safe range)");
   assert.deepEqual(parseFilters({ table: ["a", "b"] }), { table: "a" });
   assert.deepEqual(parseFilters({}), {});
 });
@@ -53,8 +55,10 @@ test("queryAudit: no filters → newest-first by id, limit page+1, no where clau
   assert.deepEqual(calls.map((c) => c[0]), ["from", "select", "order", "limit"]);
   assert.deepEqual(calls[0], ["from", "audit_log"]);
   assert.deepEqual(calls[2], ["order", "id", { ascending: false }]);
-  assert.deepEqual(calls[3], ["limit", PAGE_SIZE + 1]);
+  assert.deepEqual(calls[3], ["limit", 51]);
 });
+
+test("PAGE_SIZE is 50", () => assert.equal(PAGE_SIZE, 50));
 
 test("queryAudit: every filter becomes exactly its clause; `to` is inclusive; before is a keyset bound", () => {
   const { db, calls } = recorder();
@@ -82,26 +86,33 @@ const sessionClient = (role) => ({
 
 /** audit_log answers with `audit` rows (already sliced like PostgREST would), profiles/billing with fixtures. */
 function world(audit) {
-  const touched = [];
+  const touched = [], auditCalls = [];
   return {
-    touched,
+    touched, auditCalls,
     from(t) {
       touched.push(t);
       const out = t === "audit_log" ? audit : t === "profiles" ? [{ id: U1, email: "k@example.test", personid: 3 }] : [{ personid: 3, initials: "KP" }];
-      const b = new Proxy({}, { get: (_x, n) => n === "then" ? (r) => r({ data: out, error: null }) : () => b });
+      const b = new Proxy({}, { get: (_x, n) => n === "then" ? (r) => r({ data: out, error: null }) : (...a) => (t === "audit_log" && auditCalls.push([n, ...a]), b) });
       return b;
     },
   };
 }
 
-test("runAuditList: PAGE_SIZE+1 rows → trims to a page and returns the keyset cursor (last shown id)", async () => {
-  const audit = Array.from({ length: PAGE_SIZE + 1 }, (_, i) => ({ id: 1000 - i, tablename: "t", rowid: "1", op: "UPDATE", olddata: {}, newdata: {}, actor: null, at: "2026-01-01T00:00:00Z" }));
+test("runAuditList: 51 rows → trims to a 50-row page and returns the keyset cursor (last shown id)", async () => {
+  const audit = Array.from({ length: 51 }, (_, i) => ({ id: 1000 - i, tablename: "t", rowid: "1", op: "UPDATE", olddata: {}, newdata: {}, actor: null, at: "2026-01-01T00:00:00Z" }));
   const p = await runAuditList({ db: world(audit), params: {}, client: sessionClient("admin") });
-  assert.equal(p.rows.length, PAGE_SIZE);
-  assert.equal(p.nextBefore, 1000 - (PAGE_SIZE - 1));
+  assert.equal(p.rows.length, 50);
+  assert.equal(p.nextBefore, 951);
   const last = await runAuditList({ db: world(audit.slice(0, 3)), params: {}, client: sessionClient("admin") });
   assert.equal(last.rows.length, 3);
   assert.equal(last.nextBefore, null);
+});
+
+test("runAuditList wires its params into the audit_log query (rowid → eq, before → lt id)", async () => {
+  const db = world([]);
+  await runAuditList({ db, params: { rowid: "9", before: "500" }, client: sessionClient("admin") });
+  assert.ok(db.auditCalls.some((c) => c[0] === "eq" && c[1] === "rowid" && c[2] === "9"), JSON.stringify(db.auditCalls));
+  assert.ok(db.auditCalls.some((c) => c[0] === "lt" && c[1] === "id" && c[2] === 500), JSON.stringify(db.auditCalls));
 });
 
 test("actorName: person → initials + email; null → system / unknown; deleted profile → short id", async () => {

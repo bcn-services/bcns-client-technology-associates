@@ -32,7 +32,7 @@ export function parseFilters(p: Params): AuditFilters {
   if (actor === NO_ACTOR || UUID_RE.test(actor)) f.actor = actor.toLowerCase();
   if (validDate(from)) f.from = from;
   if (validDate(to)) f.to = to;
-  if (/^[1-9]\d{0,15}$/.test(before)) f.before = Number(before);
+  if (/^[1-9]\d{0,14}$/.test(before)) f.before = Number(before);
   return f;
 }
 
