@@ -31,7 +31,7 @@ ${extra}
 set session_replication_role = origin;`);
 before(() => {
   if (!privateDb) return;
-  try { if (one("select to_regclass('case_search')") !== "case_search") resetDb(); seed(); } catch { reachable = false; }
+  try { if (one("select count(*) from information_schema.columns where table_name = 'case_search' and column_name = 'casestatduedatedescription'") !== "1") resetDb(); seed(); } catch { reachable = false; }
 });
 after(() => { if (reachable) sql(`truncate ${TABLES.join(",")} cascade;`); });
 const live = (name, fn) => test(name, (t) => (reachable ? fn() : t.skip("needs a private local FOUNDATION_PG_URL")));
@@ -104,7 +104,7 @@ live("advanced AND/OR/date via runSearch, incl. mixed view+tblcase sources", asy
   assert.deepEqual(await adv({ use_title: "1", title: "Alpha", use_status: "1", status: "closed", mode: "and" }), [91002], "mixed AND intersects");
   assert.deepEqual(await adv({ use_title: "1", title: "Orphan", use_status: "1", status: "closed", mode: "or" }), [90002, 91002], "mixed OR unions");
   assert.deepEqual(await adv({ use_title: "1", title: "Alpha", use_firm: "", mode: "and" }), [91001, 91002], "unchecked field ignored");
-  assert.deepEqual(advancedSpec({ title: "Alpha" }), { message: "No search values selected" });
+  assert.deepEqual(advancedSpec({ title: "  " }), { message: "No search values selected" }, "blank fields only");
 });
 
 live("lists: newest (start desc, case # desc), roster by case #, titles; orphans in every list", async () => {
