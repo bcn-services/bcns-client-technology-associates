@@ -5,7 +5,8 @@
  * No due window, open-notice list or priority filter is re-derived here.
  */
 import type { Db } from "@/lib/time/entries";
-import { loadOpenBills } from "@/lib/bills/list";
+import { dueOnly, loadOpenBills } from "@/lib/bills/list";
+import { loadUnbilled } from "@/lib/reports/unbilled";
 import { firmToday, waitingFor, workStatus, type WorkStatusRow } from "@/lib/cases/presets";
 
 /** The client type `lib/cases/presets.ts` takes — distinct alias from `Db`, so call sites cast. */
@@ -13,6 +14,10 @@ type CaseDb = Parameters<typeof waitingFor>[0];
 
 export type Tile = { key: string; label: string; href: string; count: number | null };
 export type Dashboard = { tiles: Tile[]; rows: WorkStatusRow[]; error: string | null };
+
+/** Due tile target: /bills filtered by `dueOnly`, the predicate the tile counts. Unbilled tile target: lists `loadUnbilled`'s rows. */
+export const DUE_HREF = "/bills?due=1";
+export const UNBILLED_HREF = "/unbilled";
 
 /** The work-status list this dashboard mirrors: every case for the blank point man, priority order. */
 export const WORK_STATUS_HREF = "/cases/lists/work-status?sort=priority";
@@ -23,18 +28,20 @@ const isPast = (r: WorkStatusRow, today: string) => r.casestatduedate != null &&
 export async function loadDashboard(db: Db, now: Date): Promise<Dashboard> {
   const today = firmToday(now);
   const cdb = db as unknown as CaseDb;
-  const [groups, waiting, work] = await Promise.all([
+  const [groups, waiting, work, unbilled] = await Promise.all([
     loadOpenBills(db, today),
     waitingFor(cdb),
     workStatus(cdb, "", "priority"),
+    loadUnbilled(db),
   ]);
   const bills = groups.flatMap((g) => g.rows);
   const rows = "error" in work ? [] : work.rows;
   const tiles: Tile[] = [
-    { key: "due", label: "Due", href: "/bills", count: bills.filter((b) => b.due).length },
+    { key: "due", label: "Due", href: DUE_HREF, count: dueOnly(groups).flatMap((g) => g.rows).length },
     { key: "overdue", label: "Overdue", href: WORK_STATUS_HREF, count: "error" in work ? null : rows.filter((r) => isPast(r, today)).length },
     { key: "waiting", label: "Waiting", href: "/cases/lists/waiting-for", count: "error" in waiting ? null : waiting.rows.length },
     { key: "unpaid", label: "Unpaid", href: "/bills", count: bills.length },
+    { key: "unbilled", label: "Unbilled", href: UNBILLED_HREF, count: unbilled.time.length + unbilled.expenses.length },
   ];
   return { tiles, rows, error: "error" in work ? work.error : null };
 }

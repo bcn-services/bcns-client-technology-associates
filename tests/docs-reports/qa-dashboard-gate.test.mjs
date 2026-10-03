@@ -89,7 +89,7 @@ test("unpaid === every row /bills displays (EXACT); due is a strict subset of it
   assert.equal(tile(d, "unpaid").count, 2, "the Paid bill is not an open notice stage");
   assert.equal(tile(d, "due").count, shown.filter((b) => b.due).length);
   assert.equal(tile(d, "due").count, 1, "the 1-day-old 1st notice is not yet due");
-  assert.equal(tile(d, "due").href, "/bills");
+  assert.equal(tile(d, "due").href, "/bills?due=1");
   assert.ok(tile(d, "due").count < shown.length, "CONFLICT: /bills displays more rows than the due tile counts");
 });
 

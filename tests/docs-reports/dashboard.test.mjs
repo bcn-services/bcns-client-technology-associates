@@ -6,7 +6,8 @@ import { fakeDb } from "./fakedb.mjs";
 import { renderDashboard, pageModule, session, dbclient, texts } from "./render-dashboard.mjs";
 
 const { loadDashboard, WORK_STATUS_HREF } = await import("../../lib/reports/dashboard.ts");
-const { loadOpenBills } = await import("../../lib/bills/list.ts");
+const { loadOpenBills, runBillsList } = await import("../../lib/bills/list.ts");
+const { loadUnbilled } = await import("../../lib/reports/unbilled.ts");
 const { firmToday, waitingFor, workStatus } = await import("../../lib/cases/presets.ts");
 
 const NOW = new Date("2026-09-19T16:00:00Z");
@@ -47,7 +48,52 @@ test("unpaid equals every open bill /bills displays, and due equals the subset /
   assert.equal(tile(d, "due").count, shown.filter((b) => b.due).length);
   assert.equal(tile(d, "due").count, 3, "40 days, 30 days exactly, and a final notice 60 days old");
   assert.equal(tile(d, "unpaid").href, "/bills");
-  assert.equal(tile(d, "due").href, "/bills");
+  assert.equal(tile(d, "due").href, "/bills?due=1");
+});
+
+// The Due tile's number is the length of the list behind its link: /bills?due=1 renders runBillsList({ dueOnly: true }).
+test("due equals the length of the /bills?due=1 list, and every row in it is due", async () => {
+  const d = await loadDashboard(fakeDb(world()), NOW);
+  const list = (await runBillsList({ db: fakeDb(world()), now: NOW, session: Promise.resolve({ role: "staff" }), dueOnly: true })).flatMap((g) => g.rows);
+  assert.equal(tile(d, "due").count, list.length);
+  assert.equal(list.length, 3);
+  assert.deepEqual(list.map((b) => b.billid).sort(), [1, 3, 5]);
+  assert.ok(list.every((b) => b.due));
+  const all = (await runBillsList({ db: fakeDb(world()), now: NOW, session: Promise.resolve({ role: "staff" }) })).flatMap((g) => g.rows);
+  assert.equal(all.length, tile(d, "unpaid").count, "plain /bills stays the unfiltered open list");
+});
+
+// Unbilled := time with actbilled=false AND actbillid null, plus case expenses with expbillid null.
+const unbilledWorld = () => ({
+  ...world(),
+  tblactivity: [
+    { actid: 1, actcaseid: 1, actdate: "2026-09-01", actdescription: "unbilled", acthrs: 1.5, actbilled: false, actbillid: null },
+    { actid: 2, actcaseid: 1, actdate: "2026-09-02", actdescription: "billed on a bill", acthrs: 2, actbilled: true, actbillid: 5 },
+    { actid: 3, actcaseid: 2, actdate: "2026-09-03", actdescription: "legacy billed, no bill id", acthrs: 1, actbilled: true, actbillid: null },
+    { actid: 4, actcaseid: 2, actdate: "2026-09-04", actdescription: "unbilled too", acthrs: 0.5, actbilled: false, actbillid: null },
+  ],
+  tblexpenses: [
+    { expid: 1, expcaseid: 1, expbillid: null, expdate: "2026-09-01", expdscr: "filing fee", expamount: 50 },
+    { expid: 2, expcaseid: 1, expbillid: 5, expdate: "2026-09-02", expdscr: "on a bill", expamount: 75 },
+    { expid: 3, expcaseid: null, expbillid: null, expdate: "2026-09-03", expdscr: "firm overhead, no case", expamount: 99 },
+  ],
+});
+
+test("unbilled counts only unbilled time and case expenses, and equals the rows /unbilled lists", async () => {
+  const d = await loadDashboard(fakeDb(unbilledWorld()), NOW);
+  const u = await loadUnbilled(fakeDb(unbilledWorld()));
+  assert.deepEqual(u.time.map((r) => r.actid), [1, 4], "billed (flag or bill id) time is excluded");
+  assert.deepEqual(u.expenses.map((r) => r.expid), [1], "billed and no-case expenses are excluded");
+  assert.equal(tile(d, "unbilled").count, 3);
+  assert.equal(tile(d, "unbilled").count, u.time.length + u.expenses.length);
+  assert.equal(tile(d, "unbilled").href, "/unbilled");
+});
+
+test("unbilled is zero when everything is billed", async () => {
+  const w = unbilledWorld();
+  w.tblactivity.forEach((r) => { r.actbilled = true; });
+  w.tblexpenses.forEach((r) => { r.expbillid = 5; });
+  assert.equal(tile(await loadDashboard(fakeDb(w), NOW), "unbilled").count, 0);
 });
 
 test("waiting equals every row /cases/lists/waiting-for displays", async () => {
@@ -86,10 +132,10 @@ test("the dashboard never writes", async () => {
 
 // --- criterion 1: journey 06's four labels reach the DOM as plain visible text --------------------
 
-test("the page renders Due, Overdue, Waiting and Unpaid as plain text, each once as a tile label", async () => {
+test("the page renders Due, Overdue, Waiting, Unpaid and Unbilled as plain text, each once as a tile label", async () => {
   const markup = await renderDashboard(fakeDb(world()));
   const nodes = texts(markup);
-  for (const label of ["Due", "Overdue", "Waiting", "Unpaid"]) {
+  for (const label of ["Due", "Overdue", "Waiting", "Unpaid", "Unbilled"]) {
     assert.equal(nodes.filter((t) => t === label).length, 1, `${label} must appear exactly once as a tile label`);
     assert.ok(new RegExp(`>${label}<`).test(markup), `${label} must be a plain text node, not an attribute`);
   }

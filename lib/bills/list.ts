@@ -57,11 +57,16 @@ export async function loadOpenBills(db: Db, today: string, output?: { admin: boo
     .map(([stage, rows]) => ({ stage, rows: rows.sort((x, y) => y.days - x.days || x.billid - y.billid) }));
 }
 
+/** The `/bills?due=1` list and the dashboard's Due tile: open bills past their due date (`isDue`), empty stages dropped. */
+export const dueOnly = (groups: BillGroup[]): BillGroup[] =>
+  groups.map((g) => ({ ...g, rows: g.rows.filter((r) => r.due) })).filter((g) => g.rows.length > 0);
+
 /**
  * Page entry point: any signed-in role (staff included) may read; `client`/`now` injected by tests. The page passes its
  * own requireSession() promise as `session`, so one auth check serves both the page and this read.
  */
-export async function runBillsList(deps: { db: Db; now: Date; client?: SessionClient | null; session?: Promise<Session> }): Promise<BillGroup[]> {
+export async function runBillsList(deps: { db: Db; now: Date; client?: SessionClient | null; session?: Promise<Session>; dueOnly?: boolean }): Promise<BillGroup[]> {
   const session = await (deps.session ?? requireSession(undefined, deps.client));
-  return loadOpenBills(deps.db, firmToday(deps.now), { admin: session.role === "admin" });
+  const groups = await loadOpenBills(deps.db, firmToday(deps.now), { admin: session.role === "admin" });
+  return deps.dueOnly ? dueOnly(groups) : groups;
 }
