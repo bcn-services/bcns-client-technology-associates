@@ -91,9 +91,9 @@ test("each status-tracking column stamps; other columns do not", async () => {
   assert.deepEqual(Object.keys(changed).sort(), [...STAMP_COLS].sort());
   for (const col of FIELDS.map((f) => f.col)) {
     const db = dbWith();
-    const val = changed[col] ?? { caseatty: "2", caseclient: "2", caseinquiry: "2", casestartdate: "2026-01-11", caseenddate: "2026-12-31", billingalert: null }[col] ?? "changed";
+    const val = changed[col] ?? { caseatty: "2", caseclient: "2", caseinquiry: "2", casestartdate: "2026-01-11", caseenddate: "2026-12-31", billingalert: null, casestatharddeadline: null }[col] ?? "changed";
     const form = formFor(MIGRATED, val === null ? {} : { [col]: val });
-    if (col === "billingalert") form.set("billingalert", "on");
+    if (col === "billingalert" || col === "casestatharddeadline") form.set(col, "on");
     const w = await saveCase(db, 1900, form, NOW);
     assert.ok(col in w, `${col} written`);
     assert.equal("casestatlastupdated" in w, STAMP_COLS.includes(col), `${col} stamp`);
@@ -227,4 +227,17 @@ test("error codes map to fixed messages; arbitrary ?error= text is never echoed"
   for (const junk of ["Call 555-0100 now", "required:numunpaidbills", "required:", "", "failed"]) assert.equal(errorMessage(junk), "Save failed; nothing was changed.");
   const e = (() => { try { parseCaseForm(formFor(MIGRATED, { casetitle: " " })); } catch (x) { return x; } })();
   assert.equal(e.code, "required:casetitle");
+});
+
+test("casestatharddeadline: checkbox parses, saves only when toggled, and does not stamp", async () => {
+  const on = new FormData(); on.set("casestatharddeadline__present", "1"); on.set("casestatharddeadline", "on");
+  assert.deepEqual(parseCaseForm(on), { casestatharddeadline: true });
+  const off = new FormData(); off.set("casestatharddeadline__present", "1");
+  assert.deepEqual(parseCaseForm(off), { casestatharddeadline: false });
+  const db = dbWith();
+  assert.deepEqual(await saveCase(db, 1900, formFor(MIGRATED), NOW), {});
+  const f = formFor(MIGRATED); f.set("casestatharddeadline", "on");
+  assert.deepEqual(await saveCase(db, 1900, f, NOW), { casestatharddeadline: true });
+  const nul = { ...MIGRATED, casestatharddeadline: null };
+  assert.deepEqual(await saveCase(dbWith(), 1900, formFor(nul), NOW), {}, "null reads as unchecked, no write");
 });
