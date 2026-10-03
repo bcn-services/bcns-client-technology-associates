@@ -65,8 +65,8 @@ const lastDay = (year: number, month: number): string => new Date(Date.UTC(year,
 /** A caller's as-of month is clamped into 1..12, so a stray 0 or 13 can never grow or empty the result. */
 const clampMonth = (m: number): number => Math.min(12, Math.max(1, Math.trunc(m)));
 
-const shortMonth = (year: number, month: number): string =>
-  new Date(Date.UTC(year, month - 1, 1)).toLocaleString("en-US", { month: "short", timeZone: "UTC" });
+const SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const shortMonth = (_year: number, month: number): string => SHORT[month - 1] ?? "";
 
 /** Calendar year, 1..12 as-of snapshot. Delegates to `pnlRange`, so the two can never disagree. */
 export const pnl = (db: Db, year: number, asOfMonth: number = 12): Promise<Pnl> =>
@@ -155,7 +155,7 @@ export async function pnlRange(db: Db, start: string, end: string): Promise<Pnl>
     asOfMonth: asOf,
     months,
     total: {
-      label: start === `${sy}-01-01` && ey === sy ? "Total For Year" : "Total For Period",
+      label: start === `${sy}-01-01` && end === `${sy}-12-31` ? "Total For Year" : "Total For Period",
       incomeCents: sum.incomeCents,
       income: fmtCents(sum.incomeCents),
       expensesCents: sum.expensesCents,

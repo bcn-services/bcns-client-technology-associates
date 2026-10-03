@@ -9,7 +9,7 @@ import { requireSession } from "@/lib/auth/session";
 import { createServerClient } from "@/lib/db/client";
 import type { Db } from "@/lib/time/entries";
 import { buildWorkbook, workbookFilename, XLSX_MIME } from "@/lib/reports/export";
-import { findPreset, isRange, type Range } from "@/lib/reports/presets";
+import { findPreset, isRangeFor, type Range } from "@/lib/reports/presets";
 
 export const dynamic = "force-dynamic";
 
@@ -18,7 +18,7 @@ export async function GET(request: Request): Promise<Response> {
   const q = new URL(request.url).searchParams;
   const preset = findPreset(q.get("preset") ?? "");
   const range: Range = { start: q.get("start") ?? "", end: q.get("end") ?? "" };
-  if (!preset || !isRange(range)) {
+  if (!preset || !isRangeFor(preset, range)) {
     return new Response("Choose a report and a real start and end date, with the start on or before the end.", {
       status: 400,
       headers: { "content-type": "text/plain; charset=utf-8" },

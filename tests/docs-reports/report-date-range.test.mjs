@@ -5,7 +5,7 @@ import { fakeDb } from "./fakedb.mjs";
 // Contract D5: P&L and the accountant export honour the selected from/to range — not the calendar year.
 const { pnlRange, pnl } = await import("../../lib/reports/pnl.ts");
 const { buildWorkbook, accountantPlan, workbookFilename } = await import("../../lib/reports/export.ts");
-const { findPreset, runPreset } = await import("../../lib/reports/presets.ts");
+const { findPreset, runPreset, isRangeFor, MAX_PNL_RANGE_MONTHS } = await import("../../lib/reports/presets.ts");
 
 const exp = (expid, expdate, expamount, exp_notcountedinprofit = null) => ({
   expid, expdate, exptype: 9, expamount, exp_notcountedinprofit,
@@ -87,18 +87,20 @@ test("D5 pnl(year, asOf) is unchanged: a full year still labels Total For Year, 
   assert.equal(full.months[0].label, "Jan");
   const q = await pnlRange(fakeDb(world()), "2025-01-01", "2025-03-31");
   assert.equal(q.months.length, 3);
+  assert.equal(q.total.label, "Total For Period", "a Jan..Mar snapshot is not a full year");
+  assert.equal((await pnl(fakeDb(world()), 2025, 3)).total.label, "Total For Period");
 });
 
 test("D5 accountant export over a mid-year range: only that range's rows, in every sheet", async () => {
   const wb = await buildWorkbook(fakeDb(world()), findPreset("accountant-export"), MID);
   assert.deepEqual(wb.worksheets.map((w) => w.name), [
-    "Monthly Income Report Mar 2025", "Monthly Income Report Apr 2025", "Monthly Income Report May 2025", "Monthly Income Report Jun 2025",
-    "Monthly Expense Report Mar 2025", "Monthly Expense Report Apr 2025", "Monthly Expense Report May 2025", "Monthly Expense Report Jun 2025",
+    "Monthly Income 250315-250331", "Monthly Income Report Apr 2025", "Monthly Income Report May 2025", "Monthly Income Report Jun 2025",
+    "Monthly Expense 250315-250331", "Monthly Expense Report Apr 2025", "Monthly Expense Report May 2025", "Monthly Expense Report Jun 2025",
     "Yearly Income 250315-250630", "Yearly Expense 250315-250630",
     "P&L 2025-03-15 to 2025-06-30",
   ]);
   // March expense sheet: the 03-15 row only (03-14 is before the range).
-  const mar = sheet(wb, "Monthly Expense Report Mar 2025");
+  const mar = sheet(wb, "Monthly Expense 250315-250331");
   const dates = [];
   mar.eachRow((r, i) => { if (i > 1 && /^\d{4}-/.test(String(r.getCell(1).value))) dates.push(r.getCell(1).value); });
   assert.deepEqual(dates, ["2025-03-15"]);
@@ -144,4 +146,31 @@ test("D5 the file name for a range names the range, and a P&L export is a single
   const wb = await buildWorkbook(fakeDb(world()), findPreset("pnl"), MID);
   assert.deepEqual(wb.worksheets.map((w) => w.name), ["P&L 2025-03-15 to 2025-06-30"]);
   assert.equal(cents(rowOf(wb.worksheets[0], "Net").at(-1)), 5972);
+});
+
+test("D5 a partial month sheet is named by its dates; full months keep the month name; all names unique and <= 31", () => {
+  const plan = accountantPlan({ start: "2025-03-15", end: "2026-02-10" });
+  const names = plan.map((p) => p.name);
+  assert.ok(names.includes("Monthly Income 250315-250331"));
+  assert.ok(names.includes("Monthly Expense 260201-260210"));
+  assert.ok(names.includes("Monthly Income Report Apr 2025"), "a fully covered month keeps its month name");
+  assert.equal(new Set(names).size, names.length);
+  for (const n of names) assert.ok(n.length <= 31, n);
+  // A range inside one month: a single clipped sheet each, still unique.
+  const one = accountantPlan({ start: "2025-03-05", end: "2025-03-20" }).map((p) => p.name);
+  assert.equal(new Set(one).size, one.length);
+});
+
+test("D5 the P&L and export cap the range at one constant of months; other presets are uncapped", () => {
+  assert.equal(MAX_PNL_RANGE_MONTHS, 24);
+  const ok = { start: "2025-01-15", end: "2026-12-31" }; // 24 months touched
+  const tooLong = { start: "2025-01-01", end: "2027-01-01" }; // 25 months touched
+  const huge = { start: "2000-01-01", end: "2026-12-31" };
+  for (const key of ["pnl", "accountant-export"]) {
+    assert.equal(isRangeFor(findPreset(key), ok), true, `${key} 24 months`);
+    assert.equal(isRangeFor(findPreset(key), tooLong), false, `${key} 25 months`);
+    assert.equal(isRangeFor(findPreset(key), huge), false, `${key} 27 years`);
+    assert.equal(isRangeFor(findPreset(key), { start: "2025-06-30", end: "2025-01-01" }), false, `${key} reversed`);
+  }
+  assert.equal(isRangeFor(findPreset("monthly-expense"), huge), true);
 });

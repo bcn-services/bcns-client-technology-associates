@@ -26,6 +26,16 @@ export function isDate(v: string): boolean {
 /** A valid range is two real days in order; the engines treat both ends as inclusive. */
 export const isRange = (r: Range): boolean => isDate(r.start) && isDate(r.end) && r.start <= r.end;
 
+/** The P&L and accountant export build a column or sheet per month, so their range is capped (one query per sheet). */
+export const MAX_PNL_RANGE_MONTHS = 24;
+
+/** Calendar months a range touches, first and last included. */
+const monthsTouched = (r: Range): number =>
+  (Number(r.end.slice(0, 4)) - Number(r.start.slice(0, 4))) * 12 + Number(r.end.slice(5, 7)) - Number(r.start.slice(5, 7)) + 1;
+
+/** `isRange`, plus the month cap for the month-per-column presets (engine `pnl`: P&L and Accountant Export). */
+export const isRangeFor = (p: Preset, r: Range): boolean => isRange(r) && (p.engine !== "pnl" || monthsTouched(r) <= MAX_PNL_RANGE_MONTHS);
+
 /** The standalone yearly rollups are per-calendar-year reports: the year is the one the range opens in. */
 export const yearOf = (r: Range): number => Number(r.start.slice(0, 4));
 

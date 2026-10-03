@@ -66,7 +66,13 @@ export function accountantPlan(range: Range): SheetPlan[] {
   const monthly = (key: string): SheetPlan[] =>
     months.map(({ year, month }) => {
       const preset = need(key);
-      return { name: sheetName(preset.label, `${MONTHS[month - 1]} ${year}`), preset, range: clipTo(monthRange(year, month)) };
+      const full = monthRange(year, month);
+      const r = clipTo(full);
+      // A partly covered month is named by its dates ("Monthly Income 250315-250331"), like a clipped year.
+      const name = r.start === full.start && r.end === full.end
+        ? sheetName(preset.label, `${MONTHS[month - 1]} ${year}`)
+        : sheetName(preset.label.replace(/ Report$/, ""), `${compact(r.start)}-${compact(r.end)}`);
+      return { name, preset, range: r };
     });
   const yearly = (key: string): SheetPlan[] => {
     const preset = need(key);
