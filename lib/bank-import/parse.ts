@@ -50,29 +50,39 @@ export function parseDate(raw: string): string | null {
 }
 
 /**
- * Parse a BoA `Date,Description,Amount` export. Whole file first: any bad line → every error (line-numbered,
- * header = line 1) and no rows, so the caller can refuse the file all-or-nothing. BOM, CRLF and blank lines tolerated.
+ * Parse a BoA checking/savings export. The header is the first line whose cells include Date, Description and Amount
+ * (any case/order; extra columns like "Running Bal." ignored); everything above it is BoA's summary preamble, skipped.
+ * Whole file first: any bad line → every error (physical file line numbers) and no rows, so the caller can refuse the
+ * file all-or-nothing. BOM, CRLF and blank lines tolerated. BoA's "Beginning balance as of …" row (empty amount) is
+ * skipped; any other empty amount stays an error.
  */
 export function parseBoaCsv(text: string): ParseResult {
-  const lines = text.replace(/^﻿/, "").split(/\r?\n/);
+  const lines = text.replace(/^\uFEFF/, "").split(/\r?\n/);
   const errors: string[] = [];
   const rows: BankRow[] = [];
-  const head = splitCsvLine(lines[0] ?? "");
-  if (!head || head.length !== 3 || head.some((h, i) => h.trim().toLowerCase() !== HEADER[i])) {
-    return { ok: false, errors: ['Line 1: header must be "Date,Description,Amount"'] };
+  let h = -1;
+  let width = 0;
+  let col: number[] = [];
+  for (let i = 0; i < lines.length && h < 0; i++) {
+    const cells = (splitCsvLine(lines[i]!) ?? []).map((c) => c.trim().toLowerCase());
+    col = HEADER.map((name) => cells.indexOf(name));
+    if (col.every((c) => c >= 0)) [h, width] = [i, cells.length];
   }
-  for (let i = 1; i < lines.length; i++) {
+  if (h < 0) return { ok: false, errors: ["No header row found: expected columns Date, Description, Amount"] };
+  const [di, dsi, ai] = col as [number, number, number];
+  for (let i = h + 1; i < lines.length; i++) {
     const raw = lines[i]!;
     if (raw.trim() === "") continue;
     const n = i + 1;
     const f = splitCsvLine(raw);
     if (!f) { errors.push(`Line ${n}: unbalanced quotes`); continue; }
-    if (f.length !== 3) { errors.push(`Line ${n}: expected 3 fields, found ${f.length}`); continue; }
-    const postedon = parseDate(f[0]!);
-    const amount = parseMoney(f[2]!);
-    const description = f[1]!.trim();
-    if (!postedon) errors.push(`Line ${n}: bad date "${f[0]!.trim()}"`);
-    if (!amount) errors.push(`Line ${n}: bad amount "${f[2]!.trim()}"`);
+    if (f.length !== width) { errors.push(`Line ${n}: expected ${width} fields, found ${f.length}`); continue; }
+    const description = f[dsi]!.trim();
+    if (f[ai]!.trim() === "" && /^beginning balance as of\b/i.test(description)) continue;
+    const postedon = parseDate(f[di]!);
+    const amount = parseMoney(f[ai]!);
+    if (!postedon) errors.push(`Line ${n}: bad date "${f[di]!.trim()}"`);
+    if (!amount) errors.push(`Line ${n}: bad amount "${f[ai]!.trim()}"`);
     if (!description) errors.push(`Line ${n}: missing description`);
     if (postedon && amount && description) rows.push({ line: n, postedon, description, amount });
   }
