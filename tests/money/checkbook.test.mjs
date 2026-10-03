@@ -65,6 +65,31 @@ test("rule 19: CheckBook can go negative and cents never drift", () => {
   assert.equal(lines.find((l) => l.label === "CheckBook").amount, "-0.10");
 });
 
+test("rule 19: refunds (negative ExpAmount / FndsPmt) net against the totals exactly, never by magnitude", async () => {
+  const w = world();
+  w.tblexpenses.push(exp(7, "2025-03-10", "-40.05", null, false)); // vendor refund
+  w.tblfundsrcvd.push(fnd(5, "2025-03-12", "-500.25", false));      // bounced/refunded check
+  const data = await checkbook(fakeDb(w), RANGE.start, RANGE.end);
+  // Expenses 170.10 − 40.05 = 130.05; Income 3500.25 − 500.25 = 3000.00; Non-profit unchanged 2800.01
+  assert.deepEqual(asMap(data.lines), {
+    Expenses: "130.05",
+    "Non-profit": "2,800.01",
+    Income: "3,000.00",
+    Net: "2,869.95",
+    CheckBook: "69.94",
+    "Total withdrawals": "2,930.06",
+  });
+});
+
+test("rule 19: the checkbook range is not capped like the P&L (legacy has no limit)", async () => {
+  const { isRangeFor } = await import("../../lib/reports/presets.ts");
+  const wide = { start: "2015-01-01", end: "2025-12-31" };
+  assert.equal(isRangeFor(findPreset("checkbook"), wide), true);
+  assert.deepEqual(findPreset("checkbook").params(wide), wide);
+  const data = await checkbook(fakeDb(world()), wide.start, wide.end);
+  assert.equal(asMap(data.lines).Expenses, "8,170.10"); // every fixture row, both witnesses included
+});
+
 test("rule 19: an empty range is all zeros (legacy Nz)", async () => {
   const data = await checkbook(fakeDb(world()), "2030-01-01", "2030-12-31");
   for (const l of data.lines) assert.equal(l.amount, "0.00", l.label);
