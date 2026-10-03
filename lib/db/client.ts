@@ -3,7 +3,9 @@
  * client components). Config is read lazily through lib/env.ts.
  */
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { headers } from "next/headers";
 import { getConfig } from "../env";
+import { ACTOR_HEADER } from "./actor";
 import type { Database } from "./types";
 
 export type { Database } from "./types";
@@ -18,8 +20,26 @@ export class DbNotConfiguredError extends Error {
   }
 }
 
-export function createServerClient(): SupabaseClient<Database> {
+/**
+ * The signed-in user's id as middleware.ts verified it (middleware strips any
+ * client-sent copy), or null outside a request (scripts/migrate, tests). Any other
+ * error is Next's dynamic-rendering control flow and must propagate.
+ */
+export function requestActor(): string | null {
+  try {
+    return headers().get(ACTOR_HEADER);
+  } catch (e) {
+    if (e instanceof Error && e.message.includes("outside a request scope")) return null;
+    throw e;
+  }
+}
+
+/** Every request-scoped write carries the acting user's id, so audit_log.actor is filled (migration 0010). */
+export function createServerClient(actor: string | null = requestActor()): SupabaseClient<Database> {
   const { supabaseUrl, supabaseServiceRoleKey } = getConfig();
   if (!supabaseUrl || !supabaseServiceRoleKey) throw new DbNotConfiguredError();
-  return createClient<Database>(supabaseUrl, supabaseServiceRoleKey, { auth: { persistSession: false } });
+  return createClient<Database>(supabaseUrl, supabaseServiceRoleKey, {
+    auth: { persistSession: false },
+    global: { headers: actor ? { [ACTOR_HEADER]: actor } : {} },
+  });
 }

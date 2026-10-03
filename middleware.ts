@@ -2,6 +2,7 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { getConfig } from "@/lib/env";
 import { publicUrl } from "@/lib/public-url";
+import { ACTOR_HEADER } from "@/lib/db/actor";
 
 /** Exact paths reachable without a session. Never a prefix match. */
 // /signout is public so an expired tab's sign-out still clears cookies instead of bouncing to a 405.
@@ -40,7 +41,10 @@ export async function gate(
   request: NextRequest,
   bind: (request: NextRequest) => Bound | null,
 ): Promise<NextResponse> {
-  if (PUBLIC_PATHS.has(request.nextUrl.pathname)) return NextResponse.next();
+  // The actor header is trusted downstream (lib/db/client.ts → audit_log.actor), so only
+  // this gate may set it: drop any client-sent copy before anything is forwarded.
+  request.headers.delete(ACTOR_HEADER);
+  if (PUBLIC_PATHS.has(request.nextUrl.pathname)) return NextResponse.next({ request });
 
   const login = publicUrl("/login", request);
   const { pathname, search } = request.nextUrl;
@@ -75,7 +79,11 @@ export async function gate(
     );
     if (profile?.role !== "admin" && profile?.role !== "staff") return deny();
 
-    return bound.response();
+    // Forward the verified user id to the app; keep any cookies getUser() refreshed.
+    request.headers.set(ACTOR_HEADER, data.user.id);
+    const response = NextResponse.next({ request });
+    for (const cookie of bound.response().cookies.getAll()) response.cookies.set(cookie);
+    return response;
   } catch {
     return deny();
   }
