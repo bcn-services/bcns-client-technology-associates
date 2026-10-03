@@ -185,11 +185,89 @@ test("parser: BOM, CRLF, trailing blank lines, escaped quotes, BoA mm/dd/yyyy da
   assert.equal(parseDate("13/01/2026"), null);
 });
 
+const NO_HEADER = "No header row found: expected columns Date, Description, Amount";
+
 test("parser: header required; every bad line reported with its number", () => {
-  assert.deepEqual(parseBoaCsv("2026-01-15,X,-1.00\n"), { ok: false, errors: ['Line 1: header must be "Date,Description,Amount"'] });
+  assert.deepEqual(parseBoaCsv("2026-01-15,X,-1.00\n"), { ok: false, errors: [NO_HEADER] });
   const r = parseBoaCsv('Date,Description,Amount\n2026-01-15,OK,-1.00\nnope,X,-1\n2026-01-15,X,abc\n2026-01-15,"X,-1\n2026-01-15,X\n2026-01-15,,-1\n2026-01-15,X,0\n');
   assert.deepEqual(r, { ok: false, errors: [
     'Line 3: bad date "nope"', 'Line 4: bad amount "abc"', "Line 5: unbalanced quotes", "Line 6: expected 3 fields, found 2",
     "Line 7: missing description", 'Line 8: bad amount "0"',
   ] });
+});
+
+// Documented BoA checking/savings download: summary preamble, blank line, 4-column header, beginning-balance row.
+const BOA = [
+  "Description,,Summary Amt.",
+  'Beginning balance as of 01/01/2026,,"12,345.67"',
+  'Total credits,,"5,000.00"',
+  'Total debits,,"-1,234.56"',
+  'Ending balance as of 01/31/2026,,"16,111.11"',
+  "",
+  "Date,Description,Amount,Running Bal.",
+  '01/01/2026,Beginning balance as of 01/01/2026,,"12,345.67"',
+  '01/02/2026,"ZELLE PAYMENT FROM ... Conf# abc","1,500.00","13,845.67"',
+  '01/03/2026,"CHECK 1042","-250.00","13,595.67"',
+  "",
+].join("\r\n");
+
+test("parser: full BoA export — preamble skipped, beginning balance skipped, quoted thousands, physical line numbers", () => {
+  assert.deepEqual(parseBoaCsv("\uFEFF" + BOA), { ok: true, rows: [
+    { line: 9, postedon: "2026-01-02", description: "ZELLE PAYMENT FROM ... Conf# abc", amount: "1500.00" },
+    { line: 10, postedon: "2026-01-03", description: "CHECK 1042", amount: "-250.00" },
+  ] });
+});
+
+test("parser: legacy exact 3-column file still parses", () => {
+  assert.equal(parseBoaCsv(FIXTURE).ok, true);
+  assert.deepEqual(parseBoaCsv("Date,Description,Amount\n2026-01-15,X,-1.00\n"),
+    { ok: true, rows: [{ line: 2, postedon: "2026-01-15", description: "X", amount: "-1.00" }] });
+});
+
+test("parser: reordered, differently-cased columns map by index; extra columns ignored", () => {
+  const r = parseBoaCsv(' amount ,Running Bal.,DESCRIPTION,date\n"-1,234.50","9,000.00",RENT,01/05/2026\n');
+  assert.deepEqual(r, { ok: true, rows: [{ line: 2, postedon: "2026-01-05", description: "RENT", amount: "-1234.50" }] });
+});
+
+test("parser: no header anywhere → one error naming the expected columns", () => {
+  assert.deepEqual(parseBoaCsv('Description,,Summary Amt.\nTotal credits,,"5,000.00"\n\nDate,Memo,Amount\n'), { ok: false, errors: [NO_HEADER] });
+  assert.deepEqual(parseBoaCsv(""), { ok: false, errors: [NO_HEADER] });
+});
+
+test("parser: bad row after a BoA preamble reports its physical line; other empty amounts stay errors", () => {
+  const bad = BOA.replace('"CHECK 1042","-250.00"', '"CHECK 1042","-25x.00"') + '01/04/2026,"FEE",,"13,595.67"\r\n';
+  assert.deepEqual(parseBoaCsv(bad), { ok: false, errors: ['Line 10: bad amount "-25x.00"', 'Line 11: bad amount ""'] });
+  // The beginning-balance skip needs both the label and an empty amount.
+  assert.equal(parseBoaCsv("Date,Description,Amount\n01/01/2026,Beginning balance as of 01/01/2026,5.00\n").ok, true);
+});
+
+test("parser: a transaction-shaped line above the header is an error; BoA's summary preamble is not", () => {
+  assert.deepEqual(parseBoaCsv("01/01/2026,PRE,-9.00\nDate,Description,Amount\n01/02/2026,X,-1.00\n"),
+    { ok: false, errors: ["Line 1: transaction above the header row"] });
+  assert.equal(parseBoaCsv(BOA).ok, true); // "Beginning balance as of 01/01/2026" is a text cell, not a date cell
+});
+
+test("parser: running balance must be empty or money; amounts need cents when it is present", () => {
+  // Unquoted thousands splits into "-1" + "500.00": the 4-field count matches, so only the cents rule catches it.
+  assert.deepEqual(parseBoaCsv("Date,Description,Amount,Running Bal.\n01/02/2026,X,-1,500.00\n"),
+    { ok: false, errors: ['Line 2: bad amount "-1"'] });
+  assert.deepEqual(parseBoaCsv("Date,Description,Amount,Running Bal.\n01/02/2026,X,-1.00,abc\n01/03/2026,Y,-2.00,\n01/04/2026,Z,5.00,0.00\n"),
+    { ok: false, errors: ['Line 2: bad running balance "abc"'] });
+  // On the beginning-balance row the balance cell is the opening balance: it must be money, not empty.
+  const open = (bal) => parseBoaCsv(`Date,Description,Amount,Running Bal.\n01/01/2026,Beginning balance as of 01/01/2026,,${bal}\n`);
+  assert.deepEqual(open('"12,345.67"'), { ok: true, rows: [] });
+  assert.deepEqual(open(""), { ok: false, errors: ['Line 2: bad running balance ""'] });
+  assert.deepEqual(open("n/a"), { ok: false, errors: ['Line 2: bad running balance "n/a"'] });
+});
+
+test("parser: comma-only lines (Excel re-save padding) are blank", () => {
+  assert.deepEqual(parseBoaCsv("Date,Description,Amount,Running Bal.\n,,,\n01/02/2026,X,-1.00,5.00\n,,,\r\n"),
+    { ok: true, rows: [{ line: 3, postedon: "2026-01-02", description: "X", amount: "-1.00" }] });
+});
+
+test("parser: trailing comma on the header only, or on the rows only, is a field-count error", () => {
+  assert.deepEqual(parseBoaCsv("Date,Description,Amount,\n01/02/2026,X,-1.00\n"),
+    { ok: false, errors: ["Line 2: expected 4 fields, found 3"] });
+  assert.deepEqual(parseBoaCsv("Date,Description,Amount\n01/02/2026,X,-1.00,\n"),
+    { ok: false, errors: ["Line 2: expected 3 fields, found 4"] });
 });
