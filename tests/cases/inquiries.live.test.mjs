@@ -24,7 +24,8 @@ const BASE = process.env.BASE_URL ?? "http://localhost:3102";
 const EMAIL = process.env.E2E_EMAIL ?? "staff@example.test";
 const PASSWORD = process.env.E2E_PASSWORD ?? "password";
 const M = `zqinq${Date.now().toString(36)}`; // unique marker on every seeded row
-const db = createServerClient();
+const noDb = process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY ? false : "no Supabase config in .env.local";
+const db = noDb ? null : createServerClient();
 const ids = [];
 
 async function insert(rows) {
@@ -38,6 +39,7 @@ let fieldRow;
 const dated = {};
 const lit = {};
 before(async () => {
+  if (noDb) return;
   [fieldRow] = await insert([{ inqdate: FIELD_DATE, ...Object.fromEntries(TEXT_FIELDS.map((f) => [f, `pre ${M}-${f}-mixedCase post`])) }]);
   for (const d of ["2031-05-09", "2031-05-10", "2031-05-15", "2031-05-20", "2031-05-21"]) [dated[d]] = await insert([{ inqdate: d, inqsubject: `${M}date` }]);
   const subjects = { pct: `${M}lit 50%off`, pctX: `${M}lit 50Xoff`, und: `${M}lit a_b`, undX: `${M}lit aXb`, punct: `${M}lit x,(y)"z` };
@@ -45,24 +47,25 @@ before(async () => {
 });
 
 after(async () => {
+  if (noDb) return;
   const { data } = await db.from("tblinquiry").select("id").ilike("inqcallername", `%${M}%`);
   const all = [...ids, ...(data ?? []).map((r) => r.id)];
   if (all.length) await db.from("tblinquiry").delete().in("id", all);
 });
 
 for (const f of TEXT_FIELDS) {
-  test(`quick search finds the row by an upper-case substring of ${f}`, async () => {
+  test(`quick search finds the row by an upper-case substring of ${f}`, { skip: noDb }, async () => {
     const rows = await quickSearch(db, `${M}-${f}-MIXEDcase`.toUpperCase());
     assert.deepEqual(rows.map((r) => r.id), [fieldRow], `${f} not searched`);
   });
 }
 // ids and dates are shared with other rows, so these assert membership, not uniqueness.
-test("quick search finds the row by a substring of its id", async () => {
+test("quick search finds the row by a substring of its id", { skip: noDb }, async () => {
   const s = String(fieldRow);
   const sub = s.length > 2 ? s.slice(1) : s;
   assert.ok((await quickSearch(db, sub)).some((r) => r.id === fieldRow), `id substring ${sub} missed`);
 });
-test("quick search finds the row by a substring of inqdate in ISO and m/d/yyyy form", async () => {
+test("quick search finds the row by a substring of inqdate in ISO and m/d/yyyy form", { skip: noDb }, async () => {
   for (const sub of ["037-11-2", "11/23/203"]) {
     assert.ok((await quickSearch(db, sub)).some((r) => r.id === fieldRow), `inqdate substring ${sub} missed`);
   }
@@ -70,17 +73,17 @@ test("quick search finds the row by a substring of inqdate in ISO and m/d/yyyy f
 
 const dateIds = (rows) => rows.map((r) => r.id).sort((a, b) => a - b);
 const exp = (...ds) => ds.map((d) => dated[d]).sort((a, b) => a - b);
-test("advanced date mode between is inclusive of both boundaries", async () => {
+test("advanced date mode between is inclusive of both boundaries", { skip: noDb }, async () => {
   assert.deepEqual(dateIds(await advancedSearch(db, { subject: `${M}date`, dateMode: "between", date1: "2031-05-10", date2: "2031-05-20" })), exp("2031-05-10", "2031-05-15", "2031-05-20"));
 });
-test("advanced date mode on-or-after is inclusive", async () => {
+test("advanced date mode on-or-after is inclusive", { skip: noDb }, async () => {
   assert.deepEqual(dateIds(await advancedSearch(db, { subject: `${M}date`, dateMode: "onOrAfter", date1: "2031-05-15" })), exp("2031-05-15", "2031-05-20", "2031-05-21"));
 });
-test("advanced date mode on-or-before is inclusive", async () => {
+test("advanced date mode on-or-before is inclusive", { skip: noDb }, async () => {
   assert.deepEqual(dateIds(await advancedSearch(db, { subject: `${M}date`, dateMode: "onOrBefore", date1: "2031-05-15" })), exp("2031-05-09", "2031-05-10", "2031-05-15"));
 });
 
-test("% and _ match literally in quick and advanced search; commas/parens/quotes don't break the or() filter", async () => {
+test("% and _ match literally in quick and advanced search; commas/parens/quotes don't break the or() filter", { skip: noDb }, async () => {
   for (const search of [quickSearch, (d, q) => advancedSearch(d, { subject: q })]) {
     assert.deepEqual((await search(db, `${M}lit 50%off`)).map((r) => r.id), [lit.pct]);
     assert.deepEqual((await search(db, `${M}lit a_b`)).map((r) => r.id), [lit.und]);
@@ -94,7 +97,7 @@ try {
   await fetch(`${BASE}/login`, { signal: AbortSignal.timeout(5000) });
   up = true;
 } catch {}
-const skip = up ? false : `no app at ${BASE}`;
+const skip = noDb || (up ? false : `no app at ${BASE}`);
 console.log(up ? `[inquiries.live] HTTP checks RUN against ${BASE}` : `[inquiries.live] HTTP checks SKIPPED: no app at ${BASE}`);
 
 async function retry(fn, tries = 6) {
