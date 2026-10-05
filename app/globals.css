@@ -1,3 +1,10 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* Tokens the @bcn-services/config preset reads (font-sans, rounded-*). Unset, the
+   browser falls back to its default serif and square corners. */
+:root {
+  --font-sans: ui-sans-serif, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+  --radius: 0.5rem;
+}

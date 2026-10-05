@@ -10,6 +10,10 @@ export const metadata: Metadata = {
   description: "Technology Associates client app.",
 };
 
+// Every page is per-user. Without this, a build that lacks Supabase env never
+// touches cookies(), so Next prerenders pages session-less and serves that copy.
+export const dynamic = "force-dynamic";
+
 // Fail closed: any error reading the session renders no identity and no nav.
 async function safeSession(): Promise<Session | null> {
   try {
