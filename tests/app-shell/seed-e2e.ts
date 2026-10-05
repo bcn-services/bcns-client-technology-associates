@@ -17,12 +17,36 @@ export function loadEnvLocal(): void {
   try {
     text = readFileSync(new URL("../../.env.local", import.meta.url), "utf8");
   } catch {
-    return; // no file — rely on the ambient environment
+    text = ""; // no file — rely on the ambient environment (still guarded below)
   }
   for (const line of text.split("\n")) {
     const m = /^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$/.exec(line);
     if (!m || line.trimStart().startsWith("#")) continue;
     if (process.env[m[1]] === undefined) process.env[m[1]] = m[2].trim().replace(/^(['"])(.*)\1$/, "$2");
+  }
+  dropHostedTargets();
+}
+
+const isLocal = (url: string): boolean => {
+  try {
+    return /^(localhost|127\.0\.0\.1|\[::1\])$/.test(new URL(url).hostname);
+  } catch {
+    return false;
+  }
+};
+
+/**
+ * Live tests write fixtures with fixed ids (case 90001, personid 1/2, ...). .env.local points at
+ * the production TA project, and on 2026-10-05 a `pnpm test` overwrote real rows there. Unset any
+ * non-local target so those tests skip, unless ALLOW_HOSTED_DB_TESTS=1 is set deliberately.
+ */
+export function dropHostedTargets(env: NodeJS.ProcessEnv = process.env): void {
+  if (env.ALLOW_HOSTED_DB_TESTS === "1") return;
+  if (env.DATABASE_URL && !isLocal(env.DATABASE_URL)) delete env.DATABASE_URL;
+  if (env.NEXT_PUBLIC_SUPABASE_URL && !isLocal(env.NEXT_PUBLIC_SUPABASE_URL)) {
+    delete env.NEXT_PUBLIC_SUPABASE_URL;
+    delete env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    delete env.SUPABASE_SERVICE_ROLE_KEY;
   }
 }
 
