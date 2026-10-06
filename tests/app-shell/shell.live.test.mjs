@@ -95,14 +95,14 @@ test("signed-in GET of a missing path → 404 rendered inside the shell with a u
   assert.equal(res.status(), 404);
   const html = await res.text();
   assertShell(html, STAFF_EMAIL, "staff");
-  assert.ok(html.includes("Not built yet"), "custom not-found message missing");
+  assert.ok(html.includes("Page not found"), "custom not-found message missing");
   assert.ok(!html.includes("This page could not be found"), "Next default 404 rendered");
 
   // Nav is usable: clicking a section link from the 404 navigates there.
   await page.goto(`${BASE}${MISSING}`);
   await page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Time" }).click();
   await page.waitForURL(`${BASE}/time`);
-  await page.getByRole("heading", { name: "Not built yet" }).waitFor({ state: "detached" });
+  await page.getByRole("heading", { name: "Page not found" }).waitFor({ state: "detached" });
   await ctx.close();
 });
 
