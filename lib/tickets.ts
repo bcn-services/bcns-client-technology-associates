@@ -47,12 +47,35 @@ const validDate = (s: string) => {
   return d.getUTCFullYear() === y && d.getUTCMonth() === mo - 1 && d.getUTCDate() === day;
 };
 
-export async function addTicket(db: Db, date: string, description: string): Promise<void> {
+export type NewTicket = { date: string; description: string };
+
+export async function addTicket(db: Db, date: string, description: string): Promise<NewTicket> {
   if (!validDate(date)) throw new TicketError("date");
   const text = description.trim();
   if (!text || text.length > 2000) throw new TicketError("description");
   const { error } = await db.from("tickets").insert({ ticketdate: date, description: text });
   if (error) throw error;
+  return { date, description: text };
+}
+
+export type TicketMailConfig = { apiKey?: string; apiUrl: string; from?: string; to?: string };
+
+/**
+ * One plain-text notification through the Resend REST API (same call shape as lib/bill-docs/send.ts). No recipient,
+ * key, or From -> nothing sent, no error. Throws on a non-2xx or network failure; the caller treats that as best-effort.
+ */
+export async function sendTicketEmail(cfg: TicketMailConfig, t: NewTicket, fetchFn: typeof fetch = fetch): Promise<void> {
+  if (!cfg.to) return;
+  if (!cfg.apiKey || !cfg.from) return console.error("ticket email: TICKET_NOTIFY_EMAIL set but RESEND_API_KEY or BILL_FROM_EMAIL missing");
+  const flat = t.description.replace(/\s+/g, " ").trim(); // also strips CR/LF: user text only reaches the subject line
+  const subject = `New ticket: ${flat.length > 60 ? `${flat.slice(0, 60).trimEnd()}...` : flat}`;
+  const res = await fetchFn(`${cfg.apiUrl.replace(/\/+$/, "")}/emails`, {
+    method: "POST",
+    headers: { authorization: `Bearer ${cfg.apiKey}`, "content-type": "application/json" },
+    body: JSON.stringify({ from: cfg.from, to: [cfg.to], subject, text: `Date: ${t.date}\n\n${t.description}` }),
+    signal: AbortSignal.timeout(5_000), // awaited before the redirect: keep short so a hung Resend doesn't invite a double Add
+  });
+  if (!res.ok) throw new Error(`email service answered ${res.status}: ${(await res.text().catch(() => "")).slice(0, 200)}`);
 }
 
 export async function setStatus(db: Db, id: number, status: TicketStatus): Promise<void> {
@@ -66,6 +89,8 @@ export type TicketDeps = {
   db: () => Db;
   revalidatePath: (p: string) => void;
   redirect: (url: string) => void;
+  /** Called once after a successful add; failures are logged and ignored. Omitted -> no notification. */
+  notify?: (t: NewTicket) => Promise<void>;
 };
 
 /** Shared action body: signed-in check first (before any DB call), then the op; failures go back as ?error=. */
@@ -94,6 +119,13 @@ const idOf = (formData: FormData): number => {
 };
 
 export const runAddTicket = (formData: FormData, deps: TicketDeps) =>
-  run((db, f) => addTicket(db, str(f, "date"), str(f, "description")), "addTicket", formData, deps);
+  run(async (db, f) => {
+    const added = await addTicket(db, str(f, "date"), str(f, "description"));
+    try {
+      await deps.notify?.(added); // best-effort, only after the insert succeeded
+    } catch (e) {
+      console.error("addTicket notify:", e instanceof Error ? e.message : "failed");
+    }
+  }, "addTicket", formData, deps);
 export const runCloseTicket = (formData: FormData, deps: TicketDeps) => run((db, f) => setStatus(db, idOf(f), "Closed"), "closeTicket", formData, deps);
 export const runReopenTicket = (formData: FormData, deps: TicketDeps) => run((db, f) => setStatus(db, idOf(f), "Open"), "reopenTicket", formData, deps);
