@@ -1,0 +1,111 @@
+name: sync-legacy
+
+# "Sync from Access": restore TA's newest nightly SQL Server backup on this runner and overwrite
+# the 20 legacy tables with it (scripts/migrate/sync.sh). Dispatched by the app's /sync page
+# (lib/sync/runs.ts) with the sync_runs row id as run_id.
+#
+#   prod mode (default)   target = secrets.SUPABASE_DB_URL on the session pooler (:5432)
+#   rehearsal = true      target = a throwaway local Supabase stack on this runner. Never reads the
+#                         prod DB secret. The app cannot request this; dispatch it by hand.
+#
+# Runner assumptions (ubuntu-latest, verified from the runner-images docs, not by running this):
+#   docker, aws cli v2, psql (postgresql-client) are preinstalled; 7z is installed below if missing.
+#   mssql-scripter is NOT installed on the runner: its .NET service needs OpenSSL 1.0 + ICU 60. sync.sh builds
+#   scripts/migrate/scripter/Dockerfile (ubuntu:18.04) and runs it next to the mssql container.
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: sync_runs row id to track (empty only with rehearsal)
+        type: string
+        default: ""
+      rehearsal:
+        description: Load into a throwaway local stack on the runner instead of production
+        type: boolean
+        default: false
+
+concurrency:
+  # a rehearsal must not queue behind (or cancel the pending slot of) a production run, and vice versa
+  group: sync-legacy-${{ inputs.rehearsal && 'rehearsal' || 'prod' }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      # Untrusted input goes through env, never into the shell text; sync.sh checks it is digits.
+      RUN_ID: ${{ inputs.run_id }}
+      # sync.sh refuses a backup older than this (and older than the last synced one) before downloading it
+      MAX_BACKUP_AGE_HOURS: "48"
+    steps:
+      - name: Prod mode needs a run id
+        if: ${{ !inputs.rehearsal && inputs.run_id == '' }}
+        run: echo "run_id is required unless rehearsal is true" >&2; exit 1
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22 # must match the droplet's Node
+      - name: Authenticate GitHub Packages
+        run: pnpm config set "//npm.pkg.github.com/:_authToken" "${{ secrets.GH_PACKAGES_TOKEN }}"
+      - name: Install
+        run: pnpm install --frozen-lockfile
+      - name: Tooling (7z)
+        run: |
+          command -v 7z >/dev/null || { sudo apt-get update && sudo apt-get install -y p7zip-full; }
+
+      # ---- rehearsal: throwaway local stack, same schema as prod (0001..latest) ----
+      - uses: supabase/setup-cli@v1
+        if: ${{ inputs.rehearsal }}
+        with:
+          version: latest
+      - name: Local stack
+        if: ${{ inputs.rehearsal }}
+        run: |
+          supabase start
+          supabase db reset
+      - name: Sync (rehearsal, local stack)
+        if: ${{ inputs.rehearsal }}
+        env:
+          MIGRATE_DB_URL: postgresql://postgres:postgres@127.0.0.1:54422/postgres # supabase/config.toml [db] port
+          REQUIRE_LOCAL_DB: "1"
+          RUN_ID: "" # rehearsals never track a sync_runs row
+          S3_BUCKET: ${{ secrets.S3_BUCKET }}
+          S3_ENDPOINT: ${{ secrets.S3_ENDPOINT }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: ${{ secrets.AWS_DEFAULT_REGION }}
+        run: bash scripts/migrate/sync.sh
+
+      # ---- prod: overwrites the client project's legacy tables ----
+      - name: Sync (production)
+        if: ${{ !inputs.rehearsal }}
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          S3_BUCKET: ${{ secrets.S3_BUCKET }}
+          S3_ENDPOINT: ${{ secrets.S3_ENDPOINT }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: ${{ secrets.AWS_DEFAULT_REGION }}
+        run: |
+          # Session pooler (5432), not the transaction pooler (6543): load.mjs sets session GUCs.
+          export MIGRATE_DB_URL="${SUPABASE_DB_URL/:6543/:5432}"
+          echo "::add-mask::$MIGRATE_DB_URL"
+          bash scripts/migrate/sync.sh
+
+      - name: Mark the run failed if sync.sh could not
+        if: ${{ (failure() || cancelled()) && !inputs.rehearsal && inputs.run_id != '' }}
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          [[ "$RUN_ID" =~ ^[0-9]+$ ]] || exit 0
+          url="${SUPABASE_DB_URL/:6543/:5432}"
+          psql -X -q -v ON_ERROR_STOP=1 -v id="$RUN_ID" "$url" <<'SQL'
+          update sync_runs set status = 'failed', finished_at = now(), error = 'workflow failed or cancelled'
+          where id = :'id'::bigint and status in ('queued', 'running');
+          SQL

@@ -51,6 +51,9 @@ function Header({ session }: { session: Session }) {
               <Link href="/audit" className={navLink}>
                 Audit log
               </Link>
+              <Link href="/sync" className={navLink}>
+                Sync
+              </Link>
             </>
           )}
         </nav>

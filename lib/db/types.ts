@@ -94,6 +94,45 @@ export type Database = {
         }
         Relationships: []
       }
+      sync_runs: {
+        Row: {
+          id: number
+          status: string
+          requested_by: string | null
+          requested_at: string
+          started_at: string | null
+          finished_at: string | null
+          backup_key: string | null
+          backup_at: string | null
+          run_url: string | null
+          error: string | null
+        }
+        Insert: {
+          id?: never
+          status?: string
+          requested_by?: string | null
+          requested_at?: string
+          started_at?: string | null
+          finished_at?: string | null
+          backup_key?: string | null
+          backup_at?: string | null
+          run_url?: string | null
+          error?: string | null
+        }
+        Update: {
+          id?: never
+          status?: string
+          requested_by?: string | null
+          requested_at?: string
+          started_at?: string | null
+          finished_at?: string | null
+          backup_key?: string | null
+          backup_at?: string | null
+          run_url?: string | null
+          error?: string | null
+        }
+        Relationships: []
+      }
       tbl_scannedbillandcheck: {
         Row: {
           id_number: number

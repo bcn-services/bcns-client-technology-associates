@@ -1,6 +1,8 @@
 // scripts/migrate/verify.mjs — fidelity report for a load. READ-ONLY: it issues no DML/DDL.
 // Usage: node scripts/migrate/verify.mjs <export.sql> (--source-counts=<file> | --no-source-counts)
 //          [--allow-empty=tbl,tbl]                     (target from MIGRATE_DB_URL)
+//        node scripts/migrate/verify.mjs <export.sql> --source-counts=<file> --export-only
+//          export vs SQL Server counts only, no database touched (sync.sh's pre-load gate)
 // Exit 0 = source and database agree on row counts and numeric sums, no legacy table is
 // unexpectedly empty, and every identity sequence sits past its table's max id.
 // Orphans under NOT VALID FKs and denormalized-column drift are informational and never fail.
@@ -41,7 +43,8 @@ const flagVals = (name) => args.filter((a) => a.startsWith(`--${name}=`)).map((a
 const allowEmpty = new Set(flagVals("allow-empty").flatMap((v) => v.split(",")).map((s) => s.trim()).filter(Boolean));
 const sourceCountsFile = flagVals("source-counts").at(-1);
 const noSourceCounts = args.includes("--no-source-counts");
-const KNOWN_FLAG = /^--(allow-empty=|source-counts=|no-source-counts$)/;
+const exportOnly = args.includes("--export-only");
+const KNOWN_FLAG = /^--(allow-empty=|source-counts=|no-source-counts$|export-only$)/;
 const unknownFlag = args.find((a) => a.startsWith("--") && !KNOWN_FLAG.test(a));
 const positional = args.filter((a) => !a.startsWith("--"));
 const file = positional[0];
@@ -54,6 +57,7 @@ const argError =
   : positional.length > 1 ? `more than one export file given: ${positional.join(", ")}`
   : unknownFlag ? `unknown option ${unknownFlag}`
   : sourceCountsFile && noSourceCounts ? "--source-counts and --no-source-counts are mutually exclusive"
+  : exportOnly && !sourceCountsFile ? "--export-only needs --source-counts=<file>"
   : !sourceCountsFile && !noSourceCounts ? "refusing to run without SQL Server row counts: pass --source-counts=<file> (see README 1.2), or --no-source-counts to check the export only"
   : null;
 if (argError) {
@@ -82,6 +86,26 @@ if (sourceCountsFile) {
     process.stderr.write(`${sourceCountsFile}: no row count for ${missing.join(", ")}\n`);
     process.exit(2);
   }
+}
+
+// --export-only: the pre-load gate sync.sh runs BEFORE any database write. Parses the export with the
+// same parser and compares each table's INSERT row count to SQL Server's own; never touches a database.
+// An empty or partial scripter run parses to fewer rows (or none) and is refused here.
+if (exportOnly) {
+  const have = new Map(TABLES.map((t) => [t, 0]));
+  try {
+    for (const s of parse(decode(readFileSync(file), file), file)) if (have.has(s.table)) have.set(s.table, have.get(s.table) + s.rows.length);
+  } catch (e) { // a file cut off mid-statement does not parse
+    process.stderr.write(`export incomplete: ${e.message}\n`);
+    process.exit(1);
+  }
+  const bad = TABLES.filter((t) => have.get(t) !== srcTruth.get(t));
+  if (bad.length) {
+    process.stderr.write(`export incomplete: ${bad.map((t) => `${t} has ${have.get(t)}, SQL Server has ${srcTruth.get(t)}`).join("; ")}\n`);
+    process.exit(1);
+  }
+  process.stdout.write(`export-only: all ${TABLES.length} tables match SQL Server row counts\n`);
+  process.exit(0);
 }
 
 // MIGRATE_DB_URL is this lane's only env read; the harness derives DB_URL from FOUNDATION_PG_URL.
