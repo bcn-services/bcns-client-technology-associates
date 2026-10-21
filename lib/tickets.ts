@@ -66,7 +66,7 @@ export type TicketMailConfig = { apiKey?: string; apiUrl: string; from?: string;
  */
 export async function sendTicketEmail(cfg: TicketMailConfig, t: NewTicket, fetchFn: typeof fetch = fetch): Promise<void> {
   if (!cfg.to) return;
-  if (!cfg.apiKey || !cfg.from) return console.error("ticket email: TICKET_NOTIFY_EMAIL set but RESEND_API_KEY or BILL_FROM_EMAIL missing");
+  if (!cfg.apiKey || !cfg.from) return console.error("ticket email: TICKET_NOTIFY_EMAIL set but RESEND_API_KEY or TICKET_FROM_EMAIL/BILL_FROM_EMAIL missing");
   const flat = t.description.replace(/\s+/g, " ").trim(); // also strips CR/LF: user text only reaches the subject line
   const subject = `New ticket: ${flat.length > 60 ? `${flat.slice(0, 60).trimEnd()}...` : flat}`;
   const res = await fetchFn(`${cfg.apiUrl.replace(/\/+$/, "")}/emails`, {
