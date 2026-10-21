@@ -65,16 +65,17 @@ export type TicketMailConfig = { apiKey?: string; apiUrl: string; from?: string;
  * key, or From -> nothing sent, no error. Throws on a non-2xx or network failure; the caller treats that as best-effort.
  */
 export async function sendTicketEmail(cfg: TicketMailConfig, t: NewTicket, fetchFn: typeof fetch = fetch): Promise<void> {
-  if (!cfg.to || !cfg.apiKey || !cfg.from) return;
+  if (!cfg.to) return;
+  if (!cfg.apiKey || !cfg.from) return console.error("ticket email: TICKET_NOTIFY_EMAIL set but RESEND_API_KEY or BILL_FROM_EMAIL missing");
   const flat = t.description.replace(/\s+/g, " ").trim(); // also strips CR/LF: user text only reaches the subject line
   const subject = `New ticket: ${flat.length > 60 ? `${flat.slice(0, 60).trimEnd()}...` : flat}`;
   const res = await fetchFn(`${cfg.apiUrl.replace(/\/+$/, "")}/emails`, {
     method: "POST",
     headers: { authorization: `Bearer ${cfg.apiKey}`, "content-type": "application/json" },
     body: JSON.stringify({ from: cfg.from, to: [cfg.to], subject, text: `Date: ${t.date}\n\n${t.description}` }),
-    signal: AbortSignal.timeout(15_000),
+    signal: AbortSignal.timeout(5_000), // awaited before the redirect: keep short so a hung Resend doesn't invite a double Add
   });
-  if (!res.ok) throw new Error(`email service answered ${res.status}`);
+  if (!res.ok) throw new Error(`email service answered ${res.status}: ${(await res.text().catch(() => "")).slice(0, 200)}`);
 }
 
 export async function setStatus(db: Db, id: number, status: TicketStatus): Promise<void> {
