@@ -52,6 +52,10 @@ export interface AppConfig {
   ticketNotifyEmail?: string;
   /** From address on ticket emails; falls back to billFromEmail. Separate so ticket mail can send while bill email stays off. */
   ticketFromEmail?: string;
+  /** Resend receiving domain (`<id>.resend.app`). Ticket emails get reply_to `t<id>@<this>`; unset -> no reply_to and inbound replies are ignored. */
+  ticketReplyDomain?: string;
+  /** Svix signing secret (`whsec_...`) of the Resend inbound webhook. Unset -> /api/tickets/inbound rejects everything. */
+  ticketInboundSecret?: string;
   /** Always-cc'd address on bill emails (legacy Access db: Kalpna). */
   billCcEmail?: string;
   /** Always-bcc'd address on bill/notice emails (legacy Access db: Kris). */
@@ -83,6 +87,8 @@ export function getConfig(): AppConfig {
     billFromEmail: readEnv("BILL_FROM_EMAIL"),
     ticketNotifyEmail: readEnv("TICKET_NOTIFY_EMAIL"),
     ticketFromEmail: readEnv("TICKET_FROM_EMAIL") ?? readEnv("BILL_FROM_EMAIL"),
+    ticketReplyDomain: readEnv("TICKET_REPLY_DOMAIN"),
+    ticketInboundSecret: readEnv("TICKET_INBOUND_SECRET"),
     billCcEmail: readEnv("BILL_CC_EMAIL"),
     noticeBccEmail: readEnv("NOTICE_BCC_EMAIL"),
     billTaxId: readEnv("BILL_TAX_ID"),

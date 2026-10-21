@@ -1,26 +1,17 @@
-// New-ticket notification email: fake db + fake fetch only, never the network (api.resend.com is never contacted).
+// Ticket notification emails (new, closed, reopened): fake db + fake fetch only, never the network (api.resend.com is never contacted).
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { runAddTicket, runCloseTicket, runReopenTicket, sendTicketEmail } from "../../lib/tickets.ts";
 import { getConfig } from "../../lib/env.ts";
+import { memDb } from "./fakedb.mjs";
 
 const CFG = { apiKey: "re_test", apiUrl: "https://mail.test/", from: "from@example.test", to: "notify@example.test" };
 const form = (o) => { const f = new FormData(); for (const [k, v] of Object.entries(o)) f.set(k, v); return f; };
 
-/** db whose insert resolves to `error` (or ok); `ops` counts inserts. */
-const fakeDb = (error = null) => {
-  const db = {
-    ops: 0,
-    from() {
-      const b = {
-        insert: () => { db.ops++; return Promise.resolve({ error }); },
-        update: () => b, eq: () => b, select: () => Promise.resolve({ data: [{ id: 1 }], error }),
-      };
-      return b;
-    },
-  };
-  return db;
-};
+const SEED = { tickets: [{ id: 7, ticketdate: "2026-10-02", description: "Print button is missing", status: "In review", createdat: "x" }] };
+/** db whose inserts fail with `error` when given. */
+const fakeDb = (error = null) => memDb(SEED, error ? { insertError: error } : {});
+const ops = (db) => db.writes.length;
 
 /** Wires notify -> sendTicketEmail with a recording fake fetch. */
 function setup({ cfg = CFG, db = fakeDb(), fetchImpl } = {}) {
@@ -37,7 +28,7 @@ function setup({ cfg = CFG, db = fakeDb(), fetchImpl } = {}) {
 test("add: one email with right to/from/subject/body, after the insert", async () => {
   const s = setup();
   await runAddTicket(form({ date: "2026-10-21", description: "  Add a print button  " }), s.deps);
-  assert.equal(s.db.ops, 1);
+  assert.equal(ops(s.db), 1);
   assert.equal(s.sent.length, 1);
   const { url, init, body } = s.sent[0];
   assert.equal(url, "https://mail.test/emails");
@@ -107,7 +98,7 @@ test("no send when validation or the insert fails", async () => {
     assert.deepEqual({ sent: bad.sent.length, redirects: bad.redirects }, { sent: 0, redirects: ["/tickets?error=failed"] });
     const invalid = setup();
     await runAddTicket(form({ date: "nope", description: "ok" }), invalid.deps);
-    assert.deepEqual({ sent: invalid.sent.length, ops: invalid.db.ops, redirects: invalid.redirects }, { sent: 0, ops: 0, redirects: ["/tickets?error=date"] });
+    assert.deepEqual({ sent: invalid.sent.length, ops: ops(invalid.db), redirects: invalid.redirects }, { sent: 0, ops: 0, redirects: ["/tickets?error=date"] });
   } finally { console.error = log; }
 });
 
@@ -118,16 +109,75 @@ test("send failure (non-2xx or thrown) is logged, never fails the action or chan
     for (const fetchImpl of [async () => ({ ok: false, status: 500 }), async () => { throw new Error("socket hang up"); }]) {
       const s = setup({ fetchImpl });
       await runAddTicket(form({ date: "2026-10-21", description: "ok" }), s.deps);
-      assert.deepEqual({ ops: s.db.ops, redirects: s.redirects }, { ops: 1, redirects: ["/tickets"] });
+      assert.deepEqual({ ops: ops(s.db), redirects: s.redirects }, { ops: 1, redirects: ["/tickets"] });
     }
   } finally { console.error = log; }
   assert.equal(logged.length, 2);
   assert.ok(logged.every((l) => !l.includes("re_test")));
 });
 
-test("close and reopen never send", async () => {
+test("reply_to is t<id>@<domain> only when a reply domain is set; id is the new row's id", async () => {
+  const none = setup();
+  await runAddTicket(form({ date: "2026-10-21", description: "first" }), none.deps);
+  assert.ok(!("reply_to" in none.sent[0].body));
+  const s = setup({ cfg: { ...CFG, replyDomain: "abc123.resend.app" } });
+  await runAddTicket(form({ date: "2026-10-21", description: "second" }), s.deps);
+  assert.equal(s.sent[0].body.reply_to, "t8@abc123.resend.app"); // seed holds id 7
+});
+
+test("close: one email 'Ticket closed: ...' with the response and current description; response stored", async () => {
+  const s = setup({ cfg: { ...CFG, replyDomain: "abc123.resend.app" } });
+  await runCloseTicket(form({ id: "7", response: "  Shipped today  " }), s.deps);
+  assert.equal(s.sent.length, 1);
+  assert.deepEqual(s.sent[0].body, {
+    from: "from@example.test", to: ["notify@example.test"], reply_to: "t7@abc123.resend.app",
+    subject: "Ticket closed: Print button is missing",
+    text: "Ticket #7 was closed.\n\nResponse:\nShipped today\n\nTicket (2026-10-02):\nPrint button is missing",
+  });
+  assert.deepEqual(s.redirects, ["/tickets"]);
+  assert.equal(s.db.tables.ticket_messages[0].body, "Shipped today");
+});
+
+test("reopen without a response: email says reopened, has no Response section", async () => {
   const s = setup();
-  await runCloseTicket(form({ id: "1" }), s.deps);
-  await runReopenTicket(form({ id: "1" }), s.deps);
-  assert.deepEqual({ sent: s.sent.length, redirects: s.redirects }, { sent: 0, redirects: ["/tickets", "/tickets"] });
+  await runReopenTicket(form({ id: "7" }), s.deps);
+  assert.equal(s.sent.length, 1);
+  assert.equal(s.sent[0].body.subject, "Ticket reopened: Print button is missing");
+  assert.equal(s.sent[0].body.text, "Ticket #7 was reopened.\n\nTicket (2026-10-02):\nPrint button is missing");
+  assert.ok(!("reply_to" in s.sent[0].body));
+});
+
+test("close/reopen: no email when the change is refused (unknown id, wrong state, too-long response); a send failure never changes the redirect", async () => {
+  const s = setup();
+  await runCloseTicket(form({ id: "99" }), s.deps);
+  await runReopenTicket(form({ id: "abc" }), s.deps);
+  await runCloseTicket(form({ id: "7", response: "x".repeat(2001) }), s.deps);
+  assert.equal(s.sent.length, 0);
+  assert.deepEqual(s.redirects, ["/tickets?error=notfound", "/tickets?error=notfound", "/tickets?error=response"]);
+  await runCloseTicket(form({ id: "7" }), s.deps);
+  await runCloseTicket(form({ id: "7" }), s.deps); // already Closed
+  assert.deepEqual({ sent: s.sent.length, last: s.redirects.at(-1) }, { sent: 1, last: "/tickets?error=state" });
+
+  const log = console.error; console.error = () => {};
+  try {
+    const f = setup({ fetchImpl: async () => ({ ok: false, status: 500 }) });
+    await runReopenTicket(form({ id: "7" }), f.deps);
+    assert.deepEqual({ redirects: f.redirects, status: f.db.tables.tickets[0].status }, { redirects: ["/tickets"], status: "Open" });
+  } finally { console.error = log; }
+});
+
+test("getConfig reads TICKET_REPLY_DOMAIN and TICKET_INBOUND_SECRET lazily, trimmed, blank = unset", () => {
+  const keys = ["TICKET_REPLY_DOMAIN", "TICKET_INBOUND_SECRET"];
+  const saved = keys.map((k) => process.env[k]);
+  try {
+    for (const k of keys) delete process.env[k];
+    assert.deepEqual([getConfig().ticketReplyDomain, getConfig().ticketInboundSecret], [undefined, undefined]);
+    process.env.TICKET_REPLY_DOMAIN = "  ";
+    assert.equal(getConfig().ticketReplyDomain, undefined);
+    process.env.TICKET_REPLY_DOMAIN = " abc.resend.app ";
+    process.env.TICKET_INBOUND_SECRET = " whsec_x ";
+    assert.deepEqual([getConfig().ticketReplyDomain, getConfig().ticketInboundSecret], ["abc.resend.app", "whsec_x"]);
+  } finally {
+    keys.forEach((k, i) => { if (saved[i] === undefined) delete process.env[k]; else process.env[k] = saved[i]; });
+  }
 });

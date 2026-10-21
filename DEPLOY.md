@@ -51,6 +51,18 @@ monorepo under `infra/` — one copy per droplet, not per client repo.
    separation is kernel-enforced: each app runs as its own user and cannot
    read another client's files. The service-role key bypasses RLS —
    server-only, never in client-side code.
+
+   Ticket email (all optional; unset features degrade silently):
+   - `RESEND_API_KEY` — must be **full access** (not send-only): the inbound
+     webhook reads received mail with it. It also lives only in this file.
+   - `TICKET_FROM_EMAIL` — From on ticket emails (falls back to `BILL_FROM_EMAIL`).
+   - `TICKET_NOTIFY_EMAIL` — where ticket emails go, and the only sender whose
+     replies are accepted.
+   - `TICKET_REPLY_DOMAIN` — the Resend receiving domain (`<id>.resend.app`);
+     emails then carry `reply_to: t<ticket id>@<domain>`.
+   - `TICKET_INBOUND_SECRET` — the `whsec_...` signing secret of the Resend
+     webhook (`https://<domain>/api/tickets/inbound`, event `email.received`).
+     Unset = the endpoint rejects everything.
 3. **App** — push to `main`. `.github/workflows/deploy.yml` builds the Next
    standalone bundle in CI, rsyncs it to
    `/srv/<slug>/releases/<sha>/`, flips the `/srv/<slug>/current` symlink,

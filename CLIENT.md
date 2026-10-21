@@ -51,7 +51,7 @@ goes).
 | --- | --- |
 | Storage backend | **Supabase Storage (platform default)**. Case documents (scanned checks, bills, reports, fee schedules) get attached to cases and the existing scanned archive on the office network shares migrates in — no client-specific storage requirement (e.g. WebDAV) surfaced in the quote or legacy docs. |
 | AI feature | **Off for this build.** The quote explicitly scopes AI assistance (transaction categorization, bill-narrative drafting, inquiry logging, document filing) as a separate, unpriced phase after go-live. Ship v1 with `AI_ENABLED` off; revisit once usage data shows where time actually goes. |
-| Webhook providers | **None.** No live payment/bank connection in scope (bank/card activity arrives by file export and is reviewed/approved by a person); bill delivery is outbound email (Resend), not an inbound webhook integration. |
+| Webhook providers | **Resend only**, for ticket replies: `POST /api/tickets/inbound` (event `email.received`, Svix-signed, `lib/tickets-inbound.ts`) moves a ticket to In review when Nate replies to its email. No live payment/bank connection in scope (bank/card activity arrives by file export and is reviewed/approved by a person); bill delivery is outbound email (Resend). |
 
 ## Open questions (block precise scoping, not the map)
 

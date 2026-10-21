@@ -6,7 +6,8 @@ import { ACTOR_HEADER } from "@/lib/db/actor";
 
 /** Exact paths reachable without a session. Never a prefix match. */
 // /signout is public so an expired tab's sign-out still clears cookies instead of bouncing to a 405.
-const PUBLIC_PATHS = new Set(["/login", "/api/health", "/signout"]);
+// /api/tickets/inbound is Resend's webhook: no session, the Svix signature check in the route is its gate.
+const PUBLIC_PATHS = new Set(["/login", "/api/health", "/signout", "/api/tickets/inbound"]);
 
 /** Upper bound on the session lookup. A hung Supabase must deny, not stall the app. */
 const SESSION_TIMEOUT_MS = 2000;

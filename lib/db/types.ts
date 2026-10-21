@@ -931,6 +931,33 @@ export type Database = {
         }
         Relationships: []
       }
+      ticket_messages: {
+        Row: {
+          id: number
+          ticketid: number
+          author: string
+          body: string
+          resend_email_id: string | null
+          createdat: string
+        }
+        Insert: {
+          id?: never
+          ticketid: number
+          author: string
+          body: string
+          resend_email_id?: string | null
+          createdat?: string
+        }
+        Update: {
+          id?: never
+          ticketid?: number
+          author?: string
+          body?: string
+          resend_email_id?: string | null
+          createdat?: string
+        }
+        Relationships: []
+      }
       tickets: {
         Row: {
           id: number
