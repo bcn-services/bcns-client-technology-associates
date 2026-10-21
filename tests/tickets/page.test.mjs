@@ -5,6 +5,11 @@ import { readFileSync } from "node:fs";
 import { renderToStaticMarkup } from "react-dom/server";
 import { session, dbclient } from "../docs-reports/render.mjs";
 import { memDb } from "./fakedb.mjs";
+import { createRequire } from "node:module";
+
+// react-dom 18.3 has no useFormStatus outside Next's bundled canary (same shim as tests/cases/convert.test.mjs).
+const formStatus = { pending: false };
+createRequire(import.meta.url)("react-dom").useFormStatus = () => formStatus;
 
 const mod = await import("../../app/tickets/page.tsx");
 const Page = (mod.default?.default ? mod.default : mod).default;
@@ -66,8 +71,22 @@ test("?error= shows its message; unknown code shows the generic one", async () =
   assert.match(await render({ error: "date" }), /role="alert"[^>]*>Enter a valid date\./);
   assert.match(await render({ error: "zzz" }), /Save failed; nothing was changed\./);
 });
-test("no client JS: neither tickets file is a client component", () => {
+test("page and actions stay server-side (only submit-button.tsx is a client component)", () => {
   for (const f of ["../../app/tickets/page.tsx", "../../app/tickets/actions.ts"]) {
     assert.ok(!/["']use client["']/.test(readFileSync(new URL(f, import.meta.url), "utf8")), f);
+  }
+});
+
+test("every ticket button is disabled while its form's action runs, and enabled otherwise", async () => {
+  assert.doesNotMatch(await render(), /<button[^>]* disabled=""/);
+  formStatus.pending = true;
+  try {
+    const html = await render();
+    const buttons = [...html.matchAll(/<button[^>]*>/g)].map((m) => m[0]);
+    assert.ok(buttons.length >= 6, "Add, Save x2, Close x2, Reopen x2");
+    for (const b of buttons) assert.match(b, / disabled=""/);
+    assert.doesNotMatch(html, /Saving…/, "only the clicked button says Saving…, and none was clicked");
+  } finally {
+    formStatus.pending = false;
   }
 });
