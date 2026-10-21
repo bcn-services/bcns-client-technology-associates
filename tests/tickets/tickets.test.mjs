@@ -139,20 +139,19 @@ test("transitions: Close from Open or In review, Reopen from In review or Closed
   await runCloseTicket(form({ id: "3", response: "x" }), e.deps); // already Closed
   await runReopenTicket(form({ id: "1", response: "x" }), e.deps); // Open
   assert.deepEqual(e.redirects, ["/tickets?error=state", "/tickets?error=state"]);
-  assert.deepEqual(bad.tables.tickets, withReview().tables.tickets, "no ticket changed");
-  assert.deepEqual(bad.tables.ticket_messages, [], "the response written ahead of the failed move was taken back");
+  assert.deepEqual(bad.writes, [], "a stale state is refused by the pre-read: no message inserted, so none deleted, no audit rows");
   const quiet = withReview();
   await runCloseTicket(form({ id: "3" }), deps(quiet).deps); // no response: nothing written at all
   assert.deepEqual(quiet.writes, []);
 });
 
-test("request path: Close/Reopen without a response touch the DB once on success (no pre-read), with one it is insert then update", async () => {
+test("request path: Close/Reopen without a response touch the DB once on success (no pre-read); with one it is read, insert, update", async () => {
   const db = withReview();
   await runCloseTicket(form({ id: "1" }), deps(db).deps);
   assert.deepEqual(db.calls.map((c) => [c.table, c.op]), [["tickets", "update"]]);
   const db2 = withReview();
   await runReopenTicket(form({ id: "3", response: "back" }), deps(db2).deps);
-  assert.deepEqual(db2.calls.map((c) => [c.table, c.op]), [["ticket_messages", "insert"], ["tickets", "update"]]);
+  assert.deepEqual(db2.calls.map((c) => [c.table, c.op]), [["tickets", "select"], ["ticket_messages", "insert"], ["tickets", "update"]]);
 });
 
 test("the email gets the fields the update returned (date, description, trimmed response)", async () => {
@@ -235,15 +234,57 @@ const racing = (db, mutate, touch = 2) => {
 
 test("race: Close/Reopen lose to a status change before the conditional update lands → ?error=state, status stays the racer's, the response is taken back, no email", async () => {
   for (const [run, start, racer] of [[runCloseTicket, "Open", "Closed"], [runReopenTicket, "Closed", "Open"]]) {
-    const db = racing(memDb({ tickets: [T(1, "2026-10-01", start, "one")] }), (t) => { t.status = racer; }, 1);
+    const db = racing(memDb({ tickets: [T(1, "2026-10-01", start, "one")] }), (t) => { t.status = racer; }, 2); // 1st touch is the pre-read (response given), 2nd the conditional update
     const d = deps(db);
     const sent = [];
     await run(form({ id: "1", response: "late response" }), { ...d.deps, notify: async (m) => sent.push(m) });
     assert.deepEqual(d.redirects, ["/tickets?error=state"], start);
     assert.equal(statusOf(db, 1), racer, `${start}: the racer's status stands`);
     assert.deepEqual(db.tables.ticket_messages ?? [], [], `${start}: the unapplied response is not left behind`);
+    assert.deepEqual(db.writes.map((w) => w.slice(0, 2).join(" ")), ["insert ticket_messages", "delete ticket_messages"], `${start}: written, then taken back`);
     assert.deepEqual(sent, [], `${start}: nothing emailed`);
   }
+});
+
+test("race without a response: the lone conditional update loses → ?error=state, nothing written, no email", async () => {
+  for (const [run, start, racer] of [[runCloseTicket, "Open", "Closed"], [runReopenTicket, "Closed", "Open"]]) {
+    const db = racing(memDb({ tickets: [T(1, "2026-10-01", start, "one")] }), (t) => { t.status = racer; }, 1);
+    const d = deps(db);
+    const sent = [];
+    await run(form({ id: "1" }), { ...d.deps, notify: async (m) => sent.push(m) });
+    assert.deepEqual({ r: d.redirects, w: db.writes, s: statusOf(db, 1), sent }, { r: ["/tickets?error=state"], w: [], s: racer, sent: [] }, start);
+  }
+});
+
+test("stale tab with a response: refused before any write: no message inserted (so no audit rows), no email", async () => {
+  for (const [run, id] of [[runCloseTicket, "3"], [runReopenTicket, "1"]]) { // 3 is already Closed, 1 is Open
+    const db = withReview();
+    const d = deps(db);
+    const sent = [];
+    await run(form({ id, response: "too late" }), { ...d.deps, notify: async (m) => sent.push(m) });
+    assert.deepEqual({ r: d.redirects, w: db.writes, sent }, { r: ["/tickets?error=state"], w: [], sent: [] });
+    assert.ok(!db.calls.some((c) => c.table === "ticket_messages"), "ticket_messages never touched");
+  }
+});
+
+test("a failed cleanup delete is logged with ticket and message id; the user still gets ?error=state", async () => {
+  const db = racing(memDb({ tickets: [T(1, "2026-10-01", "Open", "one")] }, { deleteError: { message: "boom" } }), (t) => { t.status = "Closed"; }, 2);
+  const d = deps(db);
+  const errors = [];
+  const orig = console.error;
+  console.error = (...a) => errors.push(a.join(" "));
+  try { await runCloseTicket(form({ id: "1", response: "late" }), d.deps); } finally { console.error = orig; }
+  assert.deepEqual(errors, ["move ticket 1 response 1 cleanup failed: boom"]);
+  assert.deepEqual(d.redirects, ["/tickets?error=state"]);
+});
+
+test("ticket gone between the pre-read and the message insert: the FK rejects it → ?error=notfound, nothing left behind", async () => {
+  const db = memDb({ tickets: [T(1, "2026-10-01", "Open", "one")] });
+  const from = db.from.bind(db);
+  db.from = (table) => { if (table === "ticket_messages") db.tables.tickets.length = 0; return from(table); };
+  const d = deps(db);
+  await runCloseTicket(form({ id: "1", response: "hello" }), d.deps);
+  assert.deepEqual({ r: d.redirects, w: db.writes }, { r: ["/tickets?error=notfound"], w: [] });
 });
 
 test("race: Edit loses to a Close between load and write → ?error=state, description unchanged", async () => {

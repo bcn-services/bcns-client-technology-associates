@@ -198,8 +198,9 @@ export const runAddTicket = (formData: FormData, deps: TicketDeps) =>
 
 /**
  * Close (from Open or In review) / reopen (from In review or Closed), with an optional response stored as a message by the
- * signed-in user and included in the email. The message is written first and deleted again if the status change doesn't
- * land (race lost or write failed), so a move that didn't happen leaves no response behind and none is ever lost.
+ * signed-in user and included in the email. Without a response the whole move is one conditional update. With one, the ticket is read
+ * first (a stale tab's click is refused before anything is written, so no message and no audit rows), the message is written, and it is
+ * deleted again if the update still loses a race, so a move that didn't happen leaves no response behind and none is ever lost.
  */
 const move = (to: TicketStatus, from: TicketStatus[], kind: "closed" | "reopened", where: string) => (formData: FormData, deps: TicketDeps) =>
   run(async (db, f, session) => {
@@ -208,10 +209,11 @@ const move = (to: TicketStatus, from: TicketStatus[], kind: "closed" | "reopened
     if (response.length > 2000) throw new TicketError("response");
     let messageId: number | null = null;
     if (response) {
+      if (!from.includes((await loadTicket(db, id)).status)) throw new TicketError("state"); // notfound if the id is gone
       try {
         messageId = await addMessage(db, id, session.email || "staff", response);
       } catch (e) {
-        if ((e as { code?: string })?.code === "23503") throw new TicketError("notfound"); // ticket_messages_ticketid_fkey: no such ticket
+        if ((e as { code?: string })?.code === "23503") throw new TicketError("notfound"); // ticket_messages_ticketid_fkey: gone since the read
         throw e;
       }
     }
@@ -219,8 +221,11 @@ const move = (to: TicketStatus, from: TicketStatus[], kind: "closed" | "reopened
     try {
       t = await moveTicket(db, id, to, from);
     } catch (e) {
-      // Lost the race, wrong state, unknown id, or the write failed: the response was never applied to a move that didn't happen, so take it back.
-      if (messageId !== null) await db.from("ticket_messages").delete().eq("id", messageId).then(() => undefined, () => undefined);
+      // Lost the race (or the write failed) after the read: take the response back. supabase-js resolves with {error} rather than rejecting.
+      if (messageId !== null) {
+        const cleanup = await db.from("ticket_messages").delete().eq("id", messageId).then((r: { error?: { message?: string } | null }) => r.error?.message ?? null, (err: unknown) => (err instanceof Error ? err.message : "failed"));
+        if (cleanup) console.error(`move ticket ${id} response ${messageId} cleanup failed: ${cleanup}`);
+      }
       throw e;
     }
     // Not awaited: waiting on Resend held the redirect ~1s per click. `next start` on the droplet is long-lived, so the send

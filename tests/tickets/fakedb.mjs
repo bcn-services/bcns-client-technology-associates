@@ -1,7 +1,7 @@
 // In-memory fake PostgREST client for the ticket tests: eq/in filters really evaluated, every op recorded in `calls`,
 // writes in `writes`. ticket_messages.resend_email_id is unique like the real column (23505 on a repeat).
 // ticket_messages.ticketid is a foreign key like the real column (23503 for an unknown ticket).
-// opts.insertError makes every insert fail with that error; opts.updateError every update. Also supports delete, order and range.
+// opts.insertError makes every insert fail with that error; opts.updateError every update; opts.deleteError every delete. Also supports delete, order and range.
 export function memDb(seed = {}, opts = {}) {
   const tables = structuredClone(seed);
   const calls = [];
@@ -37,6 +37,7 @@ export function memDb(seed = {}, opts = {}) {
           return { data: hit.map(project), error: null };
         }
         if (st.op === "delete") {
+          if (opts.deleteError) return { data: null, error: opts.deleteError };
           const hit = rows.filter(match);
           tables[table] = rows.filter((r) => !hit.includes(r));
           writes.push(["delete", table, hit.length]);

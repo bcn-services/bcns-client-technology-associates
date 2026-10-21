@@ -92,3 +92,30 @@ test("every ticket button is disabled while its form's action runs, and enabled 
     formStatus.pending = false;
   }
 });
+
+test("each row's action form is keyed with the per-render stamp, so the redirect remounts it and clears the response box", async () => {
+  const rows = (node, out = []) => {
+    if (Array.isArray(node)) node.forEach((n) => rows(n, out));
+    else if (node && typeof node === "object" && "props" in node) {
+      if (node.type?.name === "RowActions") out.push({ id: node.props.id, key: node.key });
+      rows(node.props.children, out);
+    }
+    return out;
+  };
+  const stamps = [];
+  for (let i = 0; i < 2; i++) {
+    dbclient.state.db = memDb({ tickets: ROWS, ticket_messages: MSGS });
+    const lo = Date.now();
+    const found = rows(await Page({ searchParams: {} }));
+    const hi = Date.now();
+    assert.deepEqual(found.map((r) => r.id).sort(), [1, 2, 3]);
+    for (const { id, key } of found) {
+      const m = new RegExp(`^act-${id}-(\\d+)$`).exec(key);
+      assert.ok(m, `key ${key} has the stamp`);
+      assert.ok(Number(m[1]) >= lo && Number(m[1]) <= hi, "the stamp is that render's Date.now()");
+      stamps.push(m[1]);
+    }
+    await new Promise((r) => setTimeout(r, 3));
+  }
+  assert.notEqual(stamps[0], stamps[3], "a later render gets a new key");
+});
