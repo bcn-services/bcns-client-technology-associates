@@ -48,6 +48,8 @@ export interface AppConfig {
   resendApiUrl: string;
   /** From address on bill emails. */
   billFromEmail?: string;
+  /** Where new-ticket notification emails go (sent from billFromEmail via Resend). Unset -> no ticket email. */
+  ticketNotifyEmail?: string;
   /** Always-cc'd address on bill emails (legacy Access db: Kalpna). */
   billCcEmail?: string;
   /** Always-bcc'd address on bill/notice emails (legacy Access db: Kris). */
@@ -77,6 +79,7 @@ export function getConfig(): AppConfig {
     resendApiKey: readEnv("RESEND_API_KEY"),
     resendApiUrl: readEnv("RESEND_API_URL") ?? "https://api.resend.com",
     billFromEmail: readEnv("BILL_FROM_EMAIL"),
+    ticketNotifyEmail: readEnv("TICKET_NOTIFY_EMAIL"),
     billCcEmail: readEnv("BILL_CC_EMAIL"),
     noticeBccEmail: readEnv("NOTICE_BCC_EMAIL"),
     billTaxId: readEnv("BILL_TAX_ID"),
