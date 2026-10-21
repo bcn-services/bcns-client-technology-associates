@@ -59,6 +59,11 @@ export interface AppConfig {
    * real newlines or a literal "\n" so it fits a single-line .env entry.
    */
   billLetterhead?: string[];
+  /**
+   * Fine-grained GitHub token (actions:write, this repo only) the /sync page uses to dispatch the
+   * sync-legacy workflow. Unset → the Sync button is disabled with "Not configured".
+   */
+  githubSyncToken?: string;
 }
 
 /**
@@ -81,5 +86,6 @@ export function getConfig(): AppConfig {
     noticeBccEmail: readEnv("NOTICE_BCC_EMAIL"),
     billTaxId: readEnv("BILL_TAX_ID"),
     billLetterhead: readLines("BILL_LETTERHEAD"),
+    githubSyncToken: readEnv("GITHUB_SYNC_TOKEN"),
   };
 }
