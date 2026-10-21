@@ -13,4 +13,5 @@ export const SECTIONS = [
   { href: "/documents", label: "Documents" },
   { href: "/reports", label: "Reports" },
   { href: "/dashboard", label: "Dashboard" },
+  { href: "/tickets", label: "Tickets" },
 ] as const;

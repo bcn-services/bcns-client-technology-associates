@@ -931,6 +931,30 @@ export type Database = {
         }
         Relationships: []
       }
+      tickets: {
+        Row: {
+          id: number
+          ticketdate: string
+          description: string
+          status: string
+          createdat: string
+        }
+        Insert: {
+          id?: never
+          ticketdate?: string
+          description: string
+          status?: string
+          createdat?: string
+        }
+        Update: {
+          id?: never
+          ticketdate?: string
+          description?: string
+          status?: string
+          createdat?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       case_search: {

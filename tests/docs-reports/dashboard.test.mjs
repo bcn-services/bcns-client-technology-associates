@@ -178,7 +178,7 @@ test("the page renders Due, Overdue, Waiting, Unpaid and Unbilled as plain text,
 
 test("each tile renders its own count and links to the page that count came from", async () => {
   const markup = await renderDashboard(fakeDb(world()));
-  const d = await loadDashboard(fakeDb(world()), NOW);
+  const d = await loadDashboard(fakeDb(world()), new Date()); // the page reads the real clock, so compare on it
   for (const t of d.tiles) {
     assert.match(markup, new RegExp(`data-testid="tile-${t.key}"[^>]*>${t.count}<`), `${t.key} shows a different number than the loader returned`);
     assert.ok(markup.includes(`href="${t.href.replace(/&/g, "&amp;")}"`), `${t.key} does not link to ${t.href}`);
