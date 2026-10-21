@@ -221,3 +221,25 @@ test("listTickets pages messages past PostgREST's 1000-row cap (Closed rows keep
   assert.deepEqual(got.map((t) => t.messages.length).sort(), [1150, 1150]);
   assert.equal(db.calls.filter((c) => c.table === "ticket_messages").length, 3);
 });
+
+test("Close/Reopen don't wait on the email: a hung send still redirects, and a failed one is logged with the ticket id, never thrown", async () => {
+  for (const [run, start] of [[runCloseTicket, "Open"], [runReopenTicket, "Closed"]]) {
+    const db = memDb({ tickets: [T(7, "2026-10-01", start, "one")] });
+    const d = deps(db);
+    await run(form({ id: "7" }), { ...d.deps, notify: () => new Promise(() => {}) }); // never settles
+    assert.deepEqual(d.redirects, ["/tickets"], `${start}: redirected without the email`);
+  }
+  const errors = [];
+  const orig = console.error;
+  console.error = (...a) => errors.push(a.join(" "));
+  try {
+    const d = deps(memDb({ tickets: [T(7, "2026-10-01", "Open", "one")] }));
+    await runCloseTicket(form({ id: "7" }), { ...d.deps, notify: async () => { throw new Error("resend down"); } });
+    await runReopenTicket(form({ id: "7" }), { ...d.deps, notify: () => { throw new Error("config missing"); } }); // sync throw, like getConfig()
+    await new Promise((r) => setImmediate(r));
+    assert.deepEqual(d.redirects, ["/tickets", "/tickets"]);
+    assert.deepEqual(errors, ["closeTicket notify ticket 7: resend down", "reopenTicket notify ticket 7: config missing"]);
+  } finally {
+    console.error = orig;
+  }
+});

@@ -133,7 +133,7 @@ export async function sendTicketEmail(cfg: TicketMailConfig, t: TicketMail, fetc
     method: "POST",
     headers: { authorization: `Bearer ${cfg.apiKey}`, "content-type": "application/json" },
     body: JSON.stringify({ from: cfg.from, to: [cfg.to], subject, text, ...(cfg.replyDomain ? { reply_to: `t${t.id}@${cfg.replyDomain}` } : {}) }),
-    signal: AbortSignal.timeout(5_000), // awaited before the redirect: keep short so a hung Resend doesn't invite a double Add
+    signal: AbortSignal.timeout(5_000), // Add awaits this before its redirect: keep short so a hung Resend doesn't stall the page
   });
   if (!res.ok) throw new Error(`email service answered ${res.status}: ${(await res.text().catch(() => "")).slice(0, 200)}`);
 }
@@ -172,12 +172,12 @@ const idOf = (formData: FormData): number => {
   return Number(raw);
 };
 
-/** Best-effort, only called after the write succeeded. */
+/** Best-effort, only called after the write succeeded. Never rejects: a failure is logged with the ticket id and dropped. */
 async function notifyBestEffort(deps: TicketDeps, where: string, mail: TicketMail): Promise<void> {
   try {
     await deps.notify?.(mail);
   } catch (e) {
-    console.error(`${where} notify:`, e instanceof Error ? e.message : "failed");
+    console.error(`${where} notify ticket ${mail.id}:`, e instanceof Error ? e.message : "failed");
   }
 }
 
@@ -207,7 +207,9 @@ const move = (to: TicketStatus, from: TicketStatus[], kind: "closed" | "reopened
       if (messageId !== null) await db.from("ticket_messages").delete().eq("id", messageId).then(() => undefined, () => undefined);
       throw e;
     }
-    await notifyBestEffort(deps, where, { id, kind, date: t.ticketdate, description: t.description, response: response || undefined });
+    // Not awaited: waiting on Resend held the redirect ~1s per click. `next start` on the droplet is long-lived, so the send
+    // finishes after the response. ponytail: a restart mid-send drops that email; fine for a notification, add a queue if one must land.
+    void notifyBestEffort(deps, where, { id, kind, date: t.ticketdate, description: t.description, response: response || undefined });
   }, where, formData, deps);
 
 export const runCloseTicket = move("Closed", ["Open", "In review"], "closed", "closeTicket");

@@ -4,6 +4,7 @@ import { firmToday } from "@/lib/cases/presets";
 import type { Db } from "@/lib/time/entries";
 import { listTickets, parseSort, ticketErrorMessage } from "@/lib/tickets";
 import { addTicket, closeTicket, editTicket, reopenTicket } from "./actions";
+import { SubmitButton } from "./submit-button";
 
 export const dynamic = "force-dynamic";
 
@@ -28,7 +29,7 @@ export default async function TicketsPage({ searchParams }: { searchParams: Para
         <input id="date" name="date" type="date" required defaultValue={firmToday(new Date())} className="rounded border px-2 py-1" />
         <label className="sr-only" htmlFor="description">Description</label>
         <input id="description" name="description" required maxLength={2000} placeholder="Description" className="min-w-0 flex-1 rounded border px-2 py-1" />
-        <button className="rounded bg-slate-800 px-3 py-1 text-white">Add</button>
+        <SubmitButton label="Add" className="rounded bg-slate-800 px-3 py-1 text-white" />
       </form>
       <div className="overflow-x-auto">
         <table className="w-full text-sm [&_td]:py-1 [&_td]:pr-3 [&_th]:py-1 [&_th]:pr-3 [&_tr]:border-b">
@@ -61,7 +62,7 @@ export default async function TicketsPage({ searchParams }: { searchParams: Para
                         <input type="hidden" name="id" value={t.id} />
                         <label className="sr-only" htmlFor={`desc-${t.id}`}>Description</label>
                         <textarea id={`desc-${t.id}`} name="description" required maxLength={2000} rows={2} defaultValue={t.description} className="min-w-0 flex-1 rounded border px-2 py-1" />
-                        <button className="self-start rounded border border-slate-300 px-3 py-1">Save</button>
+                        <SubmitButton label="Save" className="self-start rounded border border-slate-300 px-3 py-1" />
                       </form>
                     </details>
                   )}
@@ -75,8 +76,8 @@ export default async function TicketsPage({ searchParams }: { searchParams: Para
                     <label className="sr-only" htmlFor={`resp-${t.id}`}>Response (optional)</label>
                     <textarea id={`resp-${t.id}`} name="response" maxLength={2000} rows={1} placeholder="Response (optional)" className="w-48 rounded border px-2 py-1" />
                     <span className="flex gap-1">
-                      {t.status !== "Closed" && <button formAction={closeTicket} className="rounded border border-slate-300 px-3 py-1">Close</button>}
-                      {t.status !== "Open" && <button formAction={reopenTicket} className="rounded border border-slate-300 px-3 py-1">Reopen</button>}
+                      {t.status !== "Closed" && <SubmitButton label="Close" formAction={closeTicket} className="rounded border border-slate-300 px-3 py-1" />}
+                      {t.status !== "Open" && <SubmitButton label="Reopen" formAction={reopenTicket} className="rounded border border-slate-300 px-3 py-1" />}
                     </span>
                   </form>
                 </td>
