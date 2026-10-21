@@ -125,6 +125,14 @@ test("/signout is public: a signed-out POST reaches the route instead of bouncin
   assert.equal(res.headers.get("location"), null);
 });
 
+test("/api/tickets/inbound is public (exact path only): a signed-out POST reaches the route, look-alike paths still bounce", async () => {
+  const at = (path, method = "POST") => new NextRequest(new Request(`http://localhost:3100${path}`, { method }));
+  assert.equal((await middleware(at("/api/tickets/inbound"))).headers.get("location"), null);
+  for (const path of ["/api/tickets/inbound/", "/api/tickets/inbound/x", "/api/tickets", "/api/tickets/inbound2", "/API/tickets/inbound"]) {
+    assert.match((await middleware(at(path))).headers.get("location") ?? "", /\/login/, path);
+  }
+});
+
 // Behind nginx the app sees http://127.0.0.1:<port>; the redirect must use the public Host.
 test("login redirect keeps the public host behind the reverse proxy, not the internal origin", async () => {
   const proxied = new NextRequest(new Request("http://127.0.0.1:3104/cases/90001", {
