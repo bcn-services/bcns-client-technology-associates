@@ -6,7 +6,8 @@ import { syncAction, type SyncActionState } from "./actions";
 const CONFIRM =
   "Replace all case, client, billing, time, expense and funds data with the newest Access backup? " +
   "Anything entered in this app since that backup in those tables, including finalized bill lines, is lost. " +
-  "Users, bank imports, the audit log and tickets are kept.";
+  "Users, bank imports, the audit log and tickets are kept. " +
+  "Takes about an hour. Nobody should enter data until it finishes.";
 
 function Submit({ disabled }: { disabled: boolean }) {
   const { pending } = useFormStatus();
