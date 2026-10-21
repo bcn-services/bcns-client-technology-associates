@@ -35,13 +35,21 @@ const RANK: Record<TicketStatus, number> = { "In review": 0, Open: 1, Closed: 2 
 /** In review first, then Open, then Closed (dir=desc reverses that), then newest ticketdate, then newest id. Each ticket carries its messages, oldest first. */
 // ponytail: sorted in JS over the whole table — move to SQL paging when tickets reach the thousands.
 export async function listTickets(db: Db, dir: Dir | null): Promise<Ticket[]> {
-  const { data, error } = await db.from("tickets").select("id, ticketdate, description, status, createdat");
+  // The two reads don't depend on each other (messages are not filtered by ticket id), so they run side by side.
+  const [{ data, error }, byTicket] = await Promise.all([db.from("tickets").select("id, ticketdate, description, status, createdat"), loadMessages(db)]);
   if (error) throw error;
   const rows = (data ?? []) as Omit<Ticket, "messages">[];
+  const flip = dir === "desc" ? -1 : 1;
+  return rows
+    .map((r) => ({ ...r, messages: (byTicket.get(r.id) ?? []).sort((a, b) => a.createdat.localeCompare(b.createdat) || a.id - b.id) }))
+    .sort((a, b) => flip * (RANK[a.status] - RANK[b.status]) || b.ticketdate.localeCompare(a.ticketdate) || b.id - a.id);
+}
+
+/** Every message grouped by ticket. Closed rows show their history too, so all are loaded; paged by id because PostgREST caps a response at 1000 rows
+ * (and an .in("ticketid", ids) of every ticket would outgrow the URL first). */
+// ponytail: all messages on every render — upgrade to the visible tickets' messages when the thread count reaches the thousands.
+async function loadMessages(db: Db): Promise<Map<number, TicketMessage[]>> {
   const byTicket = new Map<number, TicketMessage[]>();
-  // Closed rows show their history too, so every message is loaded; paged by id because PostgREST caps a response at 1000 rows
-  // (and an .in("ticketid", ids) of every ticket would outgrow the URL first).
-  // ponytail: all messages on every render — upgrade to the visible tickets' messages when the thread count reaches the thousands.
   for (let from = 0; ; from += PAGE) {
     const res = await db.from("ticket_messages").select("id, ticketid, author, body, createdat").order("id").range(from, from + PAGE - 1);
     if (res.error) throw res.error;
@@ -49,10 +57,7 @@ export async function listTickets(db: Db, dir: Dir | null): Promise<Ticket[]> {
     for (const m of page) byTicket.set(m.ticketid, [...(byTicket.get(m.ticketid) ?? []), m]);
     if (page.length < PAGE) break;
   }
-  const flip = dir === "desc" ? -1 : 1;
-  return rows
-    .map((r) => ({ ...r, messages: (byTicket.get(r.id) ?? []).sort((a, b) => a.createdat.localeCompare(b.createdat) || a.id - b.id) }))
-    .sort((a, b) => flip * (RANK[a.status] - RANK[b.status]) || b.ticketdate.localeCompare(a.ticketdate) || b.id - a.id);
+  return byTicket;
 }
 
 const validDate = (s: string) => {
@@ -85,13 +90,17 @@ async function loadTicket(db: Db, id: number): Promise<Row> {
   return data[0] as Row;
 }
 
-/** `from` limits which current statuses may move; a ticket that changed under us is a "state" error. */
-export async function setStatus(db: Db, id: number, status: TicketStatus, from?: TicketStatus[]): Promise<void> {
-  let q = db.from("tickets").update({ status }).eq("id", id);
-  if (from) q = q.in("status", from);
-  const { data, error } = await q.select("id");
+/**
+ * One conditional write: the ticket moves to `to` only while its status is in `from`, and the row's fields for the notification come back
+ * with it. 0 rows is a lost race ("state") or an unknown id ("notfound"); only that path pays a second read to tell them apart.
+ */
+export async function moveTicket(db: Db, id: number, to: TicketStatus, from: TicketStatus[]): Promise<{ ticketdate: string; description: string }> {
+  const { data, error } = await db.from("tickets").update({ status: to }).eq("id", id).in("status", from).select("ticketdate, description");
   if (error) throw error;
-  if (!data?.length) throw new TicketError(from ? "state" : "notfound");
+  if (data?.length) return data[0] as { ticketdate: string; description: string };
+  const cur = await db.from("tickets").select("id").eq("id", id);
+  if (cur.error) throw cur.error;
+  throw new TicketError(cur.data?.length ? "state" : "notfound");
 }
 
 /** Description edit, allowed until the ticket is Closed. */
@@ -189,22 +198,34 @@ export const runAddTicket = (formData: FormData, deps: TicketDeps) =>
 
 /**
  * Close (from Open or In review) / reopen (from In review or Closed), with an optional response stored as a message by the
- * signed-in user and included in the email. The message is written first and deleted again if the status change doesn't
- * land (race lost or write failed), so a move that didn't happen leaves no response behind and none is ever lost.
+ * signed-in user and included in the email. Without a response the whole move is one conditional update. With one, the ticket is read
+ * first (a stale tab's click is refused before anything is written, so no message and no audit rows), the message is written, and it is
+ * deleted again if the update still loses a race, so a move that didn't happen leaves no response behind and none is ever lost.
  */
 const move = (to: TicketStatus, from: TicketStatus[], kind: "closed" | "reopened", where: string) => (formData: FormData, deps: TicketDeps) =>
   run(async (db, f, session) => {
     const id = idOf(f);
     const response = str(f, "response").trim();
     if (response.length > 2000) throw new TicketError("response");
-    const t = await loadTicket(db, id);
-    if (!from.includes(t.status)) throw new TicketError("state");
-    const messageId = response ? await addMessage(db, id, session.email || "staff", response) : null;
+    let messageId: number | null = null;
+    if (response) {
+      if (!from.includes((await loadTicket(db, id)).status)) throw new TicketError("state"); // notfound if the id is gone
+      try {
+        messageId = await addMessage(db, id, session.email || "staff", response);
+      } catch (e) {
+        if ((e as { code?: string })?.code === "23503") throw new TicketError("notfound"); // ticket_messages_ticketid_fkey: gone since the read
+        throw e;
+      }
+    }
+    let t: { ticketdate: string; description: string };
     try {
-      await setStatus(db, id, to, from);
+      t = await moveTicket(db, id, to, from);
     } catch (e) {
-      // Lost the race (or the write failed): the response was never applied to a move that didn't happen, so take it back.
-      if (messageId !== null) await db.from("ticket_messages").delete().eq("id", messageId).then(() => undefined, () => undefined);
+      // Lost the race (or the write failed) after the read: take the response back. supabase-js resolves with {error} rather than rejecting.
+      if (messageId !== null) {
+        const cleanup = await db.from("ticket_messages").delete().eq("id", messageId).then((r: { error?: { message?: string } | null }) => r.error?.message ?? null, (err: unknown) => (err instanceof Error ? err.message : "failed"));
+        if (cleanup) console.error(`move ticket ${id} response ${messageId} cleanup failed: ${cleanup}`);
+      }
       throw e;
     }
     // Not awaited: waiting on Resend held the redirect ~1s per click. `next start` on the droplet is long-lived, so the send

@@ -1,7 +1,7 @@
 // Renders app/tickets/page.tsx in plain node (stubs for session + db client come from the docs-reports harness).
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { renderToStaticMarkup } from "react-dom/server";
 import { session, dbclient } from "../docs-reports/render.mjs";
 import { memDb } from "./fakedb.mjs";
@@ -10,6 +10,8 @@ import { createRequire } from "node:module";
 // react-dom 18.3 has no useFormStatus outside Next's bundled canary (same shim as tests/cases/convert.test.mjs).
 const formStatus = { pending: false };
 createRequire(import.meta.url)("react-dom").useFormStatus = () => formStatus;
+// Same for React.useOptimistic (app/tickets/optimistic-status.tsx): idle here, the flip itself is tested in optimistic.test.mjs.
+createRequire(import.meta.url)("react").useOptimistic = (state) => [state, () => {}];
 
 const mod = await import("../../app/tickets/page.tsx");
 const Page = (mod.default?.default ? mod.default : mod).default;
@@ -71,10 +73,10 @@ test("?error= shows its message; unknown code shows the generic one", async () =
   assert.match(await render({ error: "date" }), /role="alert"[^>]*>Enter a valid date\./);
   assert.match(await render({ error: "zzz" }), /Save failed; nothing was changed\./);
 });
-test("page and actions stay server-side (only submit-button.tsx is a client component)", () => {
-  for (const f of ["../../app/tickets/page.tsx", "../../app/tickets/actions.ts"]) {
-    assert.ok(!/["']use client["']/.test(readFileSync(new URL(f, import.meta.url), "utf8")), f);
-  }
+test("page and actions stay server-side (the only client components are submit-button.tsx and optimistic-status.tsx)", () => {
+  const dir = new URL("../../app/tickets/", import.meta.url);
+  const client = readdirSync(dir).filter((f) => /["']use client["']/.test(readFileSync(new URL(f, dir), "utf8")));
+  assert.deepEqual(client.sort(), ["optimistic-status.tsx", "submit-button.tsx"]);
 });
 
 test("every ticket button is disabled while its form's action runs, and enabled otherwise", async () => {
@@ -89,4 +91,31 @@ test("every ticket button is disabled while its form's action runs, and enabled 
   } finally {
     formStatus.pending = false;
   }
+});
+
+test("each row's action form is keyed with the per-render stamp, so the redirect remounts it and clears the response box", async () => {
+  const rows = (node, out = []) => {
+    if (Array.isArray(node)) node.forEach((n) => rows(n, out));
+    else if (node && typeof node === "object" && "props" in node) {
+      if (node.type?.name === "RowActions") out.push({ id: node.props.id, key: node.key });
+      rows(node.props.children, out);
+    }
+    return out;
+  };
+  const stamps = [];
+  for (let i = 0; i < 2; i++) {
+    dbclient.state.db = memDb({ tickets: ROWS, ticket_messages: MSGS });
+    const lo = Date.now();
+    const found = rows(await Page({ searchParams: {} }));
+    const hi = Date.now();
+    assert.deepEqual(found.map((r) => r.id).sort(), [1, 2, 3]);
+    for (const { id, key } of found) {
+      const m = new RegExp(`^act-${id}-(\\d+)$`).exec(key);
+      assert.ok(m, `key ${key} has the stamp`);
+      assert.ok(Number(m[1]) >= lo && Number(m[1]) <= hi, "the stamp is that render's Date.now()");
+      stamps.push(m[1]);
+    }
+    await new Promise((r) => setTimeout(r, 3));
+  }
+  assert.notEqual(stamps[0], stamps[3], "a later render gets a new key");
 });
