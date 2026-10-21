@@ -11,7 +11,11 @@
 #   S3_BUCKET        bucket holding the nightly 7z backups (newest object by LastModified wins)
 #   S3_ENDPOINT      optional --endpoint-url (non-AWS S3, minio)
 #   LOCAL_ARCHIVE    optional path to a .7z/.zip/.bak; skips S3
-#   MSSQL_SCRIPTER   default "python3 -m mssqlscripter"
+#   MSSQL_SCRIPTER   optional override: run this host command instead of the scripter container
+#                    (e.g. "python -m mssqlscripter"); the mssql port is then also published on 127.0.0.1:1433.
+#                    Default (CI and local): scripts/migrate/scripter/Dockerfile, built and run on a private
+#                    docker network shared with the mssql container. Its .NET service needs OpenSSL 1.0 + ICU 60,
+#                    which neither ubuntu-latest nor a current Mac has.
 #   REQUIRE_LOCAL_DB=1  refuse unless MIGRATE_DB_URL's host is 127.0.0.1/localhost (rehearsals)
 #   SYNC_WORK_BASE   parent of the temp work dir (default $RUNNER_TEMP or /tmp). Must be a path
 #                    Docker can bind-mount (colima only shares $HOME and /tmp/colima).
@@ -42,6 +46,7 @@ fi
 
 STEP="start"          # on failure this name (never log content: it could be client data) lands in sync_runs.error
 CONTAINER=""
+NET=""
 WORK=""
 
 # --- sync_runs bookkeeping (values via psql -v, never string-built) -------------------------------
@@ -82,6 +87,7 @@ on_exit() {
     mark_done failed "$STEP" || true
   fi
   [[ -z "$CONTAINER" ]] || docker rm -f "$CONTAINER" >/dev/null 2>&1 || true
+  [[ -z "$NET" ]] || docker network rm "$NET" >/dev/null 2>&1 || true
   [[ -z "$WORK" ]] || rm -rf "$WORK"
   exit $rc
 }
@@ -167,8 +173,12 @@ SA_PASSWORD="$(openssl rand -base64 24 | tr -d '/+=\n')Aa1!"
 if [[ -n "${GITHUB_ACTIONS:-}" ]]; then echo "::add-mask::$SA_PASSWORD"; fi
 export MSSQL_SA_PASSWORD="$SA_PASSWORD" SQLCMDPASSWORD="$SA_PASSWORD"   # -e NAME passes the value without putting it in argv
 CONTAINER="ta-sync-mssql-$$"
-docker run -d --name "$CONTAINER" --platform linux/amd64 \
-  -e ACCEPT_EULA=Y -e MSSQL_SA_PASSWORD -p 127.0.0.1:1433:1433 -v "$WORK/x":/bak:ro \
+NET="ta-sync-net-$$"
+docker network create "$NET" >/dev/null
+publish=()
+[[ -z "${MSSQL_SCRIPTER:-}" ]] || publish=(-p 127.0.0.1:1433:1433)   # only the host-scripter override needs the port
+docker run -d --name "$CONTAINER" --platform linux/amd64 --network "$NET" --network-alias mssql \
+  -e ACCEPT_EULA=Y -e MSSQL_SA_PASSWORD ${publish[@]+"${publish[@]}"} -v "$WORK/x":/bak:ro \
   mcr.microsoft.com/mssql/server:2022-latest >/dev/null
 
 sqlcmd() { docker exec -e SQLCMDPASSWORD "$CONTAINER" /opt/mssql-tools18/bin/sqlcmd -b -C -S localhost -U sa "$@"; }
@@ -213,18 +223,34 @@ n_good=$(grep -Ec '^[a-z_]+\|[0-9]+$' "$WORK/source-counts.txt" || true)
 [[ "$n_lines" == 20 && "$n_good" == 20 ]] || { echo "sync: source-counts has $n_lines lines ($n_good valid), expected 20" >&2; exit 1; }
 
 STEP="script the export"
-read -r -a SCRIPTER <<<"${MSSQL_SCRIPTER:-python3 -m mssqlscripter}"
-PYTHONIOENCODING=utf8 "${SCRIPTER[@]}" -S localhost -d TechAssoc -U sa -P "$SA_PASSWORD" \
-  --data-only --target-server-version vNext \
-  --include-objects dbo.tblstates dbo.tblbranches dbo.tblcasestatus dbo.tblcasepriority dbo.tblcasewaitingfor dbo.tblbillingnames dbo.tblexptype dbo.tblfirm dbo.tblattorney dbo.tblclient dbo.tblinquiry dbo.tblcase dbo.tblbills dbo.tblactivity dbo.tblexpenses dbo.tblfundsrcvd dbo.tblsrvauth dbo.tblcaseresult dbo.tbl_scannedbillandcheck dbo.tblscanneddocument \
-  -f "$WORK/export.sql" >/dev/null
+TABLES=(dbo.tblstates dbo.tblbranches dbo.tblcasestatus dbo.tblcasepriority dbo.tblcasewaitingfor dbo.tblbillingnames dbo.tblexptype dbo.tblfirm dbo.tblattorney dbo.tblclient dbo.tblinquiry dbo.tblcase dbo.tblbills dbo.tblactivity dbo.tblexpenses dbo.tblfundsrcvd dbo.tblsrvauth dbo.tblcaseresult dbo.tbl_scannedbillandcheck dbo.tblscanneddocument)
+mkdir "$WORK/out"
+SCRIPTER_ARGS=(--data-only --target-server-version vNext --include-objects "${TABLES[@]}")
+if [[ -n "${MSSQL_SCRIPTER:-}" ]]; then
+  read -r -a SCRIPTER <<<"$MSSQL_SCRIPTER"
+  PYTHONIOENCODING=utf8 "${SCRIPTER[@]}" -S localhost -d TechAssoc -U sa -P "$SA_PASSWORD" \
+    "${SCRIPTER_ARGS[@]}" -f "$WORK/out/export.sql" >/dev/null
+else
+  docker build --quiet --platform linux/amd64 -t ta-sync-scripter scripts/migrate/scripter >/dev/null
+  docker run --rm --platform linux/amd64 --network "$NET" -e MSSQL_SA_PASSWORD -v "$WORK/out":/out ta-sync-scripter \
+    bash -c 'exec python3 -m mssqlscripter -S mssql -d TechAssoc -U sa -P "$MSSQL_SA_PASSWORD" "$@" -f /out/export.sql' _ \
+    "${SCRIPTER_ARGS[@]}" >/dev/null
+fi
+
+# mssql-scripter exits 0 even when it fails, and load.mjs deletes every table first: so an empty or partial
+# export must stop here, before any DB write. verify.mjs --export-only compares per-table INSERT row counts
+# in the file against the SQL Server counts and never touches the database.
+STEP="export incomplete (missing or empty export.sql)"
+[[ -s "$WORK/out/export.sql" ]] || { echo "sync: export incomplete: export.sql is missing or empty" >&2; exit 1; }
+STEP="export incomplete"
+node scripts/migrate/verify.mjs "$WORK/out/export.sql" --source-counts="$WORK/source-counts.txt" --export-only
 
 # --- load, verify (unchanged scripts) -------------------------------------------------------------
 STEP="load"
-node scripts/migrate/load.mjs "$WORK/export.sql"
+node scripts/migrate/load.mjs "$WORK/out/export.sql"
 
 STEP="loaded but verify failed"
-node scripts/migrate/verify.mjs "$WORK/export.sql" --source-counts="$WORK/source-counts.txt"
+node scripts/migrate/verify.mjs "$WORK/out/export.sql" --source-counts="$WORK/source-counts.txt"
 
 STEP="mark succeeded"
 mark_done succeeded ""

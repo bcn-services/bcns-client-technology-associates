@@ -10,7 +10,8 @@ name: sync-legacy
 #
 # Runner assumptions (ubuntu-latest, verified from the runner-images docs, not by running this):
 #   docker, aws cli v2, psql (postgresql-client) are preinstalled; 7z is installed below if missing.
-#   mssql-scripter (pre-release only) is installed with pip --pre; it also worked on Python 3.14 locally.
+#   mssql-scripter is NOT installed on the runner: its .NET service needs OpenSSL 1.0 + ICU 60. sync.sh builds
+#   scripts/migrate/scripter/Dockerfile (ubuntu:18.04) and runs it next to the mssql container.
 
 on:
   workflow_dispatch:
@@ -25,7 +26,8 @@ on:
         default: false
 
 concurrency:
-  group: sync-legacy
+  # a rehearsal must not queue behind (or cancel the pending slot of) a production run, and vice versa
+  group: sync-legacy-${{ inputs.rehearsal && 'rehearsal' || 'prod' }}
   cancel-in-progress: false
 
 permissions:
@@ -38,6 +40,8 @@ jobs:
     env:
       # Untrusted input goes through env, never into the shell text; sync.sh checks it is digits.
       RUN_ID: ${{ inputs.run_id }}
+      # sync.sh refuses a backup older than this (and older than the last synced one) before downloading it
+      MAX_BACKUP_AGE_HOURS: "48"
     steps:
       - name: Prod mode needs a run id
         if: ${{ !inputs.rehearsal && inputs.run_id == '' }}
@@ -51,12 +55,8 @@ jobs:
         run: pnpm config set "//npm.pkg.github.com/:_authToken" "${{ secrets.GH_PACKAGES_TOKEN }}"
       - name: Install
         run: pnpm install --frozen-lockfile
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-      - name: Tooling (mssql-scripter, 7z)
+      - name: Tooling (7z)
         run: |
-          pip install --pre mssql-scripter
           command -v 7z >/dev/null || { sudo apt-get update && sudo apt-get install -y p7zip-full; }
 
       # ---- rehearsal: throwaway local stack, same schema as prod (0001..latest) ----
