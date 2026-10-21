@@ -16,7 +16,7 @@ const deps = () => ({
   redirect,
   notify: (t: { date: string; description: string }) => {
     const c = getConfig();
-    return sendTicketEmail({ apiKey: c.resendApiKey, apiUrl: c.resendApiUrl, from: c.billFromEmail, to: c.ticketNotifyEmail }, t);
+    return sendTicketEmail({ apiKey: c.resendApiKey, apiUrl: c.resendApiUrl, from: c.ticketFromEmail, to: c.ticketNotifyEmail }, t);
   },
 });
 

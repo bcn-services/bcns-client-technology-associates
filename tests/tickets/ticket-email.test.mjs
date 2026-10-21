@@ -79,6 +79,19 @@ test("TICKET_NOTIFY_EMAIL unset/blank (via getConfig) or key/from missing: no se
   } finally {
     if (saved === undefined) delete process.env.TICKET_NOTIFY_EMAIL; else process.env.TICKET_NOTIFY_EMAIL = saved;
   }
+  const savedFrom = [process.env.TICKET_FROM_EMAIL, process.env.BILL_FROM_EMAIL];
+  try {
+    delete process.env.TICKET_FROM_EMAIL; delete process.env.BILL_FROM_EMAIL;
+    assert.equal(getConfig().ticketFromEmail, undefined);
+    process.env.BILL_FROM_EMAIL = "bill@x.test";
+    assert.equal(getConfig().ticketFromEmail, "bill@x.test"); // fallback
+    process.env.TICKET_FROM_EMAIL = "bot@x.test";
+    assert.equal(getConfig().ticketFromEmail, "bot@x.test"); // own value wins
+    delete process.env.BILL_FROM_EMAIL;
+    assert.deepEqual([getConfig().ticketFromEmail, getConfig().billFromEmail], ["bot@x.test", undefined]); // bill email stays off
+  } finally {
+    for (const [k, v] of [["TICKET_FROM_EMAIL", savedFrom[0]], ["BILL_FROM_EMAIL", savedFrom[1]]]) if (v === undefined) delete process.env[k]; else process.env[k] = v;
+  }
   for (const cfg of [{ ...CFG, apiKey: undefined }, { ...CFG, from: undefined }]) {
     const s = setup({ cfg });
     await runAddTicket(form({ date: "2026-10-21", description: "ok" }), s.deps);
