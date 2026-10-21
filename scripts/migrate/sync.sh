@@ -16,6 +16,12 @@
 #   SYNC_WORK_BASE   parent of the temp work dir (default $RUNNER_TEMP or /tmp). Must be a path
 #                    Docker can bind-mount (colima only shares $HOME and /tmp/colima).
 # Never reads .env.local. Never echoes the SA password or the DB URL's password.
+#   MAX_BACKUP_AGE_HOURS  default 48; refuse a backup older than this (set once, in the workflow env)
+#   Freshness checks (older than the last succeeded run's backup_at, older than MAX_BACKUP_AGE_HOURS)
+#   are skipped when RUN_ID is empty (rehearsal: no sync_runs history) or LOCAL_ARCHIVE is set.
+# Needs bash >= 4: macOS /bin/bash is 3.2, where an unbound-variable abort after the EXIT trap exits 0.
+# On a Mac use `brew install bash` and run this with that bash (the shebang resolves it via PATH).
+if (( BASH_VERSINFO[0] < 4 )); then echo "sync: bash >= 4 required (this is $BASH_VERSION)" >&2; exit 2; fi
 set -euo pipefail
 
 cd "$(dirname "$0")/../.."
@@ -109,7 +115,7 @@ if [[ -n "${LOCAL_ARCHIVE:-}" ]]; then
   mark_backup "local:${ARCHIVE##*/}" ""
 else
   STEP="find newest backup"
-  : "${S3_BUCKET:?S3_BUCKET is required}"
+  [[ -n "${S3_BUCKET:-}" ]] || { echo "sync: S3_BUCKET is required" >&2; exit 1; }
   aws_ep=()
   if [[ -n "${S3_ENDPOINT:-}" ]]; then aws_ep=(--endpoint-url "$S3_ENDPOINT"); fi
   newest=$(aws s3api list-objects-v2 ${aws_ep[@]+"${aws_ep[@]}"} --bucket "$S3_BUCKET" \
@@ -117,6 +123,22 @@ else
   IFS=$'\t' read -r key modified <<<"$newest"
   [[ -n "$key" && "$key" != None ]] || { echo "sync: no objects in the bucket" >&2; exit 1; }
   echo "sync: newest backup is '$key' ($modified)"
+  if [[ -n "$RUN_ID" ]]; then
+    STEP="check backup freshness"
+    max_hours="${MAX_BACKUP_AGE_HOURS:-48}"
+    [[ "$max_hours" =~ ^[0-9]+$ ]] || { echo "sync: MAX_BACKUP_AGE_HOURS must be digits" >&2; exit 2; }
+    stale=$(psql -X -q -At -v ON_ERROR_STOP=1 -v mod="$modified" -v hrs="$max_hours" "$MIGRATE_DB_URL" <<'SQL'
+select case
+  when :'mod'::timestamptz < (select max(backup_at) from sync_runs where status = 'succeeded') then 'older than the last synced backup'
+  when now() - :'mod'::timestamptz > make_interval(hours => :'hrs'::int) then 'older than the maximum age'
+  else '' end;
+SQL
+    )
+    if [[ -n "$stale" ]]; then
+      STEP="backup is $stale (backup dated $modified)"
+      exit 1
+    fi
+  fi
   STEP="download backup"
   ARCHIVE="$WORK/dl/archive"
   aws s3 cp ${aws_ep[@]+"${aws_ep[@]}"} --only-show-errors "s3://$S3_BUCKET/$key" "$ARCHIVE"
@@ -128,14 +150,15 @@ fi
 STEP="extract backup"
 ARCHIVE_NAME="${ARCHIVE_NAME:-${ARCHIVE##*/}}"
 if [[ "$(tr '[:upper:]' '[:lower:]' <<<"$ARCHIVE_NAME")" == *.bak ]]; then
-  cp "$ARCHIVE" "$WORK/x/"
+  cp "$ARCHIVE" "$WORK/x/restore.bak"
 else
   SEVENZ=$(command -v 7z || command -v 7zz) || { echo "sync: neither 7z nor 7zz is installed" >&2; exit 1; }
   "$SEVENZ" x -y -bso0 -bsp0 -o"$WORK/x" "$ARCHIVE"
 fi
 bak_count=$(find "$WORK/x" -type f -iname '*.bak' | wc -l | tr -d ' ')
 [[ "$bak_count" == 1 ]] || { echo "sync: expected exactly one .bak, found $bak_count" >&2; exit 1; }
-mv "$(find "$WORK/x" -type f -iname '*.bak')" "$WORK/x/restore.bak"   # fixed name: nothing odd reaches T-SQL
+bak=$(find "$WORK/x" -type f -iname '*.bak')
+[[ "$bak" == "$WORK/x/restore.bak" ]] || mv "$bak" "$WORK/x/restore.bak"   # fixed name: nothing odd reaches T-SQL
 rm -f "$WORK/dl/archive"
 
 # --- restore into a throwaway SQL Server (runbook 1.2, 1.4) --------------------------------------
