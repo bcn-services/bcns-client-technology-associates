@@ -1,7 +1,7 @@
 // Renders app/tickets/page.tsx in plain node (stubs for session + db client come from the docs-reports harness).
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { renderToStaticMarkup } from "react-dom/server";
 import { session, dbclient } from "../docs-reports/render.mjs";
 import { memDb } from "./fakedb.mjs";
@@ -10,6 +10,8 @@ import { createRequire } from "node:module";
 // react-dom 18.3 has no useFormStatus outside Next's bundled canary (same shim as tests/cases/convert.test.mjs).
 const formStatus = { pending: false };
 createRequire(import.meta.url)("react-dom").useFormStatus = () => formStatus;
+// Same for React.useOptimistic (app/tickets/optimistic-status.tsx): idle here, the flip itself is tested in optimistic.test.mjs.
+createRequire(import.meta.url)("react").useOptimistic = (state) => [state, () => {}];
 
 const mod = await import("../../app/tickets/page.tsx");
 const Page = (mod.default?.default ? mod.default : mod).default;
@@ -71,10 +73,10 @@ test("?error= shows its message; unknown code shows the generic one", async () =
   assert.match(await render({ error: "date" }), /role="alert"[^>]*>Enter a valid date\./);
   assert.match(await render({ error: "zzz" }), /Save failed; nothing was changed\./);
 });
-test("page and actions stay server-side (only submit-button.tsx is a client component)", () => {
-  for (const f of ["../../app/tickets/page.tsx", "../../app/tickets/actions.ts"]) {
-    assert.ok(!/["']use client["']/.test(readFileSync(new URL(f, import.meta.url), "utf8")), f);
-  }
+test("page and actions stay server-side (the only client components are submit-button.tsx and optimistic-status.tsx)", () => {
+  const dir = new URL("../../app/tickets/", import.meta.url);
+  const client = readdirSync(dir).filter((f) => /["']use client["']/.test(readFileSync(new URL(f, dir), "utf8")));
+  assert.deepEqual(client.sort(), ["optimistic-status.tsx", "submit-button.tsx"]);
 });
 
 test("every ticket button is disabled while its form's action runs, and enabled otherwise", async () => {
