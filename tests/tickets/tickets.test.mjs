@@ -1,46 +1,8 @@
-// Unit tests for lib/tickets.ts with an in-memory fake PostgREST client that really evaluates filters.
+// Unit tests for lib/tickets.ts with an in-memory fake PostgREST client (./fakedb.mjs) that really evaluates filters.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { listTickets, parseSort, setStatus, runAddTicket, runCloseTicket, runReopenTicket } from "../../lib/tickets.ts";
-
-/** In-memory fake: eq evaluated against `tables`; every op recorded in `calls`, writes in `writes`. */
-function memDb(seed) {
-  const tables = structuredClone(seed);
-  const calls = [];
-  const writes = [];
-  return {
-    tables, calls, writes,
-    from(table) {
-      const st = { table, op: "select", filters: [], payload: null };
-      calls.push(st);
-      const exec = () => {
-        const rows = (tables[table] ??= []);
-        const match = (r) => st.filters.every(([c, v]) => r[c] === v);
-        if (st.op === "insert") {
-          const id = Math.max(0, ...rows.map((r) => r.id ?? 0)) + 1;
-          const row = { id, status: "Open", createdat: "now", ...st.payload };
-          rows.push(row); writes.push(["insert", table, row]);
-          return { data: [row], error: null };
-        }
-        if (st.op === "update") {
-          const hit = rows.filter(match);
-          for (const r of hit) Object.assign(r, st.payload);
-          writes.push(["update", table, st.payload, hit.length]);
-          return { data: hit.map((r) => ({ ...r })), error: null };
-        }
-        return { data: rows.filter(match).map((r) => ({ ...r })), error: null };
-      };
-      const b = {
-        select() { return b; },
-        insert(p) { st.op = "insert"; st.payload = p; return b; },
-        update(p) { st.op = "update"; st.payload = p; return b; },
-        eq(c, v) { st.filters.push([c, v]); return b; },
-        then(res, rej) { return Promise.resolve().then(exec).then(res, rej); },
-      };
-      return b;
-    },
-  };
-}
+import { listTickets, parseSort, setStatus, runAddTicket, runCloseTicket, runReopenTicket, runEditTicket } from "../../lib/tickets.ts";
+import { memDb } from "./fakedb.mjs";
 
 const T = (id, ticketdate, status, description = `t${id}`) => ({ id, ticketdate, description, status, createdat: "x" });
 const SEED = {
@@ -71,6 +33,23 @@ test("parseSort: only sort=status with dir asc|desc passes; everything else is t
 test("default order: Open first, then newest date, then newest id", async () => {
   assert.deepEqual(await ids(null), [4, 2, 5, 3, 1]);
 });
+test("In review sorts before Open before Closed; desc reverses the groups; messages ride along oldest first", async () => {
+  const seed = {
+    tickets: [T(1, "2026-10-01", "Closed"), T(2, "2026-10-05", "Open"), T(3, "2026-09-01", "In review"), T(4, "2026-10-09", "Open")],
+    ticket_messages: [
+      { id: 2, ticketid: 3, author: "email", body: "second", createdat: "2026-10-21T00:00:02Z" },
+      { id: 1, ticketid: 3, author: "a@x.test", body: "first", createdat: "2026-10-21T00:00:01Z" },
+    ],
+  };
+  const asc = await listTickets(memDb(seed), null);
+  assert.deepEqual(asc.map((t) => t.id), [3, 4, 2, 1]);
+  assert.deepEqual(asc[0].messages.map((m) => m.body), ["first", "second"]);
+  assert.deepEqual(asc[1].messages, []);
+  assert.deepEqual((await listTickets(memDb(seed), "desc")).map((t) => t.id), [1, 4, 2, 3]);
+  const db = memDb(seed);
+  await listTickets(db, null);
+  assert.equal(db.calls.filter((c) => c.table === "ticket_messages").length, 1, "one messages query, not one per ticket");
+});
 test("status asc is the default order", async () => {
   assert.deepEqual(await ids("asc"), await ids(null));
 });
@@ -91,7 +70,9 @@ test("runAddTicket: trims, inserts one Open row, redirects to /tickets and reval
   const db = memDb(SEED);
   const d = deps(db);
   await runAddTicket(form({ date: "2026-10-21", description: "  Add a print button  " }), d.deps);
-  assert.deepEqual(db.writes, [["insert", "tickets", { id: 6, status: "Open", createdat: "now", ticketdate: "2026-10-21", description: "Add a print button" }]]);
+  assert.equal(db.writes.length, 1);
+  assert.deepEqual(db.writes[0].slice(0, 2), ["insert", "tickets"]);
+  assert.deepEqual(db.writes[0][2], { id: 6, status: "Open", createdat: "2026-10-21T00:00:06Z", ticketdate: "2026-10-21", description: "Add a print button" });
   assert.deepEqual({ redirects: d.redirects, paths: d.paths }, { redirects: ["/tickets"], paths: ["/tickets"] });
 });
 test("runAddTicket: blank / whitespace / missing / over-long description → ?error=description, zero writes", async () => {
@@ -123,7 +104,62 @@ test("runClose/runReopen: flip status; bad or unknown id → ?error=notfound, ze
   await runCloseTicket(form({ id: "-1" }), d.deps);
   await runCloseTicket(form({ id: "99" }), d.deps);
   assert.deepEqual(d.redirects, ["/tickets", "/tickets", "/tickets?error=notfound", "/tickets?error=notfound", "/tickets?error=notfound"]);
-  assert.equal(db.writes.length, before + 1); // only the id=99 update ran (matched nothing)
+  assert.equal(db.writes.length, before);
+});
+
+const withReview = () => memDb({ tickets: [T(1, "2026-10-01", "Open", "one"), T(2, "2026-10-02", "In review", "two"), T(3, "2026-10-03", "Closed", "three")] });
+const statusOf = (db, id) => db.tables.tickets.find((t) => t.id === id).status;
+
+test("transitions: Close from Open or In review, Reopen from In review or Closed; anything else → ?error=state, zero writes", async () => {
+  const db = withReview();
+  const d = deps(db);
+  await runCloseTicket(form({ id: "1" }), d.deps);
+  await runCloseTicket(form({ id: "2" }), d.deps);
+  assert.deepEqual([1, 2].map((i) => statusOf(db, i)), ["Closed", "Closed"]);
+  await runReopenTicket(form({ id: "3" }), d.deps);
+  assert.equal(statusOf(db, 3), "Open");
+  const review = memDb({ tickets: [T(5, "2026-10-01", "In review")] });
+  await runReopenTicket(form({ id: "5" }), deps(review).deps);
+  assert.equal(statusOf(review, 5), "Open");
+  assert.deepEqual(d.redirects, ["/tickets", "/tickets", "/tickets"]);
+
+  const bad = withReview();
+  const e = deps(bad);
+  await runCloseTicket(form({ id: "3", response: "x" }), e.deps); // already Closed
+  await runReopenTicket(form({ id: "1", response: "x" }), e.deps); // Open
+  assert.deepEqual(e.redirects, ["/tickets?error=state", "/tickets?error=state"]);
+  assert.deepEqual(bad.writes, []);
+});
+
+test("response: trimmed, stored as a message by the signed-in user; blank stores none; over 2000 → ?error=response, zero writes", async () => {
+  const db = withReview();
+  const d = deps(db, async () => ({ userId: "u", email: "kris@x.test", role: "staff", personId: null }));
+  await runReopenTicket(form({ id: "2", response: "  Fixed in the new build  " }), d.deps);
+  assert.deepEqual(db.tables.ticket_messages.map(({ ticketid, author, body }) => ({ ticketid, author, body })), [{ ticketid: 2, author: "kris@x.test", body: "Fixed in the new build" }]);
+  assert.equal(statusOf(db, 2), "Open");
+  await runCloseTicket(form({ id: "2", response: "   " }), d.deps);
+  assert.equal(db.tables.ticket_messages.length, 1);
+  const long = withReview();
+  const e = deps(long);
+  await runCloseTicket(form({ id: "1", response: "x".repeat(2001) }), e.deps);
+  assert.deepEqual({ r: e.redirects, w: long.writes }, { r: ["/tickets?error=response"], w: [] });
+});
+
+test("runEditTicket: updates the description of Open and In review tickets; Closed → ?error=state; blank/long → ?error=description; unknown → notfound", async () => {
+  const db = withReview();
+  const d = deps(db);
+  await runEditTicket(form({ id: "1", description: "  better words " }), d.deps);
+  await runEditTicket(form({ id: "2", description: "also better" }), d.deps);
+  assert.deepEqual([1, 2].map((i) => db.tables.tickets.find((t) => t.id === i).description), ["better words", "also better"]);
+  assert.deepEqual([1, 2].map((i) => statusOf(db, i)), ["Open", "In review"], "edit never changes status");
+  const before = db.writes.length;
+  await runEditTicket(form({ id: "3", description: "nope" }), d.deps);
+  await runEditTicket(form({ id: "1", description: "   " }), d.deps);
+  await runEditTicket(form({ id: "1", description: "x".repeat(2001) }), d.deps);
+  await runEditTicket(form({ id: "99", description: "ok" }), d.deps);
+  assert.deepEqual(d.redirects.slice(2), ["/tickets?error=state", "/tickets?error=description", "/tickets?error=description", "/tickets?error=notfound"]);
+  assert.equal(db.writes.length, before);
+  assert.equal(db.tables.tickets.find((t) => t.id === 3).description, "three");
 });
 
 test("both roles may act (admin and staff alike)", async () => {

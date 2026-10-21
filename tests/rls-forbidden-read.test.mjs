@@ -50,3 +50,16 @@ test(
     assert.ok(!write.ok, "anon must not be able to insert a ticket");
   },
 );
+
+test(
+  "rls: anon key cannot read or write ticket_messages",
+  { skip: !configured && "Supabase env not configured — live RLS probe skipped" },
+  async () => {
+    const headers = { apikey: anonKey, Authorization: `Bearer ${anonKey}`, "Content-Type": "application/json" };
+    const read = await fetch(`${url}/rest/v1/ticket_messages?select=*`, { headers });
+    if (read.ok) assert.deepEqual(await read.json(), [], "anon must never receive ticket messages");
+    else assert.ok(read.status >= 400, "non-ok responses must be denials");
+    const write = await fetch(`${url}/rest/v1/ticket_messages`, { method: "POST", headers, body: JSON.stringify({ ticketid: 1, author: "anon", body: "probe" }) });
+    assert.ok(!write.ok, "anon must not be able to insert a ticket message");
+  },
+);
