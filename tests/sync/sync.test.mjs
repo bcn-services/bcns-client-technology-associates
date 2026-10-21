@@ -7,7 +7,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { requestSync, syncState, STALE_MS, DISPATCH_URL } from "../../lib/sync/runs.ts";
+import { requestSync, syncState, STALE_MS, STALE_QUEUED_MS, DISPATCH_URL } from "../../lib/sync/runs.ts";
 
 const NOW = Date.parse("2026-10-21T12:00:00Z");
 const HOUR = 3600 * 1000;
@@ -15,18 +15,20 @@ const TOKEN = "ghp_secret_token_value";
 const ago = (ms) => new Date(NOW - ms).toISOString();
 const run = (over) => ({ id: 1, status: "succeeded", requested_by: "u0", requested_at: ago(10 * HOUR), started_at: null, finished_at: null, backup_key: null, backup_at: null, run_url: null, error: null, ...over });
 
-function fakeDb(rows, { insertError = null } = {}) {
+// readAs: what select returns instead of the table (a snapshot taken before another writer finished the row)
+function fakeDb(rows, { insertError = null, readAs = null } = {}) {
   const table = rows.map((r) => ({ ...r }));
   const calls = { inserts: [], updates: [] };
   const db = {
     from(name) {
       assert.equal(name, "sync_runs");
-      let op = "select", payload, filter;
+      let op = "select", payload, filter, statusIn;
       const q = {
         select() { return q; },
         order() { return q; },
         limit() { return q; },
         eq(k, v) { filter = [k, v]; return q; },
+        in(k, vals) { assert.equal(k, "status"); statusIn = vals; return q; },
         insert(row) { op = "insert"; payload = row; return q; },
         update(p) { op = "update"; payload = p; return q; },
         single: async () => {
@@ -39,11 +41,11 @@ function fakeDb(rows, { insertError = null } = {}) {
         then(resolve, reject) {
           return (async () => {
             if (op === "update") {
-              calls.updates.push({ filter, ...payload });
-              for (const r of table.filter((r) => r[filter[0]] === filter[1])) Object.assign(r, payload);
+              calls.updates.push({ filter, statusIn, ...payload });
+              for (const r of table.filter((r) => r[filter[0]] === filter[1] && (!statusIn || statusIn.includes(r.status)))) Object.assign(r, payload);
               return { data: null, error: null };
             }
-            return { data: [...table].sort((a, b) => b.id - a.id).slice(0, 1), error: null };
+            return { data: readAs ?? [...table].sort((a, b) => b.id - a.id).slice(0, 1), error: null };
           })().then(resolve, reject);
         },
       };
@@ -65,6 +67,7 @@ function fakeFetch(status = 204) {
 
 test("the stale window and dispatch target are pinned to literals", () => {
   assert.equal(STALE_MS, 3 * 60 * 60 * 1000);
+  assert.equal(STALE_QUEUED_MS, 30 * 60 * 1000);
   assert.equal(DISPATCH_URL, "https://api.github.com/repos/bcn-services/bcns-client-technology-associates/actions/workflows/sync-legacy.yml/dispatches");
 });
 
@@ -77,7 +80,7 @@ test("1: the sync server action checks for an admin as its first statement (staf
 
 test("2: a fresh queued or running row refuses the request and never calls fetch", async () => {
   for (const status of ["queued", "running"]) {
-    const { db, calls } = fakeDb([run({ id: 5, status, requested_at: ago(1 * HOUR) })]);
+    const { db, calls } = fakeDb([run({ id: 5, status, requested_at: ago(10 * 60 * 1000), started_at: status === "running" ? ago(1 * HOUR) : null })]);
     const { f, sent } = fakeFetch();
     const r = await requestSync(db, "admin-1", TOKEN, f, NOW);
     assert.equal(r.ok, false, status);
@@ -88,8 +91,8 @@ test("2: a fresh queued or running row refuses the request and never calls fetch
   }
 });
 
-test("3: a stale (>3h) active row is marked failed 'timed out' and a new run proceeds", async () => {
-  const { db, table, calls } = fakeDb([run({ id: 5, status: "running", requested_at: ago(3 * HOUR + 1000) })]);
+test("3: a running row started >3h ago is marked failed 'timed out' and a new run proceeds", async () => {
+  const { db, table, calls } = fakeDb([run({ id: 5, status: "running", requested_at: ago(4 * HOUR), started_at: ago(3 * HOUR + 1000) })]);
   const { f, sent } = fakeFetch();
   const r = await requestSync(db, "admin-1", TOKEN, f, NOW);
   assert.equal(r.ok, true);
@@ -98,11 +101,29 @@ test("3: a stale (>3h) active row is marked failed 'timed out' and a new run pro
   assert.equal(old.error, "timed out");
   assert.ok(old.finished_at);
   assert.deepEqual(calls.inserts, [{ requested_by: "admin-1" }]);
+  assert.deepEqual(calls.updates[0].statusIn, ["queued", "running"]);
   assert.equal(sent.length, 1);
   assert.equal(JSON.parse(sent[0].init.body).inputs.run_id, "6");
-  // just inside the window still blocks
-  const fresh = fakeDb([run({ id: 5, status: "queued", requested_at: ago(3 * HOUR - 1000) })]);
+  // just inside the window still blocks, however long ago it was requested
+  const fresh = fakeDb([run({ id: 5, status: "running", requested_at: ago(10 * HOUR), started_at: ago(3 * HOUR - 1000) })]);
   assert.equal((await requestSync(fresh.db, "admin-1", TOKEN, fakeFetch().f, NOW)).ok, false);
+});
+
+test("3b: a queued row that never started is stale after 30 min, not before", async () => {
+  const stale = fakeDb([run({ id: 5, status: "queued", requested_at: ago(STALE_QUEUED_MS + 1000) })]);
+  assert.equal((await requestSync(stale.db, "admin-1", TOKEN, fakeFetch().f, NOW)).ok, true);
+  assert.equal(stale.table.find((x) => x.id === 5).error, "timed out");
+  const fresh = fakeDb([run({ id: 5, status: "queued", requested_at: ago(STALE_QUEUED_MS - 1000) })]);
+  assert.equal((await requestSync(fresh.db, "admin-1", TOKEN, fakeFetch().f, NOW)).ok, false);
+});
+
+test("3c: reclaiming never overwrites a run that finished since we read it", async () => {
+  const snapshot = run({ id: 5, status: "running", requested_at: ago(6 * HOUR), started_at: ago(4 * HOUR) });
+  const { db, table } = fakeDb([run({ id: 5, status: "succeeded", error: null, requested_at: ago(6 * HOUR), started_at: ago(4 * HOUR) })], { readAs: [snapshot] });
+  await requestSync(db, "admin-1", TOKEN, fakeFetch().f, NOW);
+  const old = table.find((x) => x.id === 5);
+  assert.equal(old.status, "succeeded");
+  assert.equal(old.error, null);
 });
 
 test("4: token unset -> canSync false 'Not configured'; requestSync refuses without inserting", async () => {
@@ -122,10 +143,12 @@ test("4: token unset -> canSync false 'Not configured'; requestSync refuses with
 test("4b: syncState reports the last run, an active run blocks, a stale or finished one does not", async () => {
   const idle = await syncState(fakeDb([run({ id: 2 })]).db, TOKEN, NOW);
   assert.deepEqual([idle.canSync, idle.active, idle.reason, idle.last.id], [true, false, undefined, 2]);
-  const busy = await syncState(fakeDb([run({ id: 3, status: "running", requested_at: ago(HOUR) })]).db, TOKEN, NOW);
+  const busy = await syncState(fakeDb([run({ id: 3, status: "running", requested_at: ago(5 * HOUR), started_at: ago(HOUR) })]).db, TOKEN, NOW);
   assert.deepEqual([busy.canSync, busy.active, busy.reason], [false, true, "A sync is running"]);
   const stale = await syncState(fakeDb([run({ id: 3, status: "queued", requested_at: ago(4 * HOUR) })]).db, TOKEN, NOW);
   assert.deepEqual([stale.canSync, stale.active], [true, false]);
+  const staleRunning = await syncState(fakeDb([run({ id: 3, status: "running", requested_at: ago(5 * HOUR), started_at: ago(4 * HOUR) })]).db, TOKEN, NOW);
+  assert.deepEqual([staleRunning.canSync, staleRunning.active], [true, false]);
   const none = await syncState(fakeDb([]).db, TOKEN, NOW);
   assert.deepEqual([none.last, none.canSync], [null, true]);
 });

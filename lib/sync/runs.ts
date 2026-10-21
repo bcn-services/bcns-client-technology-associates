@@ -14,13 +14,18 @@ export type SyncState = { last: SyncRun | null; active: boolean; canSync: boolea
 
 export const DISPATCH_URL =
   "https://api.github.com/repos/bcn-services/bcns-client-technology-associates/actions/workflows/sync-legacy.yml/dispatches";
-/** A queued/running row older than this is presumed dead (the workflow's own timeout is 2h). */
+/** A running row started longer ago than this is presumed dead (the workflow's own timeout is 2h). */
 export const STALE_MS = 3 * 60 * 60 * 1000;
+/** A row still queued (never started) this long after it was requested means the dispatch never ran. */
+export const STALE_QUEUED_MS = 30 * 60 * 1000;
 
 const NOT_CONFIGURED = "Not configured";
 const refuse = (error: string): SyncResult => ({ ok: false, error });
 const isActive = (r: SyncRun | null): r is SyncRun => r?.status === "queued" || r?.status === "running";
-const isStale = (r: SyncRun, now: number) => now - Date.parse(r.requested_at) > STALE_MS;
+// Measured from started_at, not requested_at: a run that waited in GitHub's queue is not dead. A row that
+// never started is stale on the much shorter queue clock.
+const isStale = (r: SyncRun, now: number) =>
+  r.started_at ? now - Date.parse(r.started_at) > STALE_MS : now - Date.parse(r.requested_at) > STALE_QUEUED_MS;
 
 /** Newest run. At most one row can be queued/running (partial unique index), and it is always the newest. */
 async function latestRun(db: Db): Promise<SyncRun | null> {
@@ -30,7 +35,12 @@ async function latestRun(db: Db): Promise<SyncRun | null> {
 }
 
 async function markFailed(db: Db, id: number, error: string, now: number): Promise<void> {
-  await db.from("sync_runs").update({ status: "failed", error, finished_at: new Date(now).toISOString() }).eq("id", id);
+  // Only a still-active row: a run that finished between our read and this write must keep its real outcome.
+  await db
+    .from("sync_runs")
+    .update({ status: "failed", error, finished_at: new Date(now).toISOString() })
+    .eq("id", id)
+    .in("status", ["queued", "running"]);
 }
 
 export async function syncState(db: Db, token: string | undefined, now: number = Date.now()): Promise<SyncState> {
