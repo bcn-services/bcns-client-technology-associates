@@ -25,6 +25,7 @@ export async function POST(request: Request): Promise<Response> {
       db: () => createServerClient() as unknown as Db,
     },
   );
-  if (result.status !== 200 || !result.note.startsWith("ignored")) console.log(`ticket inbound: ${result.status} ${result.note}`);
+  // Every outcome past the signature is logged, ignores too (a silent misconfig shows up): note and email_id only, never the body or sender.
+  if (result.status !== 401) console.log(`ticket inbound: ${result.status} ${result.note}${result.emailId ? ` email_id=${result.emailId}` : ""}`);
   return new Response(result.note, { status: result.status });
 }

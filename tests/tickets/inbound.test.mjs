@@ -23,8 +23,8 @@ const FULL = (over = {}) => ({
   ...over,
 });
 
-function setup({ status = "Closed", full = FULL(), fetchImpl, secret = SECRET, notify = NOTIFY, tickets } = {}) {
-  const db = memDb({ tickets: tickets ?? [{ id: 7, ticketdate: "2026-10-02", description: "Print button", status, createdat: "x" }] });
+function setup({ status = "Closed", full = FULL(), fetchImpl, secret = SECRET, notify = NOTIFY, tickets, dbOpts } = {}) {
+  const db = memDb({ tickets: tickets ?? [{ id: 7, ticketdate: "2026-10-02", description: "Print button", status, createdat: "x" }] }, dbOpts);
   const fetched = [];
   const fetchFn = fetchImpl ?? (async (url, init) => { fetched.push({ url, auth: init.headers.authorization }); return { ok: true, status: 200, json: async () => full }; });
   const deps = { secret: secret ?? undefined, notifyEmail: notify ?? undefined, replyDomain: DOMAIN, apiKey: "re_full", apiUrl: "https://mail.test/", db: () => db, fetchFn, now: () => NOW_S * 1000 };
@@ -37,11 +37,34 @@ const status = (db) => db.tables.tickets[0].status;
 test("good reply: fetches the body with the key, stores it (quote stripped, author 'email'), moves the ticket to In review", async () => {
   const s = setup();
   const r = await s.post(EVENT());
-  assert.deepEqual(r, { status: 200, note: "ticket 7 in review" });
+  assert.deepEqual(r, { status: 200, note: "ticket 7 in review", emailId: "em_1" });
   assert.deepEqual(s.fetched, [{ url: "https://mail.test/emails/receiving/em_1", auth: "Bearer re_full" }]);
   assert.equal(msgs(s.db).length, 1);
   assert.deepEqual({ ticketid: msgs(s.db)[0].ticketid, author: msgs(s.db)[0].author, body: msgs(s.db)[0].body, rid: msgs(s.db)[0].resend_email_id }, { ticketid: 7, author: "email", body: "Looks fixed, thanks.", rid: "em_1" });
   assert.equal(status(s.db), "In review", "a Closed ticket still goes to In review");
+});
+
+test("the status flip is not a second write: a failing ticket update cannot strand the reply (a retry finds it stored AND In review)", async () => {
+  const s = setup({ status: "Open", dbOpts: { updateError: { message: "tickets update fails" } } });
+  const r = await s.post(EVENT());
+  assert.deepEqual(r, { status: 200, note: "ticket 7 in review", emailId: "em_1" });
+  assert.equal(msgs(s.db).length, 1);
+  assert.equal(status(s.db), "In review", "the ticket_reply_review trigger (emulated in fakedb) did the flip with the insert");
+  assert.deepEqual(s.db.writes.filter((w) => w[0] === "update"), [], "handleInbound issues no update of its own");
+});
+
+test("an insert that fails leaves the status alone and answers 500 (the flip rides on the insert)", async () => {
+  const s = setup({ status: "Open", dbOpts: { insertError: { message: "pg down" } } });
+  assert.equal((await s.post(EVENT())).status, 500);
+  assert.equal(status(s.db), "Open");
+});
+
+test("every outcome past the signature carries the email_id; a bad signature carries nothing", async () => {
+  const s = setup({ status: "Open" });
+  assert.equal((await s.post(EVENT({ from: "x@else.test" }))).emailId, "em_1");
+  assert.equal((await s.post(EVENT({}, "email.sent"))).emailId, undefined, "other event types are ignored before the id is read");
+  assert.equal((await s.post(EVENT({ email_id: undefined }))).emailId, undefined);
+  assert.deepEqual(await s.post(EVENT(), signed(EVENT(), { signature: "v1,AAAA" })), { status: 401, note: "bad signature" });
 });
 
 test("bad signature -> 401, nothing fetched or written", async () => {
@@ -74,12 +97,20 @@ test("stale or future timestamp (> 300 s) -> 401; the edge of the window passes"
 
 test("unset or blank TICKET_INBOUND_SECRET fails closed, even for a signature made with an empty key", async () => {
   const body = EVENT();
-  for (const secret of [null, ""]) { // null = unset (undefined would take setup's default)
+  for (const secret of [null, "", "whsec_"]) { // null = unset (undefined would take setup's default)
     const s = setup({ secret });
     assert.equal((await s.post(body, signed(body, { signature: sig("msg_1", NOW_S, body, Buffer.alloc(0)) }))).status, 401);
     assert.equal((await s.post(body)).status, 401);
     assert.equal(s.db.calls.length, 0);
   }
+});
+
+test("a decoded key shorter than 16 bytes is rejected even with a correct signature; 16 bytes is accepted", () => {
+  const body = EVENT();
+  const check = (key) => verifySvix(`whsec_${key.toString("base64")}`, signed(body, { signature: sig("msg_1", NOW_S, body, key) }), body, NOW_S * 1000);
+  assert.equal(check(Buffer.alloc(0)), false);
+  assert.equal(check(Buffer.from("a".repeat(15))), false);
+  assert.equal(check(Buffer.from("a".repeat(16))), true);
 });
 
 test("several signatures in the header: any valid one is enough", async () => {
@@ -147,7 +178,7 @@ test("duplicate email_id: second delivery is a 200 no-op (one message; a later R
   assert.equal(status(s.db), "In review");
   s.db.tables.tickets[0].status = "Open"; // staff reopened in between
   const again = await s.post(EVENT());
-  assert.deepEqual(again, { status: 200, note: "duplicate" });
+  assert.deepEqual(again, { status: 200, note: "duplicate", emailId: "em_1" });
   assert.equal(msgs(s.db).length, 1);
   assert.equal(status(s.db), "Open");
   // a different email id for the same ticket is a new message

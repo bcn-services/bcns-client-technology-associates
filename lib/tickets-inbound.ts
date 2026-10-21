@@ -18,6 +18,7 @@ export function verifySvix(secret: string | undefined, h: SvixHeaders, rawBody: 
   if (!secret || !h.id || !h.timestamp || !h.signature) return false;
   if (!/^\d{1,12}$/.test(h.timestamp) || Math.abs(nowMs / 1000 - Number(h.timestamp)) > TOLERANCE_S) return false;
   const key = Buffer.from(secret.replace(/^whsec_/, ""), "base64");
+  if (key.length < 16) return false; // a blank or truncated secret (`whsec_`) would sign with a guessable key
   const expected = createHmac("sha256", key).update(`${h.id}.${h.timestamp}.${rawBody}`).digest();
   return h.signature.split(" ").some((entry) => {
     const [version, sig] = entry.split(",");
@@ -63,7 +64,8 @@ export type InboundDeps = {
   fetchFn?: typeof fetch;
   now?: () => number;
 };
-export type InboundResult = { status: 200 | 401 | 500; note: string };
+/** `emailId` is Resend's id for the mail, set once the signature passed and the payload had one; safe to log (the body and sender are not). */
+export type InboundResult = { status: 200 | 401 | 500; note: string; emailId?: string };
 
 type Mail = { from?: unknown; to?: unknown; received_for?: unknown };
 const strings = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : []);
@@ -80,9 +82,13 @@ function target(m: Mail, d: InboundDeps): number | null {
  * else, ignored or duplicate deliveries included, so Resend stops retrying.
  */
 export async function handleInbound(rawBody: string, headers: SvixHeaders, d: InboundDeps): Promise<InboundResult> {
-  const now = (d.now ?? Date.now)();
-  if (!verifySvix(d.secret, headers, rawBody, now)) return { status: 401, note: "bad signature" };
+  if (!verifySvix(d.secret, headers, rawBody, (d.now ?? Date.now)())) return { status: 401, note: "bad signature" };
+  const seen: { emailId?: string } = {};
+  const result = await inbound(rawBody, d, seen);
+  return { ...result, ...seen };
+}
 
+async function inbound(rawBody: string, d: InboundDeps, seen: { emailId?: string }): Promise<InboundResult> {
   let event: { type?: unknown; data?: Mail & { email_id?: unknown } };
   try {
     event = JSON.parse(rawBody);
@@ -92,6 +98,7 @@ export async function handleInbound(rawBody: string, headers: SvixHeaders, d: In
   if (event?.type !== "email.received") return { status: 200, note: "ignored: event type" };
   const emailId = event.data?.email_id;
   if (typeof emailId !== "string" || !emailId) return { status: 200, note: "ignored: no email_id" };
+  seen.emailId = emailId;
   if (target(event.data ?? {}, d) === null) return { status: 200, note: "ignored: sender or recipient" }; // saves the fetch for strangers
 
   if (!d.apiKey) return { status: 500, note: "RESEND_API_KEY missing" };
@@ -128,9 +135,7 @@ export async function handleInbound(rawBody: string, headers: SvixHeaders, d: In
       if ((e as { code?: string })?.code === "23505") return { status: 200, note: "duplicate" }; // unique resend_email_id: a retry
       throw e;
     }
-    // A reply means Nate wants it reviewed, whatever the status was (a Closed ticket included).
-    const upd = await db.from("tickets").update({ status: "In review" }).eq("id", ticketId);
-    if (upd.error) throw upd.error;
+    // The ticket_reply_review trigger (0014) moves it to In review in the same transaction as the insert, a Closed ticket included.
   } catch (e) {
     return { status: 500, note: `db failed: ${e instanceof Error ? e.message : (e as { message?: string })?.message ?? "error"}` };
   }

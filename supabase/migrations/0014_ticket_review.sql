@@ -20,3 +20,15 @@ create policy authenticated_all on ticket_messages
   for all to authenticated using (true) with check (true);
 create trigger audit after insert or update or delete on ticket_messages
   for each row execute function audit_row();
+
+-- An emailed reply (author 'email') moves its ticket to In review in the same transaction as the insert, so a webhook retry
+-- can never find the message stored and the status unchanged. Closed tickets included: a reply is never lost.
+-- security definer + fixed search_path: runs whatever role inserted the message.
+create function ticket_reply_review() returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+  update tickets set status = 'In review' where id = new.ticketid;
+  return null;
+end $$;
+create trigger ticket_reply_review after insert on ticket_messages
+  for each row when (new.author = 'email') execute function ticket_reply_review();

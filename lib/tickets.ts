@@ -29,6 +29,7 @@ export function parseSort(sort: string, dir: string): Dir | null {
   return sort === "status" && (dir === "asc" || dir === "desc") ? dir : null;
 }
 
+const PAGE = 1000;
 const RANK: Record<TicketStatus, number> = { "In review": 0, Open: 1, Closed: 2 };
 
 /** In review first, then Open, then Closed (dir=desc reverses that), then newest ticketdate, then newest id. Each ticket carries its messages, oldest first. */
@@ -38,10 +39,15 @@ export async function listTickets(db: Db, dir: Dir | null): Promise<Ticket[]> {
   if (error) throw error;
   const rows = (data ?? []) as Omit<Ticket, "messages">[];
   const byTicket = new Map<number, TicketMessage[]>();
-  if (rows.length) {
-    const res = await db.from("ticket_messages").select("id, ticketid, author, body, createdat").in("ticketid", rows.map((r) => r.id));
+  // Closed rows show their history too, so every message is loaded; paged by id because PostgREST caps a response at 1000 rows
+  // (and an .in("ticketid", ids) of every ticket would outgrow the URL first).
+  // ponytail: all messages on every render — upgrade to the visible tickets' messages when the thread count reaches the thousands.
+  for (let from = 0; ; from += PAGE) {
+    const res = await db.from("ticket_messages").select("id, ticketid, author, body, createdat").order("id").range(from, from + PAGE - 1);
     if (res.error) throw res.error;
-    for (const m of (res.data ?? []) as TicketMessage[]) byTicket.set(m.ticketid, [...(byTicket.get(m.ticketid) ?? []), m]);
+    const page = (res.data ?? []) as TicketMessage[];
+    for (const m of page) byTicket.set(m.ticketid, [...(byTicket.get(m.ticketid) ?? []), m]);
+    if (page.length < PAGE) break;
   }
   const flip = dir === "desc" ? -1 : 1;
   return rows
@@ -97,9 +103,11 @@ export async function editTicket(db: Db, id: number, description: string): Promi
   if (!data?.length) throw new TicketError("state");
 }
 
-export async function addMessage(db: Db, ticketid: number, author: string, body: string, resendEmailId?: string): Promise<void> {
-  const { error } = await db.from("ticket_messages").insert({ ticketid, author, body, ...(resendEmailId ? { resend_email_id: resendEmailId } : {}) });
+/** Returns the new message's id. An author of 'email' also moves the ticket to In review (trigger ticket_reply_review, 0014). */
+export async function addMessage(db: Db, ticketid: number, author: string, body: string, resendEmailId?: string): Promise<number> {
+  const { data, error } = await db.from("ticket_messages").insert({ ticketid, author, body, ...(resendEmailId ? { resend_email_id: resendEmailId } : {}) }).select("id");
   if (error) throw error;
+  return data[0].id as number;
 }
 
 export type TicketMail = { id: number; kind: "new" | "closed" | "reopened"; date: string; description: string; response?: string };
@@ -181,8 +189,8 @@ export const runAddTicket = (formData: FormData, deps: TicketDeps) =>
 
 /**
  * Close (from Open or In review) / reopen (from In review or Closed), with an optional response stored as a message by the
- * signed-in user and included in the email. The message is written before the status change so a failure leaves the ticket
- * as it was and a retry only risks a repeated message, never a lost response.
+ * signed-in user and included in the email. The message is written first and deleted again if the status change doesn't
+ * land (race lost or write failed), so a move that didn't happen leaves no response behind and none is ever lost.
  */
 const move = (to: TicketStatus, from: TicketStatus[], kind: "closed" | "reopened", where: string) => (formData: FormData, deps: TicketDeps) =>
   run(async (db, f, session) => {
@@ -191,8 +199,14 @@ const move = (to: TicketStatus, from: TicketStatus[], kind: "closed" | "reopened
     if (response.length > 2000) throw new TicketError("response");
     const t = await loadTicket(db, id);
     if (!from.includes(t.status)) throw new TicketError("state");
-    if (response) await addMessage(db, id, session.email || "staff", response);
-    await setStatus(db, id, to, from);
+    const messageId = response ? await addMessage(db, id, session.email || "staff", response) : null;
+    try {
+      await setStatus(db, id, to, from);
+    } catch (e) {
+      // Lost the race (or the write failed): the response was never applied to a move that didn't happen, so take it back.
+      if (messageId !== null) await db.from("ticket_messages").delete().eq("id", messageId).then(() => undefined, () => undefined);
+      throw e;
+    }
     await notifyBestEffort(deps, where, { id, kind, date: t.ticketdate, description: t.description, response: response || undefined });
   }, where, formData, deps);
 

@@ -184,3 +184,40 @@ test("unexpected DB error → ?error=failed (raw text stays server-side)", async
   try { await runCloseTicket(form({ id: "1" }), d.deps); } finally { console.error = log; }
   assert.deepEqual(d.redirects, ["/tickets?error=failed"]);
 });
+
+// Race guards: another actor changes the ticket between our load and our write (the 2nd touch of `tickets`).
+const racing = (db, mutate) => {
+  const from = db.from.bind(db);
+  let n = 0;
+  db.from = (table) => { if (table === "tickets" && ++n === 2) mutate(db.tables.tickets[0]); return from(table); };
+  return db;
+};
+
+test("race: Close/Reopen lose to a status change between load and write → ?error=state, status stays the racer's, the response is taken back, no email", async () => {
+  for (const [run, start, racer] of [[runCloseTicket, "Open", "Closed"], [runReopenTicket, "Closed", "Open"]]) {
+    const db = racing(memDb({ tickets: [T(1, "2026-10-01", start, "one")] }), (t) => { t.status = racer; });
+    const d = deps(db);
+    const sent = [];
+    await run(form({ id: "1", response: "late response" }), { ...d.deps, notify: async (m) => sent.push(m) });
+    assert.deepEqual(d.redirects, ["/tickets?error=state"], start);
+    assert.equal(statusOf(db, 1), racer, `${start}: the racer's status stands`);
+    assert.deepEqual(db.tables.ticket_messages ?? [], [], `${start}: the unapplied response is not left behind`);
+    assert.deepEqual(sent, [], `${start}: nothing emailed`);
+  }
+});
+
+test("race: Edit loses to a Close between load and write → ?error=state, description unchanged", async () => {
+  const db = racing(memDb({ tickets: [T(1, "2026-10-01", "Open", "original")] }), (t) => { t.status = "Closed"; });
+  const d = deps(db);
+  await runEditTicket(form({ id: "1", description: "overwrites a closed ticket" }), d.deps);
+  assert.deepEqual(d.redirects, ["/tickets?error=state"]);
+  assert.deepEqual({ description: db.tables.tickets[0].description, status: statusOf(db, 1) }, { description: "original", status: "Closed" });
+});
+
+test("listTickets pages messages past PostgREST's 1000-row cap (Closed rows keep their history)", async () => {
+  const messages = Array.from({ length: 2300 }, (_, i) => ({ id: i + 1, ticketid: i % 2 ? 1 : 2, author: "a", body: `m${i}`, createdat: `2026-10-21T00:00:00.${String(i).padStart(4, "0")}Z` }));
+  const db = memDb({ tickets: [T(1, "2026-10-01", "Closed"), T(2, "2026-10-02", "Open")], ticket_messages: messages });
+  const got = await listTickets(db, null);
+  assert.deepEqual(got.map((t) => t.messages.length).sort(), [1150, 1150]);
+  assert.equal(db.calls.filter((c) => c.table === "ticket_messages").length, 3);
+});

@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { renderToStaticMarkup } from "react-dom/server";
 import { session, dbclient } from "../docs-reports/render.mjs";
+import { memDb } from "./fakedb.mjs";
 
 const mod = await import("../../app/tickets/page.tsx");
 const Page = (mod.default?.default ? mod.default : mod).default;
@@ -15,7 +16,7 @@ const MSGS = [
   { id: 2, ticketid: 1, author: "kris@example.test", body: "closed it", createdat: "2026-10-02T10:00:00Z" },
 ];
 const render = async (searchParams = {}) => {
-  dbclient.state.db = { from: (table) => ({ select: () => (table === "tickets" ? Promise.resolve({ data: ROWS, error: null }) : { in: () => Promise.resolve({ data: MSGS, error: null }) }) }) };
+  dbclient.state.db = memDb({ tickets: ROWS, ticket_messages: MSGS });
   return renderToStaticMarkup(await Page({ searchParams }));
 };
 const order = (html) => [...html.matchAll(/(old|new|review) one/g)].map((m) => m[1]).filter((v, i, a) => a.indexOf(v) === i);
