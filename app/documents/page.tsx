@@ -3,7 +3,8 @@ import { requireSession } from "@/lib/auth/session";
 import { createServerClient } from "@/lib/db/client";
 import { getStorageAdapter } from "@/lib/storage";
 import type { Db } from "@/lib/time/entries";
-import { listAllDocuments } from "@/lib/documents/store";
+import { isLegacyFile, listAllDocuments } from "@/lib/documents/store";
+import { LegacyFile } from "./legacy-file";
 
 export const dynamic = "force-dynamic";
 
@@ -33,7 +34,15 @@ export default async function DocumentsPage() {
             {docs.map((doc) => (
               <tr key={doc.id} data-testid="document-row" className="border-t border-slate-100">
                 <td className="py-1">{doc.dateadded ?? ""}</td>
-                <td><Link href={`/documents/${doc.id}/download`} className="underline">{doc.description ?? `Document ${doc.id}`}</Link></td>
+                <td>
+                  {isLegacyFile(doc.filename) ? (
+                    <>{doc.description ?? doc.filename}<LegacyFile filename={doc.filename!} /></>
+                  ) : !doc.filename ? (
+                    doc.description ?? `Document ${doc.id}`
+                  ) : (
+                    <Link href={`/documents/${doc.id}/download`} className="underline">{doc.description ?? `Document ${doc.id}`}</Link>
+                  )}
+                </td>
                 <td>{doc.type ?? ""}</td>
                 <td>{doc.caseid == null ? "" : <Link href={`/cases/${doc.caseid}`} className="underline">{doc.caseid}</Link>}</td>
               </tr>

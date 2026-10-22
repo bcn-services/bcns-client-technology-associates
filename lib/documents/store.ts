@@ -27,7 +27,7 @@ export const MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
 /** Signed-URL lifetime for a download hop. lib/storage.ts clamps anything above 900s. */
 export const DOWNLOAD_URL_SECONDS = 120;
 
-export type DocErrorCode = "auth" | "notfound" | "storage" | "input" | "toolarge" | "failed";
+export type DocErrorCode = "auth" | "notfound" | "storage" | "input" | "toolarge" | "failed" | "legacy";
 
 export class DocumentError extends Error {
   constructor(readonly code: DocErrorCode) {
@@ -45,6 +45,7 @@ const MESSAGES: Record<string, string> = {
   input: "Choose a file to upload.",
   toolarge: `That file is larger than ${MAX_UPLOAD_BYTES / (1024 * 1024)} MB.`,
   failed: "The document could not be saved.",
+  legacy: "This scan is stored on the office NAS, not in the app. Open it from the NAS by its file name.",
 };
 export const documentErrorMessage = (code: string): string => MESSAGES[code] ?? MESSAGES.failed!;
 
@@ -73,6 +74,12 @@ export function assertDocumentAccess(
 
 /** Storage key for a case document: canonical case id + an opaque token. Never user text. */
 export const documentKey = (caseId: number, token: string): string => `cases/${caseId}/${token}`;
+
+/**
+ * A legacy scan: `filename` holds a bare NAS file name, not an app storage key. Must agree
+ * with the `cases/` prefix `documentKey` writes. Null/empty is not "legacy" (no file at all).
+ */
+export const isLegacyFile = (f: string | null | undefined): boolean => !!f && !f.startsWith("cases/");
 
 /** One case's documents, newest first. Authorized before the query; every row re-checked after it. */
 export async function listCaseDocuments(db: Db, session: Pick<Session, "role"> | null, caseId: number): Promise<DocRow[]> {
@@ -110,6 +117,9 @@ export async function loadDocument(db: Db, session: Pick<Session, "role"> | null
 
 /** Sign a download for an ALREADY-authorized row. A null adapter is a configuration fault, not a missing file. */
 export async function documentDownloadUrl(storage: StorageAdapter | null, doc: DocRow): Promise<string> {
+  // Decided from the row alone, so it never touches storage and cannot mislabel a bucket
+  // fault; a misconfigured bucket must still surface as "storage" on app-key rows.
+  if (isLegacyFile(doc.filename)) throw new DocumentError("legacy");
   if (!storage) throw new DocumentError("storage");
   if (!doc.filename) throw new DocumentError("notfound");
   return storage.getSignedUrl(doc.filename, DOWNLOAD_URL_SECONDS);

@@ -17,7 +17,7 @@ Module._resolveFilename = function (request, ...rest) {
 const store = await import("../../lib/documents/store.ts");
 const {
   assertDocumentAccess, createCaseDocument, documentDownloadUrl, documentErrorMessage,
-  documentKey, listAllDocuments, listCaseDocuments, loadDocument, DocumentError, MAX_UPLOAD_BYTES,
+  documentKey, isLegacyFile, listAllDocuments, listCaseDocuments, loadDocument, DocumentError, MAX_UPLOAD_BYTES,
 } = store;
 const panel = await import("../../app/documents/case-panel.tsx");
 const { CaseDocumentsPanelView } = panel.default?.CaseDocumentsPanelView ? panel.default : panel;
@@ -94,6 +94,24 @@ test("storage being unconfigured is reported as a configuration fault, not a mis
   assert.match(documentErrorMessage("storage"), /configuration/i);
 });
 
+test("isLegacyFile: only a non-empty name outside cases/ is a legacy scan", () => {
+  assert.equal(isLegacyFile(null), false);
+  assert.equal(isLegacyFile(undefined), false);
+  assert.equal(isLegacyFile(""), false);
+  assert.equal(isLegacyFile("cases/1/x"), false);
+  assert.equal(isLegacyFile("img-1.pdf"), true);
+  assert.equal(isLegacyFile(documentKey(5, "tok")), false, "isLegacyFile must agree with documentKey's prefix");
+});
+
+test("a legacy scan is 'legacy' before storage is touched; a bucket fault on an app key stays 'storage'", async () => {
+  const legacy = { id: 9, caseid: 101, filename: "img-121210115543.pdf", description: null };
+  const boom = { getSignedUrl: () => { throw new Error("adapter must not be reached"); } };
+  assert.equal(await code(() => documentDownloadUrl(boom, legacy)), "legacy");
+  assert.equal(await code(() => documentDownloadUrl(null, legacy)), "legacy");
+  assert.equal(await code(() => documentDownloadUrl(null, { ...legacy, filename: "cases/101/aaa" })), "storage");
+  assert.match(documentErrorMessage("legacy"), /office NAS/);
+});
+
 // --- upload ------------------------------------------------------------------
 
 test("upload writes the bytes then exactly one row, keyed off the case id", async () => {
@@ -147,6 +165,22 @@ test("the case panel renders that case's documents, each scoped to the case", as
   assert.doesNotMatch(html, /scene\.png/, "another case's document is on the panel");
   assert.match(html, /href="\/documents\/1\/download\?case=101"/);
   assert.doesNotMatch(html, /storage\/v1\/object/, "a raw storage URL was rendered");
+});
+
+test("legacy and empty-filename rows render without a download link; app-key rows keep theirs", () => {
+  const docs = [
+    { id: 1, caseid: 101, dateadded: "2026-01-02", type: null, description: "complaint.pdf", filename: "cases/101/aaa" },
+    { id: 7, caseid: 101, dateadded: "2026-01-02", type: null, description: null, filename: "img-121210115543.pdf" },
+    { id: 8, caseid: 101, dateadded: "2026-01-02", type: null, description: "nofile", filename: "" },
+    { id: 9, caseid: 101, dateadded: "2026-01-02", type: null, description: null, filename: null },
+  ];
+  const html = render({ caseId: 101, docs, storageReady: true });
+  assert.match(html, /href="\/documents\/1\/download\?case=101"/);
+  for (const id of [7, 8, 9]) assert.doesNotMatch(html, new RegExp(`/documents/${id}/download`), `doc ${id} is linked`);
+  assert.match(html, /<code[^>]*>img-121210115543\.pdf<\/code>/);
+  assert.match(html, /aria-label="Copy file name"/);
+  assert.match(html, /Stored on the office NAS/);
+  assert.match(html, /Document 9/);
 });
 
 test("an empty panel distinguishes 'no documents' from 'storage is not configured'", () => {
