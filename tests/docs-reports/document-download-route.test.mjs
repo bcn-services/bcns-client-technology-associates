@@ -76,3 +76,19 @@ test("a storage backend fault is 503; only a missing object is 404", async () =>
   setup({ adapter: { getSignedUrl: async () => { throw new storage.StorageObjectNotFoundError("cases/101/aaa"); } } });
   assert.equal((await get(1, "?case=101")).status, 404);
 });
+
+test("a legacy NAS scan is 404 with the NAS message and the adapter is never reached", async () => {
+  let reached = false;
+  setup({ adapter: { getSignedUrl: async () => { reached = true; return SIGNED; } } });
+  dbclient.state.db = fakeDb({ tblscanneddocument: [{ id: 5, caseid: 101, dateadded: "2026-01-02", type: null, description: null, filename: "img-121210115543.pdf" }] });
+  for (const qs of ["", "?case=101"]) {
+    const res = await get(5, qs);
+    assert.equal(res.status, 404);
+    assert.match(await res.text(), /office NAS/);
+  }
+  assert.equal(reached, false);
+  // with no storage configured it is still the NAS message, not the 503 configuration one
+  setup({ adapter: null });
+  dbclient.state.db = fakeDb({ tblscanneddocument: [{ id: 5, caseid: 101, dateadded: "2026-01-02", type: null, description: null, filename: "img-1.pdf" }] });
+  assert.equal((await get(5)).status, 404);
+});

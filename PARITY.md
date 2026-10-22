@@ -147,7 +147,7 @@ ClearedExpensesAndIncome totals (built, `lib/reports/checkbook.ts`; each sums ro
 
 | Legacy object | What it does for the user | Status | App location / gap |
 |---|---|---|---|
-| frmScannedCase (+ qryScannedDocsCase) | A case's scanned documents: add, list, open | PARTIAL | `app/documents`, `lib/documents/store.ts`, CaseDocumentsPanel. Upload, list and download work. `type` now holds the MIME type, so the legacy document category (Fee_Schedule, Service…, Received_Check…) is neither kept nor settable. That is also why the fee-schedule badge can't be live |
+| frmScannedCase (+ qryScannedDocsCase) | A case's scanned documents: add, list, open | PARTIAL | `app/documents`, `lib/documents/store.ts`, CaseDocumentsPanel. Upload, list and download work. `type` now holds the MIME type, so the legacy document category (Fee_Schedule, Service…, Received_Check…) is neither kept nor settable. That is also why the fee-schedule badge can't be live. Legacy scans (bare NAS file names) show their file name with a copy button and an office-NAS note; importing the PDFs is pending a copy of the folder from TA |
 | frmScannedCase: "grab newest scan" | Copies the newest file from `\\Tech02\NETWORK_SCANS` | LIKELY-DEAD | Network share; replaced by upload |
 | frmScannedCase: Mail_Report | On a Service or Received_Check document, emails "Service authorization received / Income received for Case #…" to jhartzsch and kseluga, with the point men and the first 2 status lines | MISSING | No notification. Needs the document category first |
 | frmScannedCase: email rptAddressLabel | Emails the address label | MISSING | The label page exists (`/cases/[id]/label`); email does not |
