@@ -36,7 +36,7 @@ export default async function DocumentsPage() {
                 <td className="py-1">{doc.dateadded ?? ""}</td>
                 <td>
                   {isLegacyFile(doc.filename) ? (
-                    <>{doc.description ?? doc.filename}<LegacyFile filename={doc.filename!} /></>
+                    <>{doc.description}<LegacyFile filename={doc.filename!} /></>
                   ) : !doc.filename ? (
                     doc.description ?? `Document ${doc.id}`
                   ) : (

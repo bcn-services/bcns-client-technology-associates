@@ -49,7 +49,7 @@ export function CaseDocumentsPanelView({ caseId, docs, storageReady }: { caseId:
                     access — the download re-derives the real caseid from the row. */}
                 <td>
                   {isLegacyFile(doc.filename) ? (
-                    <>{doc.description ?? doc.filename}<LegacyFile filename={doc.filename!} /></>
+                    <>{doc.description}<LegacyFile filename={doc.filename!} /></>
                   ) : !doc.filename ? (
                     doc.description ?? `Document ${doc.id}`
                   ) : (
