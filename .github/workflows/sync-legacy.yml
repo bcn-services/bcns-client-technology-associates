@@ -40,8 +40,11 @@ jobs:
     env:
       # Untrusted input goes through env, never into the shell text; sync.sh checks it is digits.
       RUN_ID: ${{ inputs.run_id }}
-      # sync.sh refuses a backup older than this (and older than the last synced one) before downloading it
-      MAX_BACKUP_AGE_HOURS: "48"
+      # sync.sh refuses a backup older than this (and older than the last synced one) before downloading it.
+      # Backups run Mon-Fri 6pm ET: Friday's is ~72h old by Monday evening, 96h covers a Monday holiday.
+      MAX_BACKUP_AGE_HOURS: "96"
+      # TA's read-only key can only list this folder of the bucket
+      S3_PREFIX: DB_Backup/TECH05/SQLBackupRestore/DailyBackups/
     steps:
       - name: Prod mode needs a run id
         if: ${{ !inputs.rehearsal && inputs.run_id == '' }}
