@@ -10,6 +10,7 @@
 #   RUN_ID           required to be SET; digits = the sync_runs row to track, empty = no tracking.
 #   S3_BUCKET        bucket holding the nightly 7z backups (newest object by LastModified wins)
 #   S3_ENDPOINT      optional --endpoint-url (non-AWS S3, minio)
+#   S3_PREFIX        optional key prefix to list under (TA's read-only key only covers its backup folder)
 #   LOCAL_ARCHIVE    optional path to a .7z/.zip/.bak; skips S3
 #   MSSQL_SCRIPTER   optional override: run this host command instead of the scripter container
 #                    (e.g. "python -m mssqlscripter"); the mssql port is then also published on 127.0.0.1:1433.
@@ -125,7 +126,7 @@ else
   aws_ep=()
   if [[ -n "${S3_ENDPOINT:-}" ]]; then aws_ep=(--endpoint-url "$S3_ENDPOINT"); fi
   newest=$(aws s3api list-objects-v2 ${aws_ep[@]+"${aws_ep[@]}"} --bucket "$S3_BUCKET" \
-    --query 'sort_by(Contents, &LastModified)[-1].[Key, LastModified]' --output text)
+    ${S3_PREFIX:+--prefix "$S3_PREFIX"} --query 'sort_by(Contents, &LastModified)[-1].[Key, LastModified]' --output text)
   IFS=$'\t' read -r key modified <<<"$newest"
   [[ -n "$key" && "$key" != None ]] || { echo "sync: no objects in the bucket" >&2; exit 1; }
   echo "sync: newest backup is '$key' ($modified)"
