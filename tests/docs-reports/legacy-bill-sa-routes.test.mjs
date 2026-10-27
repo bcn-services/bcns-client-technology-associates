@@ -4,7 +4,8 @@
 import test, { afterEach } from "node:test";
 import assert from "node:assert/strict";
 import Module from "node:module";
-import { readFileSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import session from "./stub-session.cjs";
 import dbclient from "./stub-dbclient.cjs";
@@ -21,8 +22,8 @@ const BILL_GET = (bill.default?.GET ? bill.default : bill).GET;
 const SA_GET = (sa.default?.GET ? sa.default : sa).GET;
 
 const DIR = here("./fixtures/legacy-docs");
-const BILL_FILE = "Bill2670 Huske 2023 08 11-0";
-const SA_FILE = "SA2110 Schulthess 2015 03 06-0";
+const BILL_FILE = "Bill9001 Doe 2023 08 11-0";
+const SA_FILE = "SA9002 Roe 2015 03 06-0";
 const bytes = (rel) => readFileSync(`${DIR}/${rel}`);
 
 const rowDb = (row) => ({ from: () => { const q = { select: () => q, eq: () => q, maybeSingle: async () => ({ data: row, error: null }) }; return q; } });
@@ -43,14 +44,29 @@ const anon = (p) => p.then((r) => r, (err) => err);
 
 // ---- bills ----
 
+test("bill: an unreadable NAS file is a 503 (a fault), never the 'not available' 404", { skip: process.getuid?.() === 0 && "root reads everything" }, async () => {
+  const tmp = mkdtempSync(`${tmpdir()}/legacy-route-`);
+  try {
+    mkdirSync(`${tmp}/Bills`);
+    writeFileSync(`${tmp}/Bills/Locked.pdf`, "x\n");
+    chmodSync(`${tmp}/Bills/Locked.pdf`, 0o000);
+    setup({ row: { billpdfpath: null, billfilename: "Locked" }, dir: tmp });
+    const res = await billGet();
+    assert.equal(res.status, 503);
+    assert.equal(await res.text(), "The PDF could not be loaded.");
+  } finally {
+    rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
 test("bill: no stored PDF + a legacy name → the NAS Word file streams as a download, and storage is never touched", async () => {
   setup({ row: { billpdfpath: null, billfilename: BILL_FILE } });
   const res = await billGet();
   assert.equal(res.status, 200);
   assert.equal(res.headers.get("content-type"), "application/msword");
-  assert.match(res.headers.get("content-disposition"), /^attachment; filename="Bill2670 Huske 2023 08 11-0\.doc"$/);
+  assert.match(res.headers.get("content-disposition"), /^attachment; filename="Bill9001 Doe 2023 08 11-0\.doc"$/);
   assert.equal(res.headers.get("cache-control"), "private, no-store");
-  assert.deepEqual(Buffer.from(await res.arrayBuffer()), bytes("Bills/Bill2670 Huske 2023 08 11-0.doc"));
+  assert.deepEqual(Buffer.from(await res.arrayBuffer()), bytes("Bills/Bill9001 Doe 2023 08 11-0.doc"));
   assert.deepEqual(fetched, []);
 });
 
@@ -98,25 +114,25 @@ test("sa: a row that is not an app-made SA streams the NAS .docx; storage is nev
   const res = await saGet();
   assert.equal(res.status, 200);
   assert.equal(res.headers.get("content-type"), "application/vnd.openxmlformats-officedocument.wordprocessingml.document");
-  assert.match(res.headers.get("content-disposition"), /^attachment; filename="SA2110 Schulthess 2015 03 06-0\.docx"$/);
-  assert.deepEqual(Buffer.from(await res.arrayBuffer()), bytes("ServAuth/SA2110 Schulthess 2015 03 06-0.docx"));
+  assert.match(res.headers.get("content-disposition"), /^attachment; filename="SA9002 Roe 2015 03 06-0\.docx"$/);
+  assert.deepEqual(Buffer.from(await res.arrayBuffer()), bytes("ServAuth/SA9002 Roe 2015 03 06-0.docx"));
   assert.deepEqual(fetched, []);
 });
 
 test("sa: a legacy file that LOOKS app-made (SA<caseid> ..., -0) falls back to the NAS when storage has no such object", async () => {
   const missing = { getSignedUrl: async (k) => { throw new storage.StorageObjectNotFoundError(k); } };
-  setup({ row: { srvauthcaseid: 2110, srvauthfile: SA_FILE }, adapter: missing });
+  setup({ row: { srvauthcaseid: 9002, srvauthfile: SA_FILE }, adapter: missing });
   const res = await saGet();
   assert.equal(res.status, 200);
-  assert.deepEqual(Buffer.from(await res.arrayBuffer()), bytes("ServAuth/SA2110 Schulthess 2015 03 06-0.docx"));
+  assert.deepEqual(Buffer.from(await res.arrayBuffer()), bytes("ServAuth/SA9002 Roe 2015 03 06-0.docx"));
 });
 
 test("sa: an app-made SA is served from storage as before, the NAS copy untouched", async () => {
-  setup({ row: { srvauthcaseid: 2110, srvauthfile: SA_FILE } });
+  setup({ row: { srvauthcaseid: 9002, srvauthfile: SA_FILE } });
   const res = await saGet();
   assert.equal(res.headers.get("content-type"), "application/pdf");
   assert.equal(await res.text(), "stored pdf bytes");
-  assert.deepEqual(fetched, [`https://storage.test/service-auths/2110/${SA_FILE}.pdf`]);
+  assert.deepEqual(fetched, [`https://storage.test/service-auths/9002/${SA_FILE}.pdf`]);
 });
 
 test("sa: missing from the NAS copy is a 'not available' 404; no directory keeps the 'older files are on the office drive' note", async () => {

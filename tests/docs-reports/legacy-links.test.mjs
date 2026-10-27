@@ -33,7 +33,7 @@ test("case panel: a legacy row links to the download route under the case scope 
 });
 
 const BILL = {
-  billid: 7, billcaseid: 55, billdate: "2019-02-01", billhours: 0, billbalance: 120, billreports: null, billfilename: "Bill2670 Huske 2023 08 11-0",
+  billid: 7, billcaseid: 55, billdate: "2019-02-01", billhours: 0, billbalance: 120, billreports: null, billfilename: "Bill9001 Doe 2023 08 11-0",
   billnotice: "Paid", billpaiddate: null, billestimate: false, billpriority: null, billcomments: null, billsecondnoticedate: null,
   billfinalnoticedate: null, billtype: null, supersedesbillid: null, billfinalizedat: null, billpdfpath: null,
 };
@@ -41,14 +41,14 @@ const fileCell = (html) => html.match(/<dt[^>]*>File name<\/dt>\s*<dd[^>]*>(.*?)
 const billHtml = (props, bill = BILL) => renderToStaticMarkup(React.createElement(BillView, { data: { bill, casetitle: "X", activity: [], revisedBy: [] }, admin: false, ...props }));
 
 test("bill view: 'File name' links to the bill's pdf route only when the legacy file resolved and there is no stored PDF", () => {
-  assert.match(fileCell(billHtml({ legacyFile: true })), /<a [^>]*href="\/bills\/7\/pdf"[^>]*>Bill2670 Huske 2023 08 11-0<\/a>/);
+  assert.match(fileCell(billHtml({ legacyFile: true })), /<a [^>]*href="\/bills\/7\/pdf"[^>]*>Bill9001 Doe 2023 08 11-0<\/a>/);
   assert.doesNotMatch(fileCell(billHtml({})), /<a /);
   assert.doesNotMatch(fileCell(billHtml({ legacyFile: false })), /<a /);
-  assert.doesNotMatch(fileCell(billHtml({ legacyFile: true }, { ...BILL, billpdfpath: "bills/7/x.pdf" })), /href="\/bills\/7\/pdf"[^>]*>Bill2670/, "an app bill keeps its own PDF link, not a file-name link");
+  assert.doesNotMatch(fileCell(billHtml({ legacyFile: true }, { ...BILL, billpdfpath: "bills/7/x.pdf" })), /href="\/bills\/7\/pdf"[^>]*>Bill9001/, "an app bill keeps its own PDF link, not a file-name link");
 });
 
 const SA_ROWS = [
-  { srvauthid: 901, srvauthcaseid: 55, srvauthdate: "2015-03-06", srvauthhours: "1.000", srvauthstatus: "Approved", srvdateapproved: null, srvauthfile: "SA2110 Schulthess 2015 03 06-0", srvadvance: null, srvauthnotes: null },
+  { srvauthid: 901, srvauthcaseid: 55, srvauthdate: "2015-03-06", srvauthhours: "1.000", srvauthstatus: "Approved", srvdateapproved: null, srvauthfile: "SA9002 Roe 2015 03 06-0", srvadvance: null, srvauthnotes: null },
   { srvauthid: 902, srvauthcaseid: 55, srvauthdate: "2015-03-06", srvauthhours: "1.000", srvauthstatus: "Approved", srvdateapproved: null, srvauthfile: "SA55 Munoz 2026 01 02-3", srvadvance: null, srvauthnotes: null },
 ];
 const saHtml = (legacyOpen) => renderToStaticMarkup(React.createElement(ServiceAuthsPanel, { caseId: 55, rows: SA_ROWS, today: "2026-09-11", t: "initial", legacyOpen }));

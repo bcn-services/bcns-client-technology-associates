@@ -30,8 +30,9 @@ export async function GET(req: Request, { params }: { params: { id: string } }):
       const dir = getConfig().legacyDocsDir;
       if (!dir) throw new DocumentError("legacy");
       const file = await resolveLegacyFile(dir, "scan", doc.filename!);
-      if (!file) throw new DocumentError("notfound");
-      return await legacyFileResponse(file);
+      const res = file && (await legacyFileResponse(file));
+      if (!res) throw new DocumentError("notfound");
+      return res;
     }
     return NextResponse.redirect(await documentDownloadUrl(getStorageAdapter(), doc), 302);
   } catch (e) {

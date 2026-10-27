@@ -29,7 +29,7 @@ export async function GET(_req: Request, { params }: { params: { srvauthid: stri
     const dir = getConfig().legacyDocsDir;
     const legacy = async () => {
       const file = await resolveLegacyFile(dir!, "sa", sa.file);
-      return file ? legacyFileResponse(file) : text("That service authorization's file is not available.", 404);
+      return (file && (await legacyFileResponse(file))) || text("That service authorization's file is not available.", 404);
     };
     if (dir && !isAppSaFile(sa.caseid, sa.file)) return await legacy();
     const key = saKey(sa.caseid, sa.file);

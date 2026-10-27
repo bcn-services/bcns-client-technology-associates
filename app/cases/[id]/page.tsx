@@ -114,6 +114,7 @@ export default async function CaseRecordPage({ params, searchParams }: { params:
     loadServiceAuths(db, id).catch((e) => { console.error("service auths read:", e); return null; })]);
   if (!rec) notFound();
   // Legacy SA files (not made by the app) get an "Open file" link only when the NAS copy has them; a fault just hides the link.
+  // The name index behind resolveLegacyFile is cached per folder, so these lookups share one directory read.
   const dir = getConfig().legacyDocsDir;
   const legacyOpen = dir
     ? (await Promise.all((sas ?? []).filter((r) => r.srvauthfile && !isAppSaFile(id, r.srvauthfile)).map(async (r) =>

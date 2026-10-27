@@ -7,8 +7,8 @@
  * every caller authorizes the ROW first (requireSession + the row's own scope), exactly as it does for
  * app-stored files, and only then asks for the bytes.
  */
-import { createReadStream } from "node:fs";
-import { readdir, realpath, stat } from "node:fs/promises";
+import { constants } from "node:fs";
+import { access, open, readdir, realpath, stat } from "node:fs/promises";
 import path from "node:path";
 import { Readable } from "node:stream";
 import { NextResponse } from "next/server";
@@ -38,11 +38,13 @@ const missing = (e: unknown): boolean => ["ENOENT", "ENOTDIR", "ELOOP"].includes
 /**
  * `file` resolved through symlinks, or null unless it is a regular file inside `realRoot`.
  * The containment check is on the REAL path, so a symlink in the copy cannot lead out of the legacy root.
+ * An unreadable file throws (EACCES is a fault, not "not here"), so a link is never offered for bytes we cannot serve.
  */
 async function contained(realRoot: string, file: string): Promise<string | null> {
   try {
     const real = await realpath(file);
     if (!real.startsWith(realRoot + path.sep) || !(await stat(real)).isFile()) return null;
+    await access(real, constants.R_OK);
     return real;
   } catch (e) {
     if (missing(e)) return null;
@@ -50,10 +52,43 @@ async function contained(realRoot: string, file: string): Promise<string | null>
   }
 }
 
+// ponytail: per-process 60s name index — a file the nightly copy adds shows up within a minute; add a manual flush if that is too slow
+const INDEX_TTL_MS = 60_000;
+type NameIndex = Map<string, string[]>;
+const indexes = new Map<string, { at: number; index: Promise<NameIndex> }>();
+
 /**
- * Absolute path of the legacy file for `name`, or null when the name is unsafe or no such file exists.
- * Exact match first; on a miss, the folder is scanned for the same base name ignoring case (the NAS is
- * case-insensitive, the droplet's disk is not) — that scan also finds files in sub-folders.
+ * Every entry under `folder` (sub-folders too) by lowercased base name. One recursive readdir per folder per minute
+ * (a folder is ~5k files), shared by concurrent lookups — a case page checks every SA row against the same folder.
+ */
+function nameIndex(folder: string): Promise<NameIndex> {
+  const hit = indexes.get(folder);
+  if (hit && Date.now() - hit.at < INDEX_TTL_MS) return hit.index;
+  const index = readdir(folder, { recursive: true }).then(
+    (entries) => {
+      const byBase: NameIndex = new Map();
+      for (const rel of entries) {
+        const key = lc(path.basename(rel));
+        byBase.set(key, [...(byBase.get(key) ?? []), rel]);
+      }
+      return byBase;
+    },
+    (e) => {
+      if (missing(e)) return new Map() as NameIndex;
+      indexes.delete(folder); // a fault is not cached
+      throw e;
+    },
+  );
+  indexes.set(folder, { at: Date.now(), index });
+  return index;
+}
+
+/**
+ * Absolute path of the legacy file for `name`, or null when the name is unsafe, no such file exists, or the name
+ * is ambiguous. Exact match first; on a miss, the folder is searched for the same base name ignoring case (the
+ * NAS is case-insensitive, the droplet's disk is not) — that search also finds files in sub-folders. Two
+ * different files with that base name (say in two year folders) could belong to different cases, so that is
+ * null, never a guess.
  */
 export async function resolveLegacyFile(root: string, kind: LegacyKind, name: string): Promise<string | null> {
   if (unsafeName(name)) return null;
@@ -70,23 +105,18 @@ export async function resolveLegacyFile(root: string, kind: LegacyKind, name: st
     const hit = await contained(realRoot, path.join(folder, c));
     if (hit) return hit;
   }
-  // ponytail: one recursive readdir per miss — add a cached name index if misses get hot (a folder is ~5k files)
-  let entries: string[];
-  try {
-    entries = await readdir(folder, { recursive: true });
-  } catch (e) {
-    if (missing(e)) return null;
-    throw e;
-  }
-  const byBase = new Map<string, string>();
-  for (const rel of entries) {
-    const key = lc(path.basename(rel));
-    if (!byBase.has(key)) byBase.set(key, rel);
-  }
+  const byBase = await nameIndex(folder);
   for (const c of wanted) {
-    const rel = byBase.get(lc(c));
-    const hit = rel && (await contained(realRoot, path.join(folder, rel)));
-    if (hit) return hit;
+    const found = new Set<string>();
+    for (const rel of byBase.get(lc(c)) ?? []) {
+      const hit = await contained(realRoot, path.join(folder, rel));
+      if (hit) found.add(hit);
+    }
+    if (found.size > 1) {
+      console.warn(`legacy file ambiguous: kind=${kind} matches=${found.size}`);
+      return null;
+    }
+    for (const only of found) return only;
   }
   return null;
 }
@@ -105,9 +135,26 @@ const TYPES: Record<string, string> = {
 /** RFC 5987 value: encodeURIComponent plus the characters it leaves bare that attr-char does not allow. */
 const encode5987 = (s: string): string => encodeURIComponent(s).replace(/['()*]/g, (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`);
 
-/** Stream an ALREADY-authorized legacy file. PDFs and images open in the browser; Word files download. */
-export async function legacyFileResponse(absPath: string): Promise<NextResponse> {
-  const size = (await stat(absPath)).size;
+/**
+ * Stream an ALREADY-authorized legacy file. PDFs and images open in the browser; Word files download.
+ * The file is opened BEFORE any header is built, so an open failure throws into the caller's try. Null means the
+ * file vanished since it was resolved (ENOENT); every other fault (permissions, I/O) throws.
+ */
+export async function legacyFileResponse(absPath: string): Promise<NextResponse | null> {
+  let fh;
+  try {
+    fh = await open(absPath);
+  } catch (e) {
+    if (missing(e)) return null;
+    throw e;
+  }
+  let size: number;
+  try {
+    size = (await fh.stat()).size;
+  } catch (e) {
+    await fh.close();
+    throw e;
+  }
   const name = path.basename(absPath);
   const ext = path.extname(name).toLowerCase();
   const type = TYPES[ext] ?? "application/octet-stream";
@@ -115,7 +162,7 @@ export async function legacyFileResponse(absPath: string): Promise<NextResponse>
   // Plain-ASCII fallback first (old clients), then the real name for everything that understands filename*.
   const ascii = name.replace(/[^\x20-\x7e]|["\\]/g, "_");
   const disposition = `${inline ? "inline" : "attachment"}; filename="${ascii}"${ascii === name ? "" : `; filename*=UTF-8''${encode5987(name)}`}`;
-  return new NextResponse(Readable.toWeb(createReadStream(absPath)) as unknown as ReadableStream, {
+  return new NextResponse(Readable.toWeb(fh.createReadStream()) as unknown as ReadableStream, {
     headers: {
       "content-type": type,
       "content-length": String(size),

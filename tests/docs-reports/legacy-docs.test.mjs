@@ -2,9 +2,10 @@
 // Pure fs against tests/docs-reports/fixtures (synthetic files); no DB, no session, no env.
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, mkdirSync, rmSync, symlinkSync, readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdtempSync, mkdirSync, readdirSync, rmSync, symlinkSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { realpath } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { LEGACY_FOLDERS, legacyFileResponse, resolveLegacyFile } from "../../lib/documents/legacy.ts";
 
@@ -19,8 +20,8 @@ test("the three NAS folders are pinned", () => {
 
 test("a scan name maps as-is into ScannedDocs; a bill/SA base name finds its Word file", async () => {
   assert.deepEqual(where(await resolveLegacyFile(ROOT, "scan", "img-120124111506.pdf")), ["ScannedDocs", "img-120124111506.pdf"]);
-  assert.deepEqual(where(await resolveLegacyFile(ROOT, "bill", "Bill2670 Huske 2023 08 11-0")), ["Bills", "bill2670 huske 2023 08 11-0.doc"]);
-  assert.deepEqual(where(await resolveLegacyFile(ROOT, "sa", "SA2110 Schulthess 2015 03 06-0")), ["ServAuth", "sa2110 schulthess 2015 03 06-0.docx"]);
+  assert.deepEqual(where(await resolveLegacyFile(ROOT, "bill", "Bill9001 Doe 2023 08 11-0")), ["Bills", "bill9001 doe 2023 08 11-0.doc"]);
+  assert.deepEqual(where(await resolveLegacyFile(ROOT, "sa", "SA9002 Roe 2015 03 06-0")), ["ServAuth", "sa9002 roe 2015 03 06-0.docx"]);
 });
 
 test("extension fallback: a pdf export beats .doc; a name with its extension already is found as-is", async () => {
@@ -32,13 +33,13 @@ test("extension fallback: a pdf export beats .doc; a name with its extension alr
 
 test("matching ignores case, and finds files in sub-folders", async () => {
   assert.deepEqual(where(await resolveLegacyFile(ROOT, "scan", "MIXED-case scan.pdf")), ["ScannedDocs", "mixed-case scan.pdf"]);
-  assert.equal(where(await resolveLegacyFile(ROOT, "bill", "BILL2670 HUSKE 2023 08 11-0"))[1], "bill2670 huske 2023 08 11-0.doc");
+  assert.equal(where(await resolveLegacyFile(ROOT, "bill", "BILL9001 DOE 2023 08 11-0"))[1], "bill9001 doe 2023 08 11-0.doc");
   assert.deepEqual(where(await resolveLegacyFile(ROOT, "scan", "nested.PNG")), ["2019", "nested.png"]);
 });
 
 test("a '..' INSIDE a name is allowed; non-ASCII names resolve", async () => {
   assert.equal(where(await resolveLegacyFile(ROOT, "scan", "2675_FeeSched..pdf"))[1], "2675_feesched..pdf");
-  assert.equal(where(await resolveLegacyFile(ROOT, "scan", "FJC \u2013 CourtListener.pdf"))[1], "fjc \u2013 courtlistener.pdf");
+  assert.equal(where(await resolveLegacyFile(ROOT, "scan", "Example \u2013 Docket Listing.pdf"))[1], "example \u2013 docket listing.pdf");
 });
 
 test("traversal and absolute names are refused, even when the target exists", async () => {
@@ -93,11 +94,11 @@ test("legacyFileResponse: a pdf streams inline with the hardening headers and th
 });
 
 test("legacyFileResponse: Word files download; images are inline; a non-ASCII name gets an RFC 5987 filename*", async () => {
-  const doc = await legacyFileResponse(await resolveLegacyFile(ROOT, "bill", "Bill2670 Huske 2023 08 11-0"));
+  const doc = await legacyFileResponse(await resolveLegacyFile(ROOT, "bill", "Bill9001 Doe 2023 08 11-0"));
   assert.equal(doc.headers.get("content-type"), "application/msword");
-  assert.match(doc.headers.get("content-disposition"), /^attachment; filename="Bill2670 Huske 2023 08 11-0\.doc"$/);
+  assert.match(doc.headers.get("content-disposition"), /^attachment; filename="Bill9001 Doe 2023 08 11-0\.doc"$/);
   await doc.arrayBuffer();
-  const docx = await legacyFileResponse(await resolveLegacyFile(ROOT, "sa", "SA2110 Schulthess 2015 03 06-0"));
+  const docx = await legacyFileResponse(await resolveLegacyFile(ROOT, "sa", "SA9002 Roe 2015 03 06-0"));
   assert.equal(docx.headers.get("content-type"), "application/vnd.openxmlformats-officedocument.wordprocessingml.document");
   assert.match(docx.headers.get("content-disposition"), /^attachment;/);
   await docx.arrayBuffer();
@@ -105,7 +106,67 @@ test("legacyFileResponse: Word files download; images are inline; a non-ASCII na
   assert.equal(png.headers.get("content-type"), "image/png");
   assert.match(png.headers.get("content-disposition"), /^inline;/);
   await png.arrayBuffer();
-  const en = await legacyFileResponse(await resolveLegacyFile(ROOT, "scan", "FJC \u2013 CourtListener.pdf"));
-  assert.equal(en.headers.get("content-disposition"), `inline; filename="FJC _ CourtListener.pdf"; filename*=UTF-8''FJC%20%E2%80%93%20CourtListener.pdf`);
+  const en = await legacyFileResponse(await resolveLegacyFile(ROOT, "scan", "Example \u2013 Docket Listing.pdf"));
+  assert.equal(en.headers.get("content-disposition"), `inline; filename="Example _ Docket Listing.pdf"; filename*=UTF-8''Example%20%E2%80%93%20Docket%20Listing.pdf`);
   await en.arrayBuffer();
+});
+
+// A scratch legacy root under the OS tmp dir; the callback gets its path and it is removed afterwards.
+async function withTmpRoot(fn) {
+  const tmp = mkdtempSync(path.join(tmpdir(), "legacy-docs-"));
+  try {
+    mkdirSync(path.join(tmp, "ScannedDocs", "2020"), { recursive: true });
+    return await fn(tmp);
+  } finally {
+    rmSync(tmp, { recursive: true, force: true });
+  }
+}
+
+test("two different files with one base name in different sub-folders are ambiguous: null, and the warning has no file name", async (t) => {
+  const warn = t.mock.method(console, "warn", () => {});
+  assert.equal(await resolveLegacyFile(ROOT, "scan", "Twin Scan.pdf"), null);
+  assert.equal(await resolveLegacyFile(ROOT, "scan", "TWIN SCAN.PDF"), null, "the case-insensitive match is ambiguous too");
+  assert.equal(warn.mock.callCount(), 2);
+  assert.equal(warn.mock.calls[0].arguments.join(" "), "legacy file ambiguous: kind=scan matches=2");
+  // a base name with ONE match in a sub-folder still resolves, quietly
+  assert.deepEqual(where(await resolveLegacyFile(ROOT, "scan", "nested.png")), ["2019", "nested.png"]);
+  assert.equal(warn.mock.callCount(), 2);
+});
+
+test("a top-level exact name wins over a same-named file in a sub-folder (no ambiguity)", async () => {
+  await withTmpRoot(async (tmp) => {
+    writeFileSync(path.join(tmp, "ScannedDocs", "Dup.pdf"), "top\n");
+    writeFileSync(path.join(tmp, "ScannedDocs", "2020", "Dup.pdf"), "nested\n");
+    assert.equal(readFileSync(await resolveLegacyFile(tmp, "scan", "Dup.pdf"), "utf8"), "top\n");
+  });
+});
+
+test("Unicode normalization: a decomposed (NFD) name on disk is found by its composed (NFC) name, and the reverse", async (t) => {
+  await withTmpRoot(async (tmp) => {
+    // In a sub-folder, so the exact top-level probe misses on any file system and the name index decides.
+    const dir = path.join(tmp, "ScannedDocs", "2020");
+    const nfd = "Cafe\u0301 Menu.pdf";
+    const nfc = "Caf\u00e9 Bar.pdf";
+    writeFileSync(path.join(dir, nfd), "nfd on disk\n");
+    writeFileSync(path.join(dir, nfc), "nfc on disk\n");
+    if (!readdirSync(dir).includes(nfd)) return t.skip("this file system does not keep the decomposed name");
+    assert.equal(readFileSync(await resolveLegacyFile(tmp, "scan", "Caf\u00e9 Menu.pdf"), "utf8"), "nfd on disk\n");
+    assert.equal(readFileSync(await resolveLegacyFile(tmp, "scan", "Cafe\u0301 Bar.pdf"), "utf8"), "nfc on disk\n");
+  });
+});
+
+const asRoot = typeof process.getuid === "function" && process.getuid() === 0;
+
+test("an unreadable file is a fault (throws), not a resolved path; the response says not-found for a vanished file and throws otherwise", { skip: asRoot && "root reads everything" }, async () => {
+  await withTmpRoot(async (tmp) => {
+    const file = path.join(tmp, "ScannedDocs", "locked.pdf");
+    writeFileSync(file, "x\n");
+    chmodSync(file, 0o000);
+    await assert.rejects(resolveLegacyFile(tmp, "scan", "locked.pdf"), { code: "EACCES" });
+    await assert.rejects(legacyFileResponse(file), { code: "EACCES" });
+    chmodSync(file, 0o644);
+    assert.equal(await resolveLegacyFile(tmp, "scan", "locked.pdf"), await realpath(file));
+    rmSync(file);
+    assert.equal(await legacyFileResponse(file), null, "a file that vanished after it was resolved is null, so the caller can answer 404");
+  });
 });

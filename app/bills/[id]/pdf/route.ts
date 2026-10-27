@@ -28,7 +28,7 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
       const dir = getConfig().legacyDocsDir;
       if (!billfilename || !dir) return text("This bill has no PDF yet.", 404);
       const file = await resolveLegacyFile(dir, "bill", billfilename);
-      return file ? await legacyFileResponse(file) : text("That bill's file is not available.", 404);
+      return (file && (await legacyFileResponse(file))) || text("That bill's file is not available.", 404);
     }
     const storage = getStorageAdapter();
     if (!storage) return text("File storage is not configured.", 503);
