@@ -2,6 +2,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireSession } from "@/lib/auth/session";
 import { createServerClient } from "@/lib/db/client";
+import { getConfig } from "@/lib/env";
+import { resolveLegacyFile } from "@/lib/documents/legacy";
 import {
   EVENT_SUGGESTIONS, errorMessage, field, attorneyName, clientName, firmAddress, formValue, origValue, loadCaseOptions, loadCaseRecord,
   type CaseOptions, type Db, type Field, type Option, type Row,
@@ -14,7 +16,7 @@ import { BillsPanel } from "@/app/bills/bills-panel";
 import { CaseFundsPanel } from "@/app/funds/case-panel";
 import { CaseExpensesPanel } from "@/app/expenses/case-panel";
 import { CaseDocumentsPanel } from "@/app/documents/case-panel";
-import { loadServiceAuths } from "@/lib/cases/service-auths";
+import { isAppSaFile, loadServiceAuths } from "@/lib/cases/service-auths";
 import { firmToday } from "@/lib/cases/presets";
 import { CASE_DOCS } from "@/lib/case-docs/docs";
 
@@ -111,6 +113,13 @@ export default async function CaseRecordPage({ params, searchParams }: { params:
   const [rec, o, sas] = await Promise.all([loadCaseRecord(db, id), loadCaseOptions(db),
     loadServiceAuths(db, id).catch((e) => { console.error("service auths read:", e); return null; })]);
   if (!rec) notFound();
+  // Legacy SA files (not made by the app) get an "Open file" link only when the NAS copy has them; a fault just hides the link.
+  const dir = getConfig().legacyDocsDir;
+  const legacyOpen = dir
+    ? (await Promise.all((sas ?? []).filter((r) => r.srvauthfile && !isAppSaFile(id, r.srvauthfile)).map(async (r) =>
+        (await resolveLegacyFile(dir, "sa", String(r.srvauthfile)).catch((e) => { console.error("sa legacy file:", r.srvauthid, e); return null; })) ? String(r.srvauthid) : null))
+      ).filter((x): x is string => x !== null)
+    : [];
   const { kase, atty, firm, client } = rec;
   const saved = first(searchParams.saved);
   const error = first(searchParams.error);
@@ -197,7 +206,7 @@ export default async function CaseRecordPage({ params, searchParams }: { params:
 
       {/* Headed slots for later lanes. */}
       <div className="grid gap-4 md:grid-cols-2">
-        <ServiceAuthsPanel t={first(searchParams.t) ?? "initial"} caseId={id} rows={sas} today={firmToday(new Date())} saved={first(searchParams.sa)} error={first(searchParams.sa_error)} created={first(searchParams.sa_new)} />
+        <ServiceAuthsPanel t={first(searchParams.t) ?? "initial"} caseId={id} rows={sas} today={firmToday(new Date())} saved={first(searchParams.sa)} error={first(searchParams.sa_error)} created={first(searchParams.sa_new)} legacyOpen={legacyOpen} />
         <BillsPanel caseId={id} />
         <CaseFundsPanel caseId={id} />
         <CaseExpensesPanel caseId={id} />

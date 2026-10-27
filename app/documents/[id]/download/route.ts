@@ -1,16 +1,19 @@
 import { NextResponse } from "next/server";
 import { requireSession } from "@/lib/auth/session";
 import { createServerClient } from "@/lib/db/client";
+import { getConfig } from "@/lib/env";
 import { getStorageAdapter, StorageObjectNotFoundError } from "@/lib/storage";
 import type { Db } from "@/lib/time/entries";
-import { DocumentError, documentDownloadUrl, documentErrorMessage, loadDocument } from "@/lib/documents/store";
+import { DocumentError, documentDownloadUrl, documentErrorMessage, isLegacyFile, loadDocument } from "@/lib/documents/store";
+import { legacyFileResponse, resolveLegacyFile } from "@/lib/documents/legacy";
 
 export const dynamic = "force-dynamic";
 
 const text = (body: string, status: number) => new NextResponse(body, { status, headers: { "content-type": "text/plain; charset=utf-8" } });
 
 /**
- * Download one document: authorize the row, then hand back a short-lived signed URL.
+ * Download one document: authorize the row, then hand back a short-lived signed URL (app files) or stream
+ * the NAS copy (legacy scans, when LEGACY_DOCS_DIR is set). Both go through the same loadDocument scope check.
  * requireSession() runs FIRST and outside the try, so an anonymous request gets the
  * app's normal /login redirect and never a file.
  */
@@ -22,6 +25,14 @@ export async function GET(req: Request, { params }: { params: { id: string } }):
   if (scope != null && !Number.isSafeInteger(scope)) return text(documentErrorMessage("notfound"), 404);
   try {
     const doc = await loadDocument(createServerClient() as unknown as Db, session, Number(params.id), scope);
+    if (isLegacyFile(doc.filename)) {
+      // Unconfigured stays the "open it on the NAS" note; a configured copy that lacks the file is a plain not-found.
+      const dir = getConfig().legacyDocsDir;
+      if (!dir) throw new DocumentError("legacy");
+      const file = await resolveLegacyFile(dir, "scan", doc.filename!);
+      if (!file) throw new DocumentError("notfound");
+      return await legacyFileResponse(file);
+    }
     return NextResponse.redirect(await documentDownloadUrl(getStorageAdapter(), doc), 302);
   } catch (e) {
     if (e instanceof DocumentError) return text(documentErrorMessage(e.code), e.code === "storage" ? 503 : 404);

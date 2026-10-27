@@ -3,6 +3,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import Module from "node:module";
+import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { fakeDb } from "./fakedb.mjs";
 import session from "./stub-session.cjs";
@@ -27,6 +28,7 @@ function setup({ adapter = { getSignedUrl: async () => SIGNED }, redirect = fals
   dbclient.state.db = fakeDb({ tblscanneddocument: DOCS.map((d) => ({ ...d })) });
   storage.state.adapter = adapter;
   session.state.redirect = redirect;
+  delete process.env.LEGACY_DOCS_DIR; // each test opts in to the NAS copy
 }
 const get = (id, qs = "") => GET(new Request(`http://localhost:3100/documents/${id}/download${qs}`), { params: { id: String(id) } });
 
@@ -91,4 +93,72 @@ test("a legacy NAS scan is 404 with the NAS message and the adapter is never rea
   setup({ adapter: null });
   dbclient.state.db = fakeDb({ tblscanneddocument: [{ id: 5, caseid: 101, dateadded: "2026-01-02", type: null, description: null, filename: "img-1.pdf" }] });
   assert.equal((await get(5)).status, 404);
+});
+
+// ---- legacy NAS files served from $LEGACY_DOCS_DIR (fixtures: tests/docs-reports/fixtures/legacy-docs) ----
+const LEGACY_DIR = fileURLToPath(new URL("./fixtures/legacy-docs", import.meta.url));
+const SCAN_BYTES = readFileSync(`${LEGACY_DIR}/ScannedDocs/img-120124111506.pdf`);
+const legacyRow = (over = {}) => ({ id: 5, caseid: 101, dateadded: "2026-01-02", type: null, description: null, filename: "img-120124111506.pdf", ...over });
+function legacySetup(rows = [legacyRow()], opts) {
+  let reached = false;
+  setup({ ...opts, adapter: { getSignedUrl: async () => { reached = true; return SIGNED; } } });
+  dbclient.state.db = fakeDb({ tblscanneddocument: rows });
+  process.env.LEGACY_DOCS_DIR = LEGACY_DIR;
+  return () => reached;
+}
+
+test("a legacy scan under its own case streams the NAS copy: 200, the exact bytes, never a redirect", async (t) => {
+  t.after(() => { delete process.env.LEGACY_DOCS_DIR; });
+  const reached = legacySetup();
+  const res = await get(5, "?case=101");
+  assert.equal(res.status, 200);
+  assert.equal(res.headers.get("content-type"), "application/pdf");
+  assert.match(res.headers.get("content-disposition"), /^inline;/);
+  assert.equal(res.headers.get("cache-control"), "private, no-store");
+  assert.ok(!res.headers.get("location"));
+  assert.deepEqual(Buffer.from(await res.arrayBuffer()), SCAN_BYTES);
+  assert.equal((await get(5)).status, 200, "no ?case= scope is still authorized by the row's own case");
+  assert.equal(reached(), false, "the storage adapter is never reached for a legacy row");
+});
+
+test("a legacy scan requested under ANOTHER case's scope is 404 with no file bytes", async (t) => {
+  t.after(() => { delete process.env.LEGACY_DOCS_DIR; });
+  legacySetup();
+  for (const qs of ["?case=202", "?case=abc"]) {
+    const res = await get(5, qs);
+    assert.equal(res.status, 404, qs);
+    const body = await res.text();
+    assert.equal(body, "That document is not available on this case.");
+    assert.ok(!res.headers.get("content-disposition"));
+  }
+  assert.equal((await get(999, "?case=101")).status, 404);
+});
+
+test("a legacy scan: anonymous → the login redirect, never the file", async (t) => {
+  t.after(() => { delete process.env.LEGACY_DOCS_DIR; });
+  legacySetup([legacyRow()], { redirect: true });
+  const e = await get(5, "?case=101").then((r) => r, (err) => err);
+  assert.ok(e instanceof Error, "a Response was returned to an anonymous caller");
+  assert.equal(e.digest, "NEXT_REDIRECT;/login");
+});
+
+test("a legacy scan with the directory unset is the NAS note; with the file missing from the copy it is not-found", async (t) => {
+  t.after(() => { delete process.env.LEGACY_DOCS_DIR; });
+  legacySetup();
+  delete process.env.LEGACY_DOCS_DIR;
+  const unset = await get(5, "?case=101");
+  assert.equal(unset.status, 404);
+  assert.match(await unset.text(), /office NAS/);
+  legacySetup([legacyRow({ filename: "img-missing-from-copy.pdf" })]);
+  const gone = await get(5, "?case=101");
+  assert.equal(gone.status, 404);
+  assert.equal(await gone.text(), "That document is not available on this case.");
+});
+
+test("a legacy name that tries to leave the folder is not-found, not a file", async (t) => {
+  t.after(() => { delete process.env.LEGACY_DOCS_DIR; });
+  legacySetup([legacyRow({ filename: "../outside/secret.txt" })]);
+  const res = await get(5, "?case=101");
+  assert.equal(res.status, 404);
+  assert.equal(await res.text(), "That document is not available on this case.");
 });

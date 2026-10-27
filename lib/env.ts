@@ -72,6 +72,11 @@ export interface AppConfig {
    * sync-legacy workflow. Unset → the Sync button is disabled with "Not configured".
    */
   githubSyncToken?: string;
+  /**
+   * Root of the nightly NAS copy on the droplet (`<dir>/{ScannedDocs,Bills,ServAuth}`). Unset → legacy
+   * files are not served and the UI keeps showing the bare NAS file name.
+   */
+  legacyDocsDir?: string;
 }
 
 /**
@@ -99,5 +104,6 @@ export function getConfig(): AppConfig {
     billTaxId: readEnv("BILL_TAX_ID"),
     billLetterhead: readLines("BILL_LETTERHEAD"),
     githubSyncToken: readEnv("GITHUB_SYNC_TOKEN"),
+    legacyDocsDir: readEnv("LEGACY_DOCS_DIR"),
   };
 }

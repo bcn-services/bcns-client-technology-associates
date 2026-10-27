@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { requireSession } from "@/lib/auth/session";
 import { createServerClient } from "@/lib/db/client";
+import { getConfig } from "@/lib/env";
 import { getStorageAdapter } from "@/lib/storage";
 import type { Db } from "@/lib/time/entries";
 import { isLegacyFile, listAllDocuments } from "@/lib/documents/store";
@@ -13,6 +14,7 @@ export default async function DocumentsPage() {
   const [session, db] = [await requireSession(), createServerClient() as unknown as Db];
   const docs = await listAllDocuments(db, session).catch((e) => { console.error("documents read:", e); return null; });
   const storageReady = getStorageAdapter() !== null;
+  const legacyReady = !!getConfig().legacyDocsDir;
   return (
     <main className="mx-auto max-w-5xl space-y-4 px-4 py-6">
       <h1 className="text-xl font-semibold">Documents</h1>
@@ -35,12 +37,12 @@ export default async function DocumentsPage() {
               <tr key={doc.id} data-testid="document-row" className="border-t border-slate-100">
                 <td className="py-1">{doc.dateadded ?? ""}</td>
                 <td>
-                  {isLegacyFile(doc.filename) ? (
+                  {isLegacyFile(doc.filename) && !legacyReady ? (
                     <>{doc.description}<LegacyFile filename={doc.filename!} /></>
                   ) : !doc.filename ? (
                     doc.description ?? `Document ${doc.id}`
                   ) : (
-                    <Link href={`/documents/${doc.id}/download`} className="underline">{doc.description ?? `Document ${doc.id}`}</Link>
+                    <Link href={`/documents/${doc.id}/download`} className="underline">{doc.description ?? (isLegacyFile(doc.filename) ? doc.filename : `Document ${doc.id}`)}</Link>
                   )}
                 </td>
                 <td>{doc.type ?? ""}</td>
