@@ -25,7 +25,7 @@ function Input({ f, v, idp }: { f: SaField; v: string; idp: string }) {
 }
 
 /** One add/edit form; `row` null = add. Each input carries a `<col>__orig` with the value it was rendered with. */
-function SaForm({ caseId, row, today, t }: { caseId: number; row: Row | null; today: string; t: string }) {
+function SaForm({ caseId, row, today, t, legacyOpen }: { caseId: number; row: Row | null; today: string; t: string; legacyOpen?: boolean }) {
   const idp = row ? `sa-${row.srvauthid}` : "sa-new";
   const vals: Row = row ?? { srvauthdate: today, srvauthstatus: "Awaiting Approval" };
   return (
@@ -44,6 +44,10 @@ function SaForm({ caseId, row, today, t }: { caseId: number; row: Row | null; to
       <div className="flex items-end gap-3">
         <SaSubmit label={row ? "Update authorization" : "Add authorization"} />
         {row && isAppSaFile(caseId, row.srvauthfile) && <SaPdfLink row={row} />}
+        {/* A legacy file on the NAS copy: the route streams it (PDF inline, Word as a download). */}
+        {row && legacyOpen && !isAppSaFile(caseId, row.srvauthfile) && (
+          <a href={saPdfHref(row.srvauthid)} className="text-sm underline" data-testid="sa-legacy-file">Open file</a>
+        )}
       </div>
     </form>
   );
@@ -59,7 +63,11 @@ function SaPdfLink({ row, label = "PDF" }: { row: Row; label?: string }) {
  * `rows` null = the read failed. `t` is the redirect's timestamp: it goes into every form key, so each
  * save remounts the forms — no row inherits another's DOM state, and the add form resets.
  */
-export function ServiceAuthsPanel({ caseId, rows, today, t, saved, error, created }: { caseId: number; rows: Row[] | null; today: string; t: string; saved?: string; error?: string; created?: string }) {
+export function ServiceAuthsPanel({ caseId, rows, today, t, saved, error, created, legacyOpen }: {
+  caseId: number; rows: Row[] | null; today: string; t: string; saved?: string; error?: string; created?: string;
+  /** srvauthids of legacy rows whose NAS file exists (the page resolves them); each gets an "Open file" link. */
+  legacyOpen?: string[];
+}) {
   const made = created ? rows?.find((r) => String(r.srvauthid) === created) : undefined;
   return (
     <section id="service-auths" className="space-y-2 rounded border border-slate-200 p-3 md:col-span-2">
@@ -83,7 +91,7 @@ export function ServiceAuthsPanel({ caseId, rows, today, t, saved, error, create
       <SaForm caseId={caseId} row={null} today={today} t={t} />
       {rows === null ? <p role="alert" className="text-sm text-red-700">Couldn&apos;t load service authorizations. Try again.</p>
         : rows.length === 0 ? <p className="text-sm text-slate-500">No service authorizations.</p>
-        : rows.map((r) => <SaForm key={String(r.srvauthid)} caseId={caseId} row={r} today={today} t={t} />)}
+        : rows.map((r) => <SaForm key={String(r.srvauthid)} caseId={caseId} row={r} today={today} t={t} legacyOpen={legacyOpen?.includes(String(r.srvauthid))} />)}
     </section>
   );
 }

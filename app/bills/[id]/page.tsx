@@ -1,6 +1,8 @@
 import { notFound } from "next/navigation";
 import { requireSession } from "@/lib/auth/session";
 import { createServerClient } from "@/lib/db/client";
+import { getConfig } from "@/lib/env";
+import { resolveLegacyFile } from "@/lib/documents/legacy";
 import type { Db } from "@/lib/time/entries";
 import { loadBill } from "@/lib/bills/edit";
 import { brokenFinalize, storedLines } from "@/lib/bills/finalize";
@@ -22,6 +24,11 @@ export default async function BillPage({ params, searchParams }: { params: { id:
   const data = await loadBill(db, id);
   if (!data) notFound();
   const broken = !!data.bill.billfinalizedat && brokenFinalize(data.bill, await storedLines(db, id));
+  // A legacy bill (no stored PDF) gets a "File name" link only when its NAS copy is really there; a fault just hides the link.
+  const { billpdfpath, billfilename } = data.bill;
+  const dir = getConfig().legacyDocsDir;
+  const legacyFile = !billpdfpath && !!billfilename && !!dir
+    && !!(await resolveLegacyFile(dir, "bill", billfilename).catch((e) => { console.error("bill legacy file:", id, e); return null; }));
   const admin = session.role === "admin";
   const error = first(searchParams.error);
   return (
@@ -38,6 +45,7 @@ export default async function BillPage({ params, searchParams }: { params: { id:
         error={error ? noticeErrorMessage(error) : undefined}
         saved={first(searchParams.saved) === "1"}
         broken={broken}
+        legacyFile={legacyFile}
       />
     </main>
   );

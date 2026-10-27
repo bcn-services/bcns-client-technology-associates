@@ -202,7 +202,7 @@ test("action wiring: createServiceAuthAction uses requireSession (not an admin g
   assert.doesNotMatch(body, /requireAdmin|role/);
   const route = readFileSync(join(ROOT, "app/cases/service-auths/pdf/[srvauthid]/route.ts"), "utf8");
   const get = route.slice(route.indexOf("export async function GET"));
-  assert.ok(get.indexOf("await requireSession()") > 0 && get.indexOf("await requireSession()") < get.indexOf("saPdfKey("), "session check precedes the lookup");
+  assert.ok(get.indexOf("await requireSession()") > 0 && get.indexOf("await requireSession()") < get.indexOf("saFile("), "session check precedes the lookup");
 });
 
 /** Non-type imports reachable from `entry` (repo files resolved; bare packages recorded by name). */

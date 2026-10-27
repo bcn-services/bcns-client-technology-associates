@@ -254,9 +254,9 @@ export async function runCreateSa(caseId: number, deps: CreateSaDeps): Promise<v
   deps.redirect(`/cases/${caseId}?${q}&t=${deps.now().getTime()}#service-auths`);
 }
 
-/** Storage key of SA `srvauthid`'s PDF, or null when there is no such row or it names no file. */
-export async function saPdfKey(db: Db, srvauthid: number): Promise<string | null> {
+/** SA `srvauthid`'s case and file name, or null when there is no such row or it names no file. */
+export async function saFile(db: Db, srvauthid: number): Promise<{ caseid: number; file: string } | null> {
   const { data, error } = await db.from("tblsrvauth").select("srvauthcaseid, srvauthfile").eq("srvauthid", srvauthid).maybeSingle();
   if (error) throw new Error(`tblsrvauth read: ${error.message}`);
-  return data?.srvauthfile ? saKey(Number(data.srvauthcaseid), String(data.srvauthfile)) : null;
+  return data?.srvauthfile ? { caseid: Number(data.srvauthcaseid), file: String(data.srvauthfile) } : null;
 }

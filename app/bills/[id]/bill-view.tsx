@@ -13,7 +13,7 @@ const show = (v: string | number | null | undefined) => (v == null || v === "" ?
 const input = "rounded border border-slate-300 px-2 py-1";
 
 /** Pure view of one bill. `action` is the bound editBill; passed only for admins, so staff get no form. */
-export function BillView({ data, admin, action, advance, close, revise, createPdf, error, saved, broken }: {
+export function BillView({ data, admin, action, advance, close, revise, createPdf, error, saved, broken, legacyFile }: {
   data: BillPageData;
   admin: boolean;
   action?: (formData: FormData) => void | Promise<void>;
@@ -26,6 +26,8 @@ export function BillView({ data, admin, action, advance, close, revise, createPd
   saved?: boolean;
   /** Finalized but its stored lines don't add up (lib/bills/finalize.ts brokenFinalize). */
   broken?: boolean;
+  /** A legacy bill (no stored PDF) whose NAS copy exists: "File name" links to /bills/[id]/pdf, which streams it. */
+  legacyFile?: boolean;
 }) {
   const { bill: b, casetitle, activity, revisedBy } = data;
   const fields: [string, React.ReactNode][] = [
@@ -41,7 +43,7 @@ export function BillView({ data, admin, action, advance, close, revise, createPd
     ["Paid", show(b.billpaiddate)],
     ["Reports", show(b.billreports)],
     ["Priority", show(b.billpriority)],
-    ["File name", show(b.billfilename)],
+    ["File name", legacyFile && !b.billpdfpath ? <a key="f" href={`/bills/${b.billid}/pdf`} className="underline" data-testid="bill-legacy-file">{show(b.billfilename)}</a> : show(b.billfilename)],
     ["Comments", show(b.billcomments)],
   ];
   // Remount the form whenever the row changes, so a same-URL redirect shows the saved values (Next 14.2 keeps uncontrolled inputs).

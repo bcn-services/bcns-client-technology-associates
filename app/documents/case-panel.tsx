@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { requireSession, type Session } from "@/lib/auth/session";
 import { createServerClient } from "@/lib/db/client";
+import { getConfig } from "@/lib/env";
 import { getStorageAdapter } from "@/lib/storage";
 import type { Db } from "@/lib/time/entries";
 import { isLegacyFile, listCaseDocuments, type DocRow } from "@/lib/documents/store";
@@ -18,10 +19,11 @@ export async function CaseDocumentsPanel({ caseId, db, session, storageReady }: 
   const d = db ?? (createServerClient() as unknown as Db);
   const ready = storageReady ?? getStorageAdapter() !== null;
   const docs = await listCaseDocuments(d, s, caseId).catch((e) => { console.error("case documents read:", e); return null; });
-  return <CaseDocumentsPanelView caseId={caseId} docs={docs} storageReady={ready} />;
+  return <CaseDocumentsPanelView caseId={caseId} docs={docs} storageReady={ready} legacyReady={!!getConfig().legacyDocsDir} />;
 }
 
-export function CaseDocumentsPanelView({ caseId, docs, storageReady }: { caseId: number; docs: DocRow[] | null; storageReady: boolean }) {
+/** `legacyReady`: the NAS copy is configured, so legacy rows link to the download route instead of showing the bare file name. */
+export function CaseDocumentsPanelView({ caseId, docs, storageReady, legacyReady = false }: { caseId: number; docs: DocRow[] | null; storageReady: boolean; legacyReady?: boolean }) {
   return (
     <section id="documents-panel" data-testid="documents-panel" className="space-y-2 rounded border border-slate-200 p-3">
       <h2 className="font-semibold">Documents</h2>
@@ -48,12 +50,12 @@ export function CaseDocumentsPanelView({ caseId, docs, storageReady }: { caseId:
                 {/* `?case=` scopes the request to the case being viewed; it can only narrow
                     access — the download re-derives the real caseid from the row. */}
                 <td>
-                  {isLegacyFile(doc.filename) ? (
+                  {isLegacyFile(doc.filename) && !legacyReady ? (
                     <>{doc.description}<LegacyFile filename={doc.filename!} /></>
                   ) : !doc.filename ? (
                     doc.description ?? `Document ${doc.id}`
                   ) : (
-                    <Link href={`/documents/${doc.id}/download?case=${caseId}`} className="underline">{doc.description ?? `Document ${doc.id}`}</Link>
+                    <Link href={`/documents/${doc.id}/download?case=${caseId}`} className="underline">{doc.description ?? (isLegacyFile(doc.filename) ? doc.filename : `Document ${doc.id}`)}</Link>
                   )}
                 </td>
                 <td>{doc.type ?? ""}</td>

@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { requireSession } from "@/lib/auth/session";
 import { createServerClient } from "@/lib/db/client";
+import { getConfig } from "@/lib/env";
+import { legacyFileResponse, resolveLegacyFile } from "@/lib/documents/legacy";
 import { getStorageAdapter, StorageObjectNotFoundError } from "@/lib/storage";
 import type { Db } from "@/lib/time/entries";
 
@@ -11,7 +13,8 @@ const text = (body: string, status: number) => new NextResponse(body, { status, 
 /**
  * The bill's stored invoice PDF, for any signed-in user. requireSession() runs first and outside the try, so an
  * anonymous request gets the app's /login redirect, never a file. The bytes are proxied (not a redirect to the
- * signed URL) so the response is always application/pdf under the app's own origin.
+ * signed URL) so the response is always application/pdf under the app's own origin. A legacy bill (no stored PDF,
+ * a bare NAS base name in billfilename) is streamed from the NAS copy instead when LEGACY_DOCS_DIR is set.
  */
 export async function GET(_req: Request, { params }: { params: { id: string } }): Promise<NextResponse> {
   await requireSession();
@@ -20,8 +23,13 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
     const db = createServerClient() as unknown as Db;
     const { data, error } = await db.from("tblbills").select("billpdfpath, billfilename").eq("billid", Number(params.id)).maybeSingle();
     if (error) throw new Error(`tblbills read: ${error.message}`);
-    const path = (data as { billpdfpath: string | null } | null)?.billpdfpath;
-    if (!path) return text("This bill has no PDF yet.", 404);
+    const { billpdfpath: path, billfilename } = (data ?? {}) as { billpdfpath?: string | null; billfilename?: string | null };
+    if (!path) {
+      const dir = getConfig().legacyDocsDir;
+      if (!billfilename || !dir) return text("This bill has no PDF yet.", 404);
+      const file = await resolveLegacyFile(dir, "bill", billfilename);
+      return (file && (await legacyFileResponse(file))) || text("That bill's file is not available.", 404);
+    }
     const storage = getStorageAdapter();
     if (!storage) return text("File storage is not configured.", 503);
     const res = await fetch(await storage.getSignedUrl(path, 60), { cache: "no-store" });
