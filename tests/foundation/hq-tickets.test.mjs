@@ -9,7 +9,8 @@ before(() => {
   sql(`insert into tickets (ticketdate, description, status, createdat) values
     (current_date, 'fix the thing', 'Open', now() - interval '2 days'),
     (current_date, 'old and quiet', 'Open', now() - interval '200 days'),
-    (current_date, 'old but replied', 'Open', now() - interval '200 days');
+    (current_date, 'old but replied', 'Open', now() - interval '200 days'),
+    (current_date, 'old and closed', 'Closed', now() - interval '200 days');
     insert into ticket_messages (ticketid, author, body)
     select id, 'kris@x.test', 'recent reply' from tickets where description = 'old but replied';`);
 });
@@ -17,9 +18,9 @@ after(() => sql(`delete from ticket_messages; delete from tickets;`));
 const tid = (d) => one(`select id from tickets where description = '${d}'`);
 const status = (id) => one(`select status from tickets where id = ${id}`);
 
-test("pull returns recent tickets (a recent message keeps an old one) with the mapped shape", () => {
+test("pull returns every open ticket and recently touched closed ones, with the mapped shape", () => {
   const rows = sql(asHq(`select id, slug, subject, body, severity, status from hq_tickets_pull() order by id`));
-  assert.deepEqual(rows.map((r) => r[3]), ["fix the thing", "old but replied"]);
+  assert.deepEqual(rows.map((r) => r[3]), ["fix the thing", "old and quiet", "old but replied"]);
   assert.deepEqual(rows[0].slice(1), ["technology-associates", "fix the thing", "fix the thing", "normal", "open"]);
 });
 

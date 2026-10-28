@@ -10,7 +10,7 @@ end $$;
 alter role hq_tickets set statement_timeout = '5s';
 grant usage on schema public to hq_tickets;
 
--- Tickets touched in the last 90 days, shaped for HQ (slug, one-line subject, body, source-neutral status).
+-- Every open ticket plus those closed in the last 90 days, shaped for HQ (slug, one-line subject, body, source-neutral status).
 create function public.hq_tickets_pull()
 returns table (id int, slug text, subject text, body text, severity text, status text, created_at timestamptz, updated_at timestamptz)
 language sql security definer set search_path = '' as $$
@@ -20,7 +20,7 @@ language sql security definer set search_path = '' as $$
   from public.tickets t
   left join public.ticket_messages m on m.ticketid = t.id
   group by t.id
-  having greatest(t.createdat, max(m.createdat)) > now() - interval '90 days'
+  having t.status <> 'Closed' or greatest(t.createdat, max(m.createdat)) > now() - interval '90 days'
 $$;
 
 -- Push back a resolution: close the ticket, and only if this call closed it add the optional 'bcns' message.
