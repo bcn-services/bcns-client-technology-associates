@@ -39,8 +39,24 @@ test("resolve with '' adds no message, closes, and a second call returns 0", () 
   assert.equal(one(asHq(`select hq_ticket_resolve(${id}, '')`)), "0");
 });
 
+test("a repeat resolve with a body on a Closed ticket, or on a missing id, returns 0 and writes nothing", () => {
+  const id = tid("fix the thing");
+  assert.equal(one(asHq(`select hq_ticket_resolve(${id}, 'again')`)), "0");
+  assert.deepEqual(sql(`select author, body from ticket_messages where ticketid = ${id}`), [["bcns", "done, deployed"]]);
+  assert.equal(one(asHq(`select hq_ticket_resolve(999999, 'no such ticket')`)), "0");
+});
+
+test("resolve with a whitespace-only body closes without a message", () => {
+  const id = tid("old and quiet");
+  assert.equal(one(asHq(`select hq_ticket_resolve(${id}, '   ')`)), "1");
+  assert.equal(one(`select count(*) from ticket_messages where ticketid = ${id}`), "0");
+  assert.equal(status(id), "Closed");
+});
+
 test("hq_tickets cannot read tables; other roles cannot call the functions", () => {
   assert.match(errorOf(asHq(`select * from tickets`)) ?? "", /permission denied/);
   assert.match(errorOf(asHq(`select * from ticket_messages`)) ?? "", /permission denied/);
-  for (const r of ["anon", "authenticated"]) assert.match(errorOf(`set role ${r}; select * from hq_tickets_pull()`) ?? "", /permission denied/);
+  for (const r of ["anon", "authenticated"])
+    for (const call of ["hq_tickets_pull()", "hq_ticket_resolve(1, 'x')"])
+      assert.match(errorOf(`set role ${r}; select * from ${call}`) ?? "", /permission denied/);
 });

@@ -23,19 +23,22 @@ language sql security definer set search_path = '' as $$
   having greatest(t.createdat, max(m.createdat)) > now() - interval '90 days'
 $$;
 
--- Push back a resolution: optional 'bcns' message, then Closed. Returns ticket rows changed (0 = already Closed).
+-- Push back a resolution: close the ticket, and only if this call closed it add the optional 'bcns' message.
+-- Returns ticket rows changed (0 = already Closed or no such ticket, nothing written), so a retry or an overlapping run
+-- adds no duplicate message and a bad id raises no FK error (concurrent calls serialize on the row lock).
 -- Author 'bcns' (not 'email') so ticket_reply_review (0014) does not flip the ticket back to In review.
+-- ponytail: a ticket already closed at the source before the push gets no message (HQ auto-dones those without pushing).
 create function public.hq_ticket_resolve(p_id int, p_body text)
 returns int
 language plpgsql security definer set search_path = '' as $$
 declare n int;
 begin
-  -- btrim, not just <> '': ticket_messages rejects blank bodies and a raised error would retry forever.
-  if btrim(p_body) <> '' then
-    insert into public.ticket_messages (ticketid, author, body) values (p_id, 'bcns', p_body);
-  end if;
   update public.tickets set status = 'Closed' where id = p_id and status <> 'Closed';
   get diagnostics n = row_count;
+  -- btrim, not just <> '': ticket_messages rejects blank bodies and a raised error would retry forever.
+  if n = 1 and btrim(p_body) <> '' then
+    insert into public.ticket_messages (ticketid, author, body) values (p_id, 'bcns', p_body);
+  end if;
   return n;
 end $$;
 
