@@ -159,7 +159,7 @@ export async function sendTicketEmail(cfg: TicketMailConfig, t: TicketMail, fetc
   const text =
     t.kind === "new"
       ? `Date: ${t.date}\n\n${t.description}`
-      : `Ticket #${t.id} was ${t.kind}.\n\n${t.response ? `Response:\n${t.response}\n\n` : ""}Ticket (${t.date}):\n${t.description}`;
+      : `Ticket #${t.id} was ${t.kind === "reviewed" ? "moved to In review" : t.kind}.\n\n${t.response ? `Response:\n${t.response}\n\n` : ""}Ticket (${t.date}):\n${t.description}`;
   const res = await fetchFn(`${cfg.apiUrl.replace(/\/+$/, "")}/emails`, {
     method: "POST",
     headers: { authorization: `Bearer ${cfg.apiKey}`, "content-type": "application/json" },

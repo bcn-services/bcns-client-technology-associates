@@ -61,8 +61,8 @@ export function RowActions({ id, close, reopen, review, remove }: { id: number; 
   return (
     <form className="flex flex-col items-end gap-1">
       <input type="hidden" name="id" value={id} />
-      <label className="sr-only" htmlFor={`resp-${id}`}>Response (optional)</label>
-      <textarea id={`resp-${id}`} name="response" maxLength={2000} rows={1} placeholder="Response (optional)" className="w-48 rounded border px-2 py-1" />
+      <label className="sr-only" htmlFor={`resp-${id}`}>Response (required for Reply)</label>
+      <textarea id={`resp-${id}`} name="response" maxLength={2000} rows={1} placeholder="Response (required for Reply)" className="w-48 rounded border px-2 py-1" />
       <span className="flex gap-1">
         {shown === "Open" && !saving && <SubmitButton label="Reply" formAction={flipThen(show, "In review", review)} className="rounded border border-slate-300 px-3 py-1" />}
         {shown !== "Closed" && <SubmitButton label={saving ? "Saving…" : "Close"} formAction={flipThen(show, "Closed", close)} className="rounded border border-slate-300 px-3 py-1" />}

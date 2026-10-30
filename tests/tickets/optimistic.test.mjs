@@ -75,6 +75,15 @@ test("the flip is requested before the server action starts", async () => {
   assert.deepEqual(order, ["flip:Closed", "action"]);
 });
 
+test("Reply click flips Open to In review: Reply is gone, Close and Reopen both say Saving… and are disabled; reverted, Reply is back", () => {
+  world.flip = "In review";
+  formStatus.pending = true;
+  assert.deepEqual([badge(html("Open"))[1], buttons(html("Open"))], ["In review", ["Saving…", "Saving…"]]);
+  world.flip = null;
+  formStatus.pending = false;
+  assert.deepEqual(buttons(html("Open")), ["Reply", "Close"]);
+});
+
 test("while the flip is unconfirmed, the control that replaced the clicked button says Saving… and is disabled; confirmed or reverted, labels are back", () => {
   const dis = (h) => [...h.matchAll(/<button([^>]*)>([^<]*)<\/button>/g)].map((m) => [m[2], / disabled=""/.test(m[1])]);
   for (const [start, to] of [["Open", "Closed"], ["In review", "Closed"], ["Closed", "Open"], ["In review", "Open"]]) {
