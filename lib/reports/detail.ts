@@ -102,13 +102,15 @@ const byDate = <T extends { [k: string]: any }>(rows: T[], dateKey: string, idKe
  */
 export async function expenseDetail(db: Db, f: DetailFilter): Promise<ExpenseDetail> {
   // No `active` filter on tblexptype: `active` gates the picker, never the report (and it is nullable).
-  // Read first: a typeName filter needs the ids before the expense query can be built.
-  const types = await db.from("tblexptype").select("exptypeid, exptype");
-  if (types.error) throw new Error(`tblexptype read: ${types.error.message}`);
+  // Promise.resolve runs the builder once; only a typeName filter has to wait for the ids before the expense query is built.
+  const typesQ = Promise.resolve(db.from("tblexptype").select("exptypeid, exptype"));
   const wanted = f.typeName?.trim().toLowerCase();
-  const typeIds = wanted
-    ? (types.data ?? []).filter((t: { exptype: string | null }) => t.exptype?.trim().toLowerCase() === wanted).map((t: { exptypeid: number }) => t.exptypeid)
-    : null;
+  let typeIds: number[] | null = null;
+  if (wanted) {
+    const t = await typesQ;
+    if (t.error) throw new Error(`tblexptype read: ${t.error.message}`);
+    typeIds = (t.data ?? []).filter((r: { exptype: string | null }) => r.exptype?.trim().toLowerCase() === wanted).map((r: { exptypeid: number }) => r.exptypeid);
+  }
   const build = (count: boolean) => {
     let q = db
       .from("tblexpenses")
@@ -121,10 +123,12 @@ export async function expenseDetail(db: Db, f: DetailFilter): Promise<ExpenseDet
     if (f.description) q = q.ilike("expdscr", `%${escapeLike(f.description)}%`);
     return q.order("expdate").order("expid");
   };
-  const [raw, names] = await Promise.all([
+  const [raw, types, names] = await Promise.all([
     pageAll(build, "tblexpenses detail"),
+    typesQ,
     db.from("tblbillingnames").select("personid, initials"),
   ]);
+  if (types.error) throw new Error(`tblexptype read: ${types.error.message}`);
   if (names.error) throw new Error(`tblbillingnames read: ${names.error.message}`);
   const typeName = new Map<number, string>((types.data ?? []).map((t: { exptypeid: number; exptype: string }) => [t.exptypeid, t.exptype]));
   const initials = new Map<number, string>((names.data ?? []).map((n: { personid: number; initials: string }) => [n.personid, n.initials]));
