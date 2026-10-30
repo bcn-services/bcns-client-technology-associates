@@ -3,7 +3,7 @@ import { createServerClient } from "@/lib/db/client";
 import { firmToday } from "@/lib/cases/presets";
 import type { Db } from "@/lib/time/entries";
 import { listTickets, parseSort, ticketErrorMessage } from "@/lib/tickets";
-import { addTicket, closeTicket, editTicket, reopenTicket } from "./actions";
+import { addTicket, closeTicket, deleteTicket, editTicket, reopenTicket } from "./actions";
 import { RowActions, StatusBadge, TicketStatusProvider } from "./optimistic-status";
 import { SubmitButton } from "./submit-button";
 
@@ -12,12 +12,13 @@ export const dynamic = "force-dynamic";
 type Params = Record<string, string | string[] | undefined>;
 const first = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v) ?? "";
 
-/** Change-request log for all signed-in users. Status header sorts via `?sort=status&dir=asc|desc`; default is In review, Open, then Closed. */
+/** Change-request log for all signed-in users. Status and Date headers sort via `?sort=status|date&dir=asc|desc`; default is In review, Open, then Closed. */
 export default async function TicketsPage({ searchParams }: { searchParams: Params }) {
-  const dir = parseSort(first(searchParams.sort), first(searchParams.dir));
-  const [, tickets] = await Promise.all([requireSession(), listTickets(createServerClient() as unknown as Db, dir)]);
+  const sort = parseSort(first(searchParams.sort), first(searchParams.dir));
+  const [session, tickets] = await Promise.all([requireSession(), listTickets(createServerClient() as unknown as Db, sort)]);
   const error = first(searchParams.error);
-  const desc = dir === "desc";
+  const statusDesc = sort?.by !== "date" && sort?.dir === "desc"; // default view is status asc
+  const dateDir = sort?.by === "date" ? sort.dir : null; // first click on Date shows newest first
   const stamp = Date.now(); // keys the per-row forms like the add form: a same-URL redirect remounts them so the inputs clear
   return (
     <main className="mx-auto max-w-4xl space-y-4 px-4 py-6">
@@ -35,10 +36,12 @@ export default async function TicketsPage({ searchParams }: { searchParams: Para
         <table className="w-full text-sm [&_td]:py-1 [&_td]:pr-3 [&_th]:py-1 [&_th]:pr-3 [&_tr]:border-b">
           <thead>
             <tr className="text-left text-slate-700">
-              <th>Date</th>
+              <th aria-sort={dateDir ? (dateDir === "desc" ? "descending" : "ascending") : undefined}>
+                <a href={`/tickets?sort=date&dir=${dateDir === "desc" ? "asc" : "desc"}`} className="underline">Date{dateDir ? (dateDir === "desc" ? " ↓" : " ↑") : ""}</a>
+              </th>
               <th>Description</th>
-              <th aria-sort={desc ? "descending" : "ascending"}>
-                <a href={`/tickets?sort=status&dir=${desc ? "asc" : "desc"}`} className="underline">Status {desc ? "↓" : "↑"}</a>
+              <th aria-sort={dateDir ? undefined : statusDesc ? "descending" : "ascending"}>
+                <a href={`/tickets?sort=status&dir=${statusDesc ? "asc" : "desc"}`} className="underline">Status{dateDir ? "" : statusDesc ? " ↓" : " ↑"}</a>
               </th>
               <th />
             </tr>
@@ -72,7 +75,7 @@ export default async function TicketsPage({ searchParams }: { searchParams: Para
                     <StatusBadge />
                   </td>
                   <td className="text-right">
-                    <RowActions key={`act-${t.id}-${stamp}`} id={t.id} close={closeTicket} reopen={reopenTicket} />
+                    <RowActions key={`act-${t.id}-${stamp}`} id={t.id} close={closeTicket} reopen={reopenTicket} remove={session.role === "admin" ? deleteTicket : undefined} />
                   </td>
                 </tr>
               </TicketStatusProvider>

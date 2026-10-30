@@ -30,13 +30,14 @@ const order = (html) => [...html.matchAll(/(old|new|review) one/g)].map((m) => m
 /** The <tr> for one ticket, by its description text. */
 const row = (html, text) => html.split("<tr").find((r) => r.includes(`>${text}</div>`)) ?? assert.fail(`no row for ${text}`);
 
-test("default render: In review, Open, Closed order; status header links to dir=desc; no extra links", async () => {
+test("default render: In review, Open, Closed order; status header links to dir=desc, Date header to date desc; no extra links", async () => {
   const before = session.state.calls;
   const html = await render();
   assert.equal(session.state.calls, before + 1, "session check must run on every render");
   assert.deepEqual(order(html), ["review", "new", "old"]);
   assert.match(html, /<a href="\/tickets\?sort=status&amp;dir=desc"[^>]*>Status/);
-  assert.equal((html.match(/<a /g) ?? []).length, 1, "the sort header is the only link");
+  assert.match(html, /<a href="\/tickets\?sort=date&amp;dir=desc"[^>]*>Date</);
+  assert.equal((html.match(/<a /g) ?? []).length, 2, "the two sort headers are the only links");
   assert.match(html, /<input[^>]*type="date"/);
 });
 test("In review row: blue badge, Nate's reply shown, optional response box, both Close and Reopen, Edit", async () => {
@@ -68,6 +69,26 @@ test("?sort=status&dir=desc puts Closed first and flips the header link; junk pa
   assert.match(desc, /dir=asc/);
   assert.deepEqual(order(await render({ sort: "status", dir: "sideways" })), ["review", "new", "old"]);
   assert.deepEqual(order(await render({ sort: "createdat", dir: "desc" })), ["review", "new", "old"]);
+});
+test("?sort=date: newest first on desc (header then links to asc, Status header drops its arrow), oldest first on asc", async () => {
+  const desc = await render({ sort: "date", dir: "desc" });
+  assert.deepEqual(order(desc), ["new", "old", "review"]);
+  assert.match(desc, /<a href="\/tickets\?sort=date&amp;dir=asc"[^>]*>Date ↓</);
+  assert.match(desc, /<a href="\/tickets\?sort=status&amp;dir=desc"[^>]*>Status</);
+  assert.deepEqual(order(await render({ sort: "date", dir: "asc" })), ["review", "old", "new"]);
+});
+test("Delete is offered to an admin on Closed rows only; staff never see it", async () => {
+  const html = await render();
+  assert.match(row(html, "old one"), /<button[^>]*type="button"[^>]*>Delete<\/button>/);
+  assert.doesNotMatch(row(html, "new one"), />Delete</);
+  assert.doesNotMatch(row(html, "review one"), />Delete</);
+  const was = session.state.role;
+  session.state.role = "staff";
+  try {
+    assert.doesNotMatch(await render(), />Delete</);
+  } finally {
+    session.state.role = was;
+  }
 });
 test("?error= shows its message; unknown code shows the generic one", async () => {
   assert.match(await render({ error: "date" }), /role="alert"[^>]*>Enter a valid date\./);
