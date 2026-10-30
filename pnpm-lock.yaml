@@ -9,8 +9,8 @@ importers:
   .:
     dependencies:
       '@bcn-services/app-core':
-        specifier: ^0.2.0
-        version: 0.2.0
+        specifier: ^0.2.1
+        version: 0.2.1
       '@bcn-services/ui':
         specifier: ^0.1.1
         version: 0.1.1(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
@@ -82,8 +82,8 @@ packages:
   '@anthropic-ai/sdk@0.39.0':
     resolution: {integrity: sha512-eMyDIPRZbt1CCLErRCi3exlAvNkBtRe+kW5vvJyef93PmNr/clstYgHhtvmkxN82nlKgzyGPCyGxrm0JQ1ZIdg==}
 
-  '@bcn-services/app-core@0.2.0':
-    resolution: {integrity: sha512-RxIYxvlksHWvVtv32+cenoAHnNS9WQs3Yhzi57le/ZJdFNtZ8UMmqb0Muk3SVtl9xinXeEfDaJ9QSUQqJBwYXA==, tarball: https://npm.pkg.github.com/download/@bcn-services/app-core/0.2.0/d65bea59d2a7945938e47953caa2e5848e8b8637}
+  '@bcn-services/app-core@0.2.1':
+    resolution: {integrity: sha512-EfoS1GQjVMVjYmSAH0nygDdkBR3OU92b/vr+/tYLkeK3CX8wuN+qdkPMpDAKlczE9B8tnxxedKDhF1VI822Jnw==, tarball: https://npm.pkg.github.com/download/@bcn-services/app-core/0.2.1/5d427cc353124bdfee6bbce118b22fda870499ae}
 
   '@bcn-services/config@0.1.1':
     resolution: {integrity: sha512-bmMjnJAwQwxHdfmXkv762sHfqWqymLO8aTK69S27Sv59UczyTGvRSQrhk4sZF9g0yl+DMYSEkVw4JHrTtF44HA==, tarball: https://npm.pkg.github.com/download/@bcn-services/config/0.1.1/696e5f68caf9d1b0c80ebb3bbaec0b8c79967002}
@@ -1693,7 +1693,7 @@ snapshots:
     transitivePeerDependencies:
       - encoding
 
-  '@bcn-services/app-core@0.2.0':
+  '@bcn-services/app-core@0.2.1':
     dependencies:
       '@anthropic-ai/sdk': 0.39.0
     transitivePeerDependencies:
