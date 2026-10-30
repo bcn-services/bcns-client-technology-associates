@@ -220,7 +220,7 @@ test("each preset hands its engine exactly the parameters its row declares — n
     "yearly-expense": { year: 2026, dimension: "exptype" },
     "yearly-income": { year: 2026, dimension: "branch" },
     pnl: { start: START, end: END },
-    "consultant-fees": { start: START, end: END, description: "consultant" },
+    "consultant-fees": { start: START, end: END, typeName: "Consultants" },
     "accountant-export": { start: START, end: END },
     checkbook: { start: START, end: END },
   };

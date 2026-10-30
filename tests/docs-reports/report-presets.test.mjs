@@ -58,8 +58,8 @@ test("the six legacy report names are present and journey 06's three selectors e
   for (const rx of [/p&l|profit/i, /yearly ?expense/i, /accountant export/i]) {
     assert.equal(labels.filter((l) => rx.test(l)).length, 1, `${rx} must match exactly one button label`);
   }
-  // A filtered-expense cut exists: an expenseDetail row carrying a description filter.
-  const filtered = PRESETS.filter((p) => p.engine === "expenseDetail" && p.params(RANGE).description);
+  // A filtered-expense cut exists: an expenseDetail row carrying an expense-type filter.
+  const filtered = PRESETS.filter((p) => p.engine === "expenseDetail" && p.params(RANGE).typeName);
   assert.equal(filtered.length, 1);
 });
 
@@ -137,12 +137,22 @@ test("the accountant-export preset still produces a rendered result this step", 
   assert.equal(data.months.length, 6);
 });
 
-test("the filtered-expense preset narrows by description without touching the range", async () => {
-  const db = fakeDb(world());
-  const p = PRESETS.find((x) => x.engine === "expenseDetail" && x.params(RANGE).description);
-  const { data } = await runPreset(db, p, RANGE);
-  assert.deepEqual(data.rows.map((r) => r.expid), [3]);
-  assert.equal(data.total, "0.01");
+test("the filtered-expense preset keeps exactly the expenses whose Type is Consultants, whatever the description says", async () => {
+  const w = world();
+  w.tblexptype = [{ exptypeid: 9, exptype: "Alpha", active: true }, { exptypeid: 10, exptype: "consultants ", active: false }];
+  w.tblexpenses = [
+    exp(3, "2025-03-20", 0.01, 9, "Consultant fee"),       // description says consultant, Type does not
+    exp(10, "2025-03-21", 2.5, 10, "Smith & Co"),           // Type is Consultants (case/space/inactive tolerated)
+    exp(11, "2025-07-01", 40.0, 10, "after the range"),
+    exp(12, "2025-04-01", 1.0, null, "no type"),
+  ];
+  const p = PRESETS.find((x) => x.engine === "expenseDetail" && x.params(RANGE).typeName);
+  const { data } = await runPreset(fakeDb(w), p, RANGE);
+  assert.deepEqual(data.rows.map((r) => r.expid), [10]);
+  assert.equal(data.total, "2.50");
+  // A database with no Consultants type yields an empty report, never every expense.
+  w.tblexptype = [{ exptypeid: 9, exptype: "Alpha", active: true }];
+  assert.deepEqual((await runPreset(fakeDb(w), p, RANGE)).data.rows, []);
 });
 
 // --- structural invariant the page renders straight into the DOM ----------------------------------

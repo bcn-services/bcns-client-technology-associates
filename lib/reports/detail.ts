@@ -19,6 +19,8 @@ export type DetailFilter = {
   end: string;
   /** `tblexptype.exptypeid`. Never gated on `tblexptype.active`: retired types still own historical rows. */
   exptype?: number | null;
+  /** `tblexptype.exptype` name, matched case-insensitively (expenses only). Resolves to ids, so it also covers duplicate or retired rows of that name. */
+  typeName?: string | null;
   /** Case-insensitive substring over the vendor/description column (`expdscr` / `fndsdesc`). */
   description?: string | null;
   /** `expbranch` / `fndsbranch`, matched exactly. */
@@ -99,6 +101,14 @@ const byDate = <T extends { [k: string]: any }>(rows: T[], dateKey: string, idKe
  * Rows with a null `expcaseid` are firm-wide expenses and are included.
  */
 export async function expenseDetail(db: Db, f: DetailFilter): Promise<ExpenseDetail> {
+  // No `active` filter on tblexptype: `active` gates the picker, never the report (and it is nullable).
+  // Read first: a typeName filter needs the ids before the expense query can be built.
+  const types = await db.from("tblexptype").select("exptypeid, exptype");
+  if (types.error) throw new Error(`tblexptype read: ${types.error.message}`);
+  const wanted = f.typeName?.trim().toLowerCase();
+  const typeIds = wanted
+    ? (types.data ?? []).filter((t: { exptype: string | null }) => t.exptype?.trim().toLowerCase() === wanted).map((t: { exptypeid: number }) => t.exptypeid)
+    : null;
   const build = (count: boolean) => {
     let q = db
       .from("tblexpenses")
@@ -106,17 +116,15 @@ export async function expenseDetail(db: Db, f: DetailFilter): Promise<ExpenseDet
       .gte("expdate", f.start)
       .lte("expdate", f.end);
     if (f.exptype != null) q = q.eq("exptype", f.exptype);
+    if (typeIds) q = q.in("exptype", typeIds); // no row of that name → empty list → no rows, never "all rows"
     if (f.branch) q = q.eq("expbranch", f.branch);
     if (f.description) q = q.ilike("expdscr", `%${escapeLike(f.description)}%`);
     return q.order("expdate").order("expid");
   };
-  // No `active` filter on tblexptype: `active` gates the picker, never the report (and it is nullable).
-  const [raw, types, names] = await Promise.all([
+  const [raw, names] = await Promise.all([
     pageAll(build, "tblexpenses detail"),
-    db.from("tblexptype").select("exptypeid, exptype"),
     db.from("tblbillingnames").select("personid, initials"),
   ]);
-  if (types.error) throw new Error(`tblexptype read: ${types.error.message}`);
   if (names.error) throw new Error(`tblbillingnames read: ${names.error.message}`);
   const typeName = new Map<number, string>((types.data ?? []).map((t: { exptypeid: number; exptype: string }) => [t.exptypeid, t.exptype]));
   const initials = new Map<number, string>((names.data ?? []).map((n: { personid: number; initials: string }) => [n.personid, n.initials]));
