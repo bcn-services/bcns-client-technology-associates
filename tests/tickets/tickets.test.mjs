@@ -1,7 +1,7 @@
 // Unit tests for lib/tickets.ts with an in-memory fake PostgREST client (./fakedb.mjs) that really evaluates filters.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { listTickets, parseSort, moveTicket, deleteTicket, runAddTicket, runCloseTicket, runReopenTicket, runEditTicket, runDeleteTicket } from "../../lib/tickets.ts";
+import { listTickets, parseSort, moveTicket, deleteTicket, runAddTicket, runCloseTicket, runReopenTicket, runReviewTicket, runEditTicket, runDeleteTicket } from "../../lib/tickets.ts";
 import { memDb } from "./fakedb.mjs";
 
 const T = (id, ticketdate, status, description = `t${id}`) => ({ id, ticketdate, description, status, createdat: "x" });
@@ -428,4 +428,39 @@ test("listTickets: an error from either query rejects it", async () => {
     db.from = (t) => (t === bad ? { select: () => ({ order: () => ({ range: () => Promise.resolve({ error: { message: bad } }) }), then: (res) => res({ error: { message: bad } }) }) } : from(t));
     await assert.rejects(listTickets(db, null), { message: bad }, bad);
   }
+});
+
+test("runReviewTicket: Open → In review with the reply stored as the signed-in user's message and one email; any other status → ?error=state", async () => {
+  const db = memDb({ tickets: [T(1, "2026-10-01", "Open", "one"), T(2, "2026-10-02", "Closed", "two")] });
+  const d = deps(db);
+  const sent = [];
+  await runReviewTicket(form({ id: "1", response: "  Fix is in progress  " }), { ...d.deps, notify: async (m) => sent.push(m) });
+  assert.deepEqual(d.redirects, ["/tickets"]);
+  assert.equal(statusOf(db, 1), "In review");
+  assert.deepEqual(db.tables.ticket_messages.map((m) => [m.ticketid, m.author, m.body]), [[1, "e", "Fix is in progress"]]);
+  assert.deepEqual(sent, [{ id: 1, kind: "reviewed", date: "2026-10-01", description: "one", response: "Fix is in progress" }]);
+  await runReviewTicket(form({ id: "1", response: "again" }), d.deps); // now In review
+  await runReviewTicket(form({ id: "2", response: "again" }), d.deps); // Closed
+  assert.deepEqual(d.redirects.slice(1), ["/tickets?error=state", "/tickets?error=state"]);
+  assert.equal(db.tables.ticket_messages.length, 1, "refused replies leave no message");
+});
+test("runReviewTicket: a missing or blank reply → ?error=reply, zero writes, status unchanged", async () => {
+  const db = memDb({ tickets: [T(1, "2026-10-01", "Open", "one")] });
+  const d = deps(db);
+  await runReviewTicket(form({ id: "1" }), d.deps);
+  await runReviewTicket(form({ id: "1", response: "   " }), d.deps);
+  assert.deepEqual(d.redirects, ["/tickets?error=reply", "/tickets?error=reply"]);
+  assert.deepEqual(db.writes, []);
+  assert.equal(statusOf(db, 1), "Open");
+});
+test("race: Reply loses to a Close before the conditional update lands → ?error=state, the reply is taken back, no email", async () => {
+  const db = racing(memDb({ tickets: [T(1, "2026-10-01", "Open", "one")] }), (t) => { t.status = "Closed"; }, 2); // 1st touch is the pre-read, 2nd the conditional update
+  const d = deps(db);
+  const sent = [];
+  await runReviewTicket(form({ id: "1", response: "on it" }), { ...d.deps, notify: async (m) => sent.push(m) });
+  assert.deepEqual(d.redirects, ["/tickets?error=state"]);
+  assert.equal(statusOf(db, 1), "Closed");
+  assert.deepEqual(db.tables.ticket_messages ?? [], []);
+  assert.deepEqual(db.writes.map((w) => w.slice(0, 2).join(" ")), ["insert ticket_messages", "delete ticket_messages"]);
+  assert.deepEqual(sent, []);
 });

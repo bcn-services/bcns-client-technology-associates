@@ -18,16 +18,16 @@ const { TicketStatusProvider, StatusBadge, RowActions, flipThen } = await import
 
 const noop = async () => {};
 const html = (status) => renderToStaticMarkup(
-  React.createElement(TicketStatusProvider, { status }, React.createElement(StatusBadge), React.createElement(RowActions, { id: 7, close: noop, reopen: noop })),
+  React.createElement(TicketStatusProvider, { status }, React.createElement(StatusBadge), React.createElement(RowActions, { id: 7, close: noop, reopen: noop, review: noop })),
 );
 const buttons = (h) => [...h.matchAll(/<button[^>]*>([^<]*)<\/button>/g)].map((m) => m[1]);
 const badge = (h) => /rounded px-2 py-0\.5 text-xs ([^"]*)">([^<]*)</.exec(h).slice(1);
 const fd = () => new FormData();
 const defer = () => { let resolve, reject; const promise = new Promise((a, b) => { resolve = a; reject = b; }); return { promise, resolve, reject }; };
 
-test("server status renders the matching badge and buttons (Open: Close; In review: both; Closed: Reopen)", () => {
+test("server status renders the matching badge and buttons (Open: Reply, Close; In review: both; Closed: Reopen)", () => {
   world.flip = null;
-  assert.deepEqual([badge(html("Open")), buttons(html("Open"))], [["bg-amber-100 text-amber-800", "Open"], ["Close"]]);
+  assert.deepEqual([badge(html("Open")), buttons(html("Open"))], [["bg-amber-100 text-amber-800", "Open"], ["Reply", "Close"]]);
   assert.deepEqual([badge(html("In review")), buttons(html("In review"))], [["bg-blue-100 text-blue-800", "In review"], ["Close", "Reopen"]]);
   assert.deepEqual([badge(html("Closed")), buttons(html("Closed"))], [["bg-green-100 text-green-800", "Closed"], ["Reopen"]]);
 });
@@ -44,7 +44,7 @@ test("Close click: badge and buttons flip to Closed while the server action is s
   server.resolve(); // run() answers with a redirect to ?error=state: the row on the server is unchanged
   await done;
   world.flip = null; // React drops the flip once the action settles
-  assert.deepEqual([badge(html("Open")), buttons(html("Open"))], [["bg-amber-100 text-amber-800", "Open"], ["Close"]], "reverted to the server's status");
+  assert.deepEqual([badge(html("Open")), buttons(html("Open"))], [["bg-amber-100 text-amber-800", "Open"], ["Reply", "Close"]], "reverted to the server's status");
 });
 
 test("Reopen click from In review or Closed flips the badge to Open (the one control left says Saving…)", () => {
@@ -73,6 +73,15 @@ test("the flip is requested before the server action starts", async () => {
   const order = [];
   await flipThen((to) => order.push(`flip:${to}`), "Closed", async () => { order.push("action"); })(fd());
   assert.deepEqual(order, ["flip:Closed", "action"]);
+});
+
+test("Reply click flips Open to In review: Reply is gone, Close and Reopen both say Saving… and are disabled; reverted, Reply is back", () => {
+  world.flip = "In review";
+  formStatus.pending = true;
+  assert.deepEqual([badge(html("Open"))[1], buttons(html("Open"))], ["In review", ["Saving…", "Saving…"]]);
+  world.flip = null;
+  formStatus.pending = false;
+  assert.deepEqual(buttons(html("Open")), ["Reply", "Close"]);
 });
 
 test("while the flip is unconfirmed, the control that replaced the clicked button says Saving… and is disabled; confirmed or reverted, labels are back", () => {

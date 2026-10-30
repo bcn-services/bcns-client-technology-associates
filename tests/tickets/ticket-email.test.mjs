@@ -1,7 +1,7 @@
 // Ticket notification emails (new, closed, reopened): fake db + fake fetch only, never the network (api.resend.com is never contacted).
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { runAddTicket, runCloseTicket, runReopenTicket, sendTicketEmail } from "../../lib/tickets.ts";
+import { runAddTicket, runCloseTicket, runReopenTicket, runReviewTicket, sendTicketEmail } from "../../lib/tickets.ts";
 import { getConfig } from "../../lib/env.ts";
 import { memDb } from "./fakedb.mjs";
 
@@ -180,4 +180,12 @@ test("getConfig reads TICKET_REPLY_DOMAIN and TICKET_INBOUND_SECRET lazily, trim
   } finally {
     keys.forEach((k, i) => { if (saved[i] === undefined) delete process.env[k]; else process.env[k] = saved[i]; });
   }
+});
+test("reply: one email 'Ticket in review: ...' with the reply and 'moved to In review' wording", async () => {
+  const s = setup({ cfg: { ...CFG, replyDomain: "abc123.resend.app" }, db: memDb({ tickets: [{ ...SEED.tickets[0], status: "Open" }] }) });
+  await runReviewTicket(form({ id: "7", response: "Fix in progress" }), s.deps);
+  assert.equal(s.sent.length, 1);
+  assert.equal(s.sent[0].body.subject, "Ticket in review: Print button is missing");
+  assert.equal(s.sent[0].body.text, "Ticket #7 was moved to In review.\n\nResponse:\nFix in progress\n\nTicket (2026-10-02):\nPrint button is missing");
+  assert.equal(s.sent[0].body.reply_to, "t7@abc123.resend.app");
 });

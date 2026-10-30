@@ -3,7 +3,7 @@ import { createServerClient } from "@/lib/db/client";
 import { firmToday } from "@/lib/cases/presets";
 import type { Db } from "@/lib/time/entries";
 import { listTickets, parseSort, ticketErrorMessage } from "@/lib/tickets";
-import { addTicket, closeTicket, deleteTicket, editTicket, reopenTicket } from "./actions";
+import { addTicket, closeTicket, deleteTicket, editTicket, reopenTicket, reviewTicket } from "./actions";
 import { RowActions, StatusBadge, TicketStatusProvider } from "./optimistic-status";
 import { SubmitButton } from "./submit-button";
 
@@ -75,7 +75,7 @@ export default async function TicketsPage({ searchParams }: { searchParams: Para
                     <StatusBadge />
                   </td>
                   <td className="text-right">
-                    <RowActions key={`act-${t.id}-${stamp}`} id={t.id} close={closeTicket} reopen={reopenTicket} remove={session.role === "admin" ? deleteTicket : undefined} />
+                    <RowActions key={`act-${t.id}-${stamp}`} id={t.id} close={closeTicket} reopen={reopenTicket} review={reviewTicket} remove={session.role === "admin" ? deleteTicket : undefined} />
                   </td>
                 </tr>
               </TicketStatusProvider>
