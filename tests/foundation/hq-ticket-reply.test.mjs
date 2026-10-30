@@ -32,11 +32,11 @@ test("reply on an In review ticket adds a message and leaves the status", () => 
 test("reply on a Closed ticket, a missing id, or a blank/null body returns 0 and writes nothing", () => {
   const closed = tid("reply closed");
   const open = tid("reply open");
-  const before = one(`select count(*) from ticket_messages`);
+  const count0 = one(`select count(*) from ticket_messages`);
   assert.equal(one(asHq(`select hq_ticket_reply(${closed}, 'too late')`)), "0");
   assert.equal(one(asHq(`select hq_ticket_reply(999999, 'no such ticket')`)), "0");
   for (const b of [`''`, `'   '`, `null`]) assert.equal(one(asHq(`select hq_ticket_reply(${open}, ${b})`)), "0");
-  assert.equal(one(`select count(*) from ticket_messages`), before);
+  assert.equal(one(`select count(*) from ticket_messages`), count0);
   assert.equal(status(closed), "Closed");
 });
 
