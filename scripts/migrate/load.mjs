@@ -108,7 +108,7 @@ const script = [
   // past the point where a full DELETE + bloat is slower than the reload itself.
   // tblbilllines (0009, not one of the 20) holds lines of app-finalized bills; replica mode
   // skips its restrict FK, so clear it first or the tblbills delete would orphan them.
-  "delete from tblbilllines;",
+  ...(skip.has("tblbills") ? [] : ["delete from tblbilllines;"]),
   ...[...TABLES].reverse().filter((t) => !skip.has(t)).map((t) => `delete from ${t};`),
   // Kept time rows can point at app-made bills (actbillid, 0002) that the tblbills reload just deleted;
   // billids are reused (the sequence is reset to the Access max), so a stale link would later bind to an

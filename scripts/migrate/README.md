@@ -198,5 +198,6 @@ Two steps must happen once, by a person, before Part 2 can run:
 Why `tblactivity`: Access has no real time (billing ran off Excel timesheets), so a full reload deleted every entry typed in the app.
 Kept time can carry `actbillid` (0002) pointing at an app-made bill that the `tblbills` reload deletes, and billids are reused,
 so `load.mjs` also resets those rows to unbilled (`actbilled = false, actbillid = null`) inside the load transaction.
-Still lost on a sync: cases created in the app, so kept time on them shows under no case (`tblactivity_actcaseid_fkey` is NOT VALID;
-`verify.mjs` reports it as an orphan).
+Still lost on a sync: cases created in the app. Kept time on them is orphaned (`tblactivity_actcaseid_fkey` is NOT VALID;
+`verify.mjs` reports it as an orphan), and the case id can be handed out again later, which would attach that time to an unrelated case.
+Not guarded here (needs a decision); same for a billing name (`actwho`) added in the app.
