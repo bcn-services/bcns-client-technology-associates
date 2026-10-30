@@ -2,7 +2,7 @@
 // Usage: node scripts/migrate/load.mjs <export.sql>   (target from MIGRATE_DB_URL)
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
-import { decode, parse, quote } from "./parse.mjs";
+import { decode, parse, quote, syncSkip } from "./parse.mjs";
 
 // The 20 legacy tables, in dependency order (same list as README Part 1.5).
 // profiles / bank_transactions / audit_log are deliberately absent and must stay absent.
@@ -12,6 +12,10 @@ const TABLES = [
   "tblinquiry", "tblcase", "tblbills", "tblactivity", "tblexpenses",
   "tblfundsrcvd", "tblsrvauth", "tblcaseresult", "tbl_scannedbillandcheck", "tblscanneddocument",
 ];
+
+// SYNC_SKIP (sync.sh sets it to tblactivity): those tables are neither cleared nor loaded.
+let skip;
+try { skip = syncSkip(TABLES); } catch (e) { process.stderr.write(`${e.message}\n`); process.exit(2); }
 
 const file = process.argv[2];
 if (!file) {
@@ -62,6 +66,7 @@ const lines = [];
 const units = []; // one entry per emitted INSERT, parallel to its \echo marker
 
 for (const s of stmts) {
+  if (skip.has(s.table)) continue;
   if (!known.has(s.table)) {
     skippedTables.set(s.table, (skippedTables.get(s.table) ?? 0) + s.rows.length);
     continue;
@@ -104,7 +109,12 @@ const script = [
   // tblbilllines (0009, not one of the 20) holds lines of app-finalized bills; replica mode
   // skips its restrict FK, so clear it first or the tblbills delete would orphan them.
   "delete from tblbilllines;",
-  ...[...TABLES].reverse().map((t) => `delete from ${t};`),
+  ...[...TABLES].reverse().filter((t) => !skip.has(t)).map((t) => `delete from ${t};`),
+  // Kept time rows can point at app-made bills (actbillid, 0002) that the tblbills reload just deleted;
+  // billids are reused (the sequence is reset to the Access max), so a stale link would later bind to an
+  // unrelated bill. Their bills are gone, so the work is unbilled again. Legacy rows never have actbillid.
+  ...(skip.has("tblactivity") && !skip.has("tblbills")
+    ? ["update tblactivity set actbilled = false, actbillid = null where actbillid is not null;"] : []),
   ...lines,
   "commit;",
 ].join("\n") + "\n";
@@ -136,5 +146,8 @@ try {
 syncSequences();
 
 let total = 0;
-for (const t of TABLES) { total += counts.get(t); process.stdout.write(`${t} ${counts.get(t)}\n`); }
+for (const t of TABLES) {
+  if (skip.has(t)) { process.stdout.write(`${t} kept (SYNC_SKIP)\n`); continue; }
+  total += counts.get(t); process.stdout.write(`${t} ${counts.get(t)}\n`);
+}
 process.stdout.write(`total ${total}\n`);

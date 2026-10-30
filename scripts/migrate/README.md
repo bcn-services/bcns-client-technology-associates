@@ -188,3 +188,15 @@ Two steps must happen once, by a person, before Part 2 can run:
    already-migrated database needs no re-apply unless a migration was added since.
 
 **The go-live re-run is identical to the first run in every step except one:** the `.bak` in step 2 of Part 2 comes from the client's nightly S3 backup instead of a manual copy. Same container, same restore, same `mssql-scripter` invocation, same three scripts, same `MIGRATE_DB_URL`. Nothing else changes, and Kris still installs and runs nothing.
+
+## Sync from Access: `SYNC_SKIP`
+
+`sync.sh` (the "Sync from Access" button) sets `SYNC_SKIP=tblactivity` unless the caller sets it (empty = reload all 20).
+`load.mjs` then neither clears nor loads those tables and `verify.mjs` does not compare them. Run by hand with
+`SYNC_SKIP` unset (the cutover), both treat all 20 tables as before.
+
+Why `tblactivity`: Access has no real time (billing ran off Excel timesheets), so a full reload deleted every entry typed in the app.
+Kept time can carry `actbillid` (0002) pointing at an app-made bill that the `tblbills` reload deletes, and billids are reused,
+so `load.mjs` also resets those rows to unbilled (`actbilled = false, actbillid = null`) inside the load transaction.
+Still lost on a sync: cases created in the app, so kept time on them shows under no case (`tblactivity_actcaseid_fkey` is NOT VALID;
+`verify.mjs` reports it as an orphan).

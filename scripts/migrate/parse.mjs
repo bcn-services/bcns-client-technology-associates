@@ -113,3 +113,12 @@ export function parse(text, file = "input") {
 }
 
 export const quote = (s) => "'" + s.replace(/'/g, "''") + "'";
+
+/** Tables named in SYNC_SKIP (comma list): load.mjs leaves them untouched and verify.mjs does not compare them.
+ *  Unset = the one-time cutover, all 20 tables. sync.sh defaults it to tblactivity (time entered in the app). */
+export function syncSkip(tables, raw = process.env.SYNC_SKIP) {
+  const skip = new Set((raw ?? "").split(",").map((s) => s.trim()).filter(Boolean));
+  const unknown = [...skip].filter((t) => !tables.includes(t));
+  if (unknown.length) throw new Error(`SYNC_SKIP names tables that are not legacy tables: ${unknown.join(", ")}`);
+  return skip;
+}

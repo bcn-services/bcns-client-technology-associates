@@ -357,3 +357,27 @@ test("a truncated text cell exits 1 and names only its own table", () => {
     for (const t of LEGACY_20.filter((x) => x !== "tblclient")) assert.match(rowRow(r.stdout, t), /\| 0 \| 0 \| ok \|$/, `${t} was dragged in`);
   } finally { reload(); }
 });
+
+test("SYNC_SKIP=tblactivity: time the app added is not compared, other tables still are, and an unset SYNC_SKIP fails on it", () => {
+  const sh = (env, ...flags) => {
+    const r = spawnSync("node", [VERIFY, SMALL, ...flags], {
+      encoding: "utf8", env: { ...process.env, MIGRATE_DB_URL: DB_URL, TZ: "UTC", PGTZ: "UTC", SYNC_SKIP: env },
+    });
+    return { code: r.status, stdout: r.stdout, stderr: r.stderr };
+  };
+  sql(`insert into tblactivity (actid, actcaseid, actdate, actdescription, acthrs, actwho)
+       values (9001, 5001, date '2024-05-01', 'typed in app', 1.00, 11);`);
+  try {
+    const kept = sh("tblactivity", `--source-counts=${countsFile({ tblactivity: 99 })}`);
+    assert.equal(kept.code, 0, kept.stdout + kept.stderr);
+    assert.match(kept.stdout, /Not compared \(`SYNC_SKIP`, kept as they were\): `tblactivity`/);
+    assert.equal(countRow(kept.stdout, "tblactivity"), undefined, "tblactivity was compared");
+    assert.ok(countRow(kept.stdout, "tblexpenses"), "the other tables dropped out of the report");
+    const full = sh("", "--no-source-counts");
+    assert.equal(full.code, 1, "an unset SYNC_SKIP did not flag the extra time row");
+    assert.match(countRow(full.stdout, "tblactivity"), /MISMATCH/);
+    const bad = sh("nope", "--no-source-counts");
+    assert.equal(bad.code, 2);
+    assert.match(bad.stderr, /SYNC_SKIP names tables that are not legacy tables: nope/);
+  } finally { sql("delete from tblactivity where actid = 9001;"); }
+});

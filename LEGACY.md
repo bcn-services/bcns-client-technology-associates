@@ -95,6 +95,9 @@ SrvDateApproved, SrvAdvance, SrvAuthNotes
 ### tblActivity (time entry)
 ActID, ActCaseID, ActDate, ActDescription, ActHrs, ActWho, ActBilled
 
+Access holds no real time (see "Billing is driven by Excel timesheets" below), so "Sync from Access"
+leaves `tblactivity` alone (`SYNC_SKIP`, `scripts/migrate/README.md` "Sync from Access"); only the one-time cutover loads it.
+
 ### tblBillingNames
 PersonID, Initials, BillingFactor
 

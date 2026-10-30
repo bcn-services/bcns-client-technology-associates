@@ -4,9 +4,9 @@ import { useFormState, useFormStatus } from "react-dom";
 import { syncAction, type SyncActionState } from "./actions";
 
 const CONFIRM =
-  "Replace all case, client, billing, time, expense and funds data with the newest Access backup? " +
+  "Replace all case, client, billing, expense and funds data with the newest Access backup? " +
   "Anything entered in this app since that backup in those tables, including finalized bill lines, is lost. " +
-  "Users, bank imports, the audit log and tickets are kept. " +
+  "Time entries, users, bank imports, the audit log and tickets are kept; time billed in this app becomes unbilled again, because those bills are replaced. " +
   "Takes about an hour. Nobody should enter data until it finishes.";
 
 function Submit({ disabled }: { disabled: boolean }) {

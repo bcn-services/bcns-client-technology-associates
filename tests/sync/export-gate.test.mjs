@@ -69,3 +69,8 @@ test("sync.sh runs the gate before load.mjs", () => {
   assert.ok(gateAt > 0 && loadAt > 0);
   assert.ok(gateAt < loadAt, "export gate must precede the load");
 });
+
+test("sync.sh keeps the app's time by default: SYNC_SKIP defaults to tblactivity and an empty value still means a full reload", () => {
+  const sh = readFileSync(join(ROOT, "scripts/migrate/sync.sh"), "utf8");
+  assert.match(sh, /^export SYNC_SKIP="\$\{SYNC_SKIP-tblactivity\}"$/m);
+});
