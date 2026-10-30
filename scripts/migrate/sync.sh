@@ -21,6 +21,9 @@
 #   SYNC_WORK_BASE   parent of the temp work dir (default $RUNNER_TEMP or /tmp). Must be a path
 #                    Docker can bind-mount (colima only shares $HOME and /tmp/colima).
 # Never reads .env.local. Never echoes the SA password or the DB URL's password.
+#   SYNC_SKIP        comma list of legacy tables load.mjs/verify.mjs leave alone. Default tblactivity: Access has
+#                    no time (billing runs off Excel timesheets), so the app's own time entries must survive.
+#                    Set to empty for a full reload. load/verify run by hand (cutover) never default it.
 #   MAX_BACKUP_AGE_HOURS  default 48; refuse a backup older than this (set once, in the workflow env)
 #   Freshness checks (older than the last succeeded run's backup_at, older than MAX_BACKUP_AGE_HOURS)
 #   are skipped when RUN_ID is empty (rehearsal: no sync_runs history) or LOCAL_ARCHIVE is set.
@@ -35,6 +38,7 @@ cd "$(dirname "$0")/../.."
 : "${RUN_ID?RUN_ID must be set (empty = no status tracking)}"
 [[ -z "$RUN_ID" || "$RUN_ID" =~ ^[0-9]+$ ]] || { echo "sync: RUN_ID must be digits" >&2; exit 2; }
 export MIGRATE_DB_URL
+export SYNC_SKIP="${SYNC_SKIP-tblactivity}"
 
 if [[ "${REQUIRE_LOCAL_DB:-}" == 1 ]]; then
   host=$(sed -E 's#^[a-z]+://([^@/]*@)?([^:/?]+).*#\2#' <<<"$MIGRATE_DB_URL")
@@ -246,7 +250,7 @@ STEP="export incomplete (missing or empty export.sql)"
 STEP="export incomplete"
 node scripts/migrate/verify.mjs "$WORK/out/export.sql" --source-counts="$WORK/source-counts.txt" --export-only
 
-# --- load, verify (unchanged scripts) -------------------------------------------------------------
+# --- load, verify (same scripts as the cutover; SYNC_SKIP is the only difference) -----------------------
 STEP="load"
 node scripts/migrate/load.mjs "$WORK/out/export.sql"
 

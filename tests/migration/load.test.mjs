@@ -24,11 +24,11 @@ const LEGACY_20 = [
 ];
 const FIXTURE_MAX_CASEID = 5010;
 
-function runLoad(file, { tz = "UTC" } = {}) {
+function runLoad(file, { tz = "UTC", skip = "" } = {}) {
   try {
     const stdout = execFileSync("node", [LOAD, file], {
       encoding: "utf8", stdio: ["pipe", "pipe", "pipe"],
-      env: { ...process.env, MIGRATE_DB_URL: DB_URL, TZ: tz, PGTZ: tz },
+      env: { ...process.env, MIGRATE_DB_URL: DB_URL, TZ: tz, PGTZ: tz, SYNC_SKIP: skip },
     });
     return { ok: true, stdout, stderr: "" };
   } catch (e) {
@@ -189,4 +189,42 @@ test("a UTF-16 LE file with a BOM loads identically to the UTF-8 one", () => {
     one(`select encode(convert_to(casenotes,'UTF8'),'hex') from tblcase where caseid = 5001;`),
     Buffer.from("Line one; semicolon kept\nit's line two", "utf8").toString("hex"),
   );
+});
+
+test("SYNC_SKIP=tblactivity keeps the app's time, reloads the rest, and unbills time whose bill was replaced", () => {
+  assert.equal(runLoad(SMALL).ok, true);
+  sql(`insert into tblbills (billid, billcaseid, billdate, billhours, billbalance, billnotice)
+         values (9001, 5001, date '2024-05-01', 1.50, 100.00, 'app bill');
+       insert into tblactivity (actid, actcaseid, actdate, actdescription, acthrs, actwho, actbilled, actbillid)
+         values (9001, 5001, date '2024-05-01', 'typed in app, unbilled', 1.00, 11, false, null),
+                (9002, 5001, date '2024-05-02', 'typed in app, billed', 1.50, 11, true, 9001);
+       update tblactivity set actdescription = 'edited in app' where actid = 81;
+       update tblcase set casetitle = 'edited in app' where caseid = 5001;`);
+  try {
+    const r = runLoad(SMALL, { skip: "tblactivity" });
+    assert.equal(r.ok, true, r.stderr);
+    assert.equal(count("tblactivity"), 5, "time entries were deleted or reloaded");
+    assert.equal(one(`select actdescription from tblactivity where actid = 81;`), "edited in app", "a fixture time row was overwritten");
+    assert.equal(one(`select actdescription from tblactivity where actid = 9001;`), "typed in app, unbilled");
+    assert.equal(count("tblbills"), 3, "the app-made bill survived the reload");
+    assert.notEqual(one(`select casetitle from tblcase where caseid = 5001;`), "edited in app", "the other tables were not reloaded");
+    assert.deepEqual(sql(`select actbilled::text, coalesce(actbillid::text,'null') from tblactivity where actid = 9002;`)[0], ["false", "null"],
+      "time billed on a replaced bill still points at it");
+    assert.match(r.stdout, /^tblactivity kept \(SYNC_SKIP\)$/m);
+    assert.match(r.stdout, /^total 57$/m);
+    // The cutover path (SYNC_SKIP unset) still replaces every table, time included.
+    assert.equal(runLoad(SMALL).ok, true);
+    assert.equal(count("tblactivity"), 3, "an unset SYNC_SKIP no longer reloads tblactivity");
+  } finally { assert.equal(runLoad(SMALL).ok, true); }
+});
+
+test("SYNC_SKIP naming a non-legacy table exits 2 and changes nothing", () => {
+  assert.equal(runLoad(SMALL).ok, true);
+  sql(`update tblcase set casetitle = 'untouched' where caseid = 5001;`);
+  const r = runLoad(SMALL, { skip: "tblactivity,profiles" });
+  assert.equal(r.ok, false);
+  assert.equal(r.code, 2);
+  assert.match(r.stderr, /SYNC_SKIP names tables that are not legacy tables: profiles/);
+  assert.equal(one(`select casetitle from tblcase where caseid = 5001;`), "untouched");
+  assert.equal(runLoad(SMALL).ok, true);
 });

@@ -9,10 +9,10 @@
 import { execFileSync } from "node:child_process";
 import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
-import { decode, parse, quote } from "./parse.mjs";
+import { decode, parse, quote, syncSkip } from "./parse.mjs";
 
 // The 20 legacy tables, in dependency order (same list as load.mjs / README Part 1.5).
-const TABLES = [
+const ALL_TABLES = [
   "tblstates", "tblbranches", "tblcasestatus", "tblcasepriority", "tblcasewaitingfor",
   "tblbillingnames", "tblexptype", "tblfirm", "tblattorney", "tblclient",
   "tblinquiry", "tblcase", "tblbills", "tblactivity", "tblexpenses",
@@ -32,6 +32,11 @@ const NTEXT_COLS = [
   "tblclient.clientnotes",
   "tbl_scannedbillandcheck.long_description",
 ];
+
+// SYNC_SKIP (sync.sh sets it to tblactivity): load.mjs left those tables alone, so the export says nothing about them.
+let skip;
+try { skip = syncSkip(ALL_TABLES); } catch (e) { process.stderr.write(`${e.message}\n`); process.exit(2); }
+const TABLES = ALL_TABLES.filter((t) => !skip.has(t));
 
 const EXPECTED_NOT_VALID_FKS = 26; // ground truth from the schema review; reported, never fatal.
 
@@ -281,6 +286,7 @@ md.push(`# Migration verify — ${stamp}`, "", `Source: \`${file}\``, "");
 md.push(srcTruth
   ? `SQL Server row counts: \`${sourceCountsFile}\``
   : "SQL Server row counts: **not supplied** (`--no-source-counts`) — a partially truncated export cannot be detected from the export alone.");
+if (skip.size) md.push("", `Not compared (\`SYNC_SKIP\`, kept as they were): ${[...skip].map((x) => `\`${x}\``).join(", ")}.`);
 if (allowEmpty.size) md.push("", `Acknowledged empty (\`--allow-empty\`): ${[...allowEmpty].map((x) => `\`${x}\``).join(", ")}.`);
 md.push("");
 
