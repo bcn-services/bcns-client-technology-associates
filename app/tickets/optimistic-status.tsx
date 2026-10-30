@@ -1,6 +1,7 @@
 "use client";
 
-import { createContext, useContext, useOptimistic, type ReactNode } from "react";
+import { createContext, useContext, useOptimistic, useState, type ReactNode } from "react";
+import { useFormStatus } from "react-dom";
 import type { TicketStatus } from "@/lib/tickets";
 import { SubmitButton } from "./submit-button";
 
@@ -35,7 +36,25 @@ export const flipThen = (show: (to: TicketStatus) => void, to: TicketStatus, act
   await action(formData);
 };
 
-export function RowActions({ id, close, reopen }: { id: number; close: Server; reopen: Server }) {
+/** Two clicks, no window.confirm: Delete only arms "Confirm delete". Lives inside the row form so it can read the form's pending state. */
+function DeleteControl({ remove }: { remove: Server }) {
+  const { pending } = useFormStatus();
+  const [confirming, setConfirming] = useState(false);
+  return (
+    <span className="flex gap-1">
+      {confirming ? (
+        <>
+          <SubmitButton label="Confirm delete" formAction={remove} className="rounded border border-red-300 px-3 py-1 text-red-700" />
+          <button type="button" disabled={pending} onClick={() => setConfirming(false)} className="rounded border border-slate-300 px-3 py-1 disabled:opacity-60">Cancel</button>
+        </>
+      ) : (
+        <button type="button" disabled={pending} onClick={() => setConfirming(true)} className="rounded border border-red-300 px-3 py-1 text-red-700 disabled:opacity-60">Delete</button>
+      )}
+    </span>
+  );
+}
+
+export function RowActions({ id, close, reopen, remove }: { id: number; close: Server; reopen: Server; remove?: Server }) {
   const { status, shown, show } = useStatus();
   // The clicked button unmounts on the flip, so while the flip is unconfirmed the control that took its place says "Saving…" (disabled via useFormStatus).
   const saving = shown !== status;
@@ -48,6 +67,10 @@ export function RowActions({ id, close, reopen }: { id: number; close: Server; r
         {shown !== "Closed" && <SubmitButton label={saving ? "Saving…" : "Close"} formAction={flipThen(show, "Closed", close)} className="rounded border border-slate-300 px-3 py-1" />}
         {shown !== "Open" && <SubmitButton label={saving ? "Saving…" : "Reopen"} formAction={flipThen(show, "Open", reopen)} className="rounded border border-slate-300 px-3 py-1" />}
       </span>
+      {/* Delete is for Closed tickets (see deleteTicket) and only offered to admins (`remove` is omitted for staff). */}
+      {remove && shown === "Closed" && (
+        <DeleteControl remove={remove} />
+      )}
     </form>
   );
 }

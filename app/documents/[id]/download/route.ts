@@ -31,7 +31,8 @@ export async function GET(req: Request, { params }: { params: { id: string } }):
       if (!dir) throw new DocumentError("legacy");
       const file = await resolveLegacyFile(dir, "scan", doc.filename!);
       const res = file && (await legacyFileResponse(file));
-      if (!res) throw new DocumentError("notfound");
+      // Configured but the file is not in our copy: say it is on the NAS, not that the document does not exist.
+      if (!res) throw new DocumentError("legacy");
       return res;
     }
     return NextResponse.redirect(await documentDownloadUrl(getStorageAdapter(), doc), 302);

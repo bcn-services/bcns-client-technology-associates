@@ -81,9 +81,9 @@ export const PRESETS: Preset[] = [
     key: "consultant-fees",
     label: "Consultant Fees",
     engine: "expenseDetail",
-    params: (r) => ({ start: r.start, end: r.end, description: "consultant" }),
+    params: (r) => ({ start: r.start, end: r.end, typeName: "Consultants" }),
     period: span,
-    note: "Expenses whose description mentions a consultant — the legacy All_Consultants cut.",
+    note: "Expenses whose Type is Consultants — the legacy All_Consultants cut.",
   },
   {
     key: "accountant-export",

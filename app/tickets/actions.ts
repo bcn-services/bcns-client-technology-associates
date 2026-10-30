@@ -6,9 +6,9 @@ import { requireSession } from "@/lib/auth/session";
 import { createServerClient } from "@/lib/db/client";
 import type { Db } from "@/lib/time/entries";
 import { getConfig } from "@/lib/env";
-import { runAddTicket, runCloseTicket, runEditTicket, runReopenTicket, sendTicketEmail, type TicketMail } from "@/lib/tickets";
+import { runAddTicket, runCloseTicket, runDeleteTicket, runEditTicket, runReopenTicket, sendTicketEmail, type TicketMail } from "@/lib/tickets";
 
-// Any signed-in user (admin or staff) may log and change tickets.
+// Any signed-in user (admin or staff) may log and change tickets; only an admin may delete one (runDeleteTicket checks).
 const deps = () => ({
   session: () => requireSession(),
   db: () => createServerClient() as unknown as Db,
@@ -34,4 +34,8 @@ export async function reopenTicket(formData: FormData): Promise<void> {
 
 export async function editTicket(formData: FormData): Promise<void> {
   await runEditTicket(formData, deps());
+}
+
+export async function deleteTicket(formData: FormData): Promise<void> {
+  await runDeleteTicket(formData, deps());
 }

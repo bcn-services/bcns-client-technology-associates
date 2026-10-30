@@ -142,7 +142,7 @@ test("a legacy scan: anonymous → the login redirect, never the file", async (t
   assert.equal(e.digest, "NEXT_REDIRECT;/login");
 });
 
-test("a legacy scan with the directory unset is the NAS note; with the file missing from the copy it is not-found", async (t) => {
+test("a legacy scan with the directory unset is the NAS note; with the file missing from the copy it is the NAS note too", async (t) => {
   t.after(() => { delete process.env.LEGACY_DOCS_DIR; });
   legacySetup();
   delete process.env.LEGACY_DOCS_DIR;
@@ -152,13 +152,24 @@ test("a legacy scan with the directory unset is the NAS note; with the file miss
   legacySetup([legacyRow({ filename: "img-missing-from-copy.pdf" })]);
   const gone = await get(5, "?case=101");
   assert.equal(gone.status, 404);
-  assert.equal(await gone.text(), "That document is not available on this case.");
+  assert.match(await gone.text(), /office NAS/);
 });
 
-test("a legacy name that tries to leave the folder is not-found, not a file", async (t) => {
+test("a document attached to an expense (no caseid) opens; a case scope or no owner at all still refuses it", async () => {
+  setup();
+  const row = (over) => ({ id: 8, caseid: null, dateadded: "2026-01-02", type: "application/pdf", description: "receipt.pdf", filename: "cases/0/zzz", expenseid: 44, ...over });
+  dbclient.state.db = fakeDb({ tblscanneddocument: [row({}), row({ id: 9, expenseid: null })] });
+  const ok = await get(8);
+  assert.equal(ok.status, 302);
+  assert.equal((await get(8, "?case=101")).status, 404, "a case scope never matches a case-less row");
+  assert.equal((await get(9)).status, 404, "no case and no other owner is still not-found");
+});
+
+test("a legacy name that tries to leave the folder is a 404, never a file", async (t) => {
   t.after(() => { delete process.env.LEGACY_DOCS_DIR; });
   legacySetup([legacyRow({ filename: "../outside/secret.txt" })]);
   const res = await get(5, "?case=101");
   assert.equal(res.status, 404);
-  assert.equal(await res.text(), "That document is not available on this case.");
+  assert.ok(!res.headers.get("content-disposition"));
+  assert.match(await res.text(), /office NAS/);
 });

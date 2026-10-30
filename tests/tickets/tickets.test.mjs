@@ -1,7 +1,7 @@
 // Unit tests for lib/tickets.ts with an in-memory fake PostgREST client (./fakedb.mjs) that really evaluates filters.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { listTickets, parseSort, moveTicket, runAddTicket, runCloseTicket, runReopenTicket, runEditTicket } from "../../lib/tickets.ts";
+import { listTickets, parseSort, moveTicket, deleteTicket, runAddTicket, runCloseTicket, runReopenTicket, runEditTicket, runDeleteTicket } from "../../lib/tickets.ts";
 import { memDb } from "./fakedb.mjs";
 
 const T = (id, ticketdate, status, description = `t${id}`) => ({ id, ticketdate, description, status, createdat: "x" });
@@ -14,7 +14,7 @@ const SEED = {
     T(5, "2026-09-30", "Open"),
   ],
 };
-const ids = async (dir) => (await listTickets(memDb(SEED), dir)).map((t) => t.id);
+const ids = async (dir, by = "status") => (await listTickets(memDb(SEED), dir && { by, dir })).map((t) => t.id);
 const form = (o) => { const f = new FormData(); for (const [k, v] of Object.entries(o)) f.set(k, v); return f; };
 const deps = (db, session = async () => ({ userId: "u", email: "e", role: "staff", personId: null })) => {
   const out = { redirects: [], paths: [] };
@@ -22,10 +22,12 @@ const deps = (db, session = async () => ({ userId: "u", email: "e", role: "staff
   return out;
 };
 
-test("parseSort: only sort=status with dir asc|desc passes; everything else is the default (null)", () => {
-  assert.equal(parseSort("status", "asc"), "asc");
-  assert.equal(parseSort("status", "desc"), "desc");
-  for (const [s, d] of [["", ""], ["status", ""], ["status", "up"], ["description", "asc"], ["status", "ASC"], ["status; drop", "asc"], ["", "asc"]]) {
+test("parseSort: only sort=status|date with dir asc|desc passes; everything else is the default (null)", () => {
+  assert.deepEqual(parseSort("status", "asc"), { by: "status", dir: "asc" });
+  assert.deepEqual(parseSort("status", "desc"), { by: "status", dir: "desc" });
+  assert.deepEqual(parseSort("date", "asc"), { by: "date", dir: "asc" });
+  assert.deepEqual(parseSort("date", "desc"), { by: "date", dir: "desc" });
+  for (const [s, d] of [["", ""], ["status", ""], ["status", "up"], ["description", "asc"], ["date", "up"], ["Date", "asc"], ["status", "ASC"], ["status; drop", "asc"], ["", "asc"]]) {
     assert.equal(parseSort(s, d), null, `${s}/${d}`);
   }
 });
@@ -45,7 +47,7 @@ test("In review sorts before Open before Closed; desc reverses the groups; messa
   assert.deepEqual(asc.map((t) => t.id), [3, 4, 2, 1]);
   assert.deepEqual(asc[0].messages.map((m) => m.body), ["first", "second"]);
   assert.deepEqual(asc[1].messages, []);
-  assert.deepEqual((await listTickets(memDb(seed), "desc")).map((t) => t.id), [1, 4, 2, 3]);
+  assert.deepEqual((await listTickets(memDb(seed), { by: "status", dir: "desc" })).map((t) => t.id), [1, 4, 2, 3]);
   const db = memDb(seed);
   await listTickets(db, null);
   assert.equal(db.calls.filter((c) => c.table === "ticket_messages").length, 1, "one messages query, not one per ticket");
@@ -55,6 +57,60 @@ test("status asc is the default order", async () => {
 });
 test("status desc: Closed first, same date/id tiebreaks", async () => {
   assert.deepEqual(await ids("desc"), [3, 1, 4, 2, 5]);
+});
+
+test("date sort ignores status: desc is newest first, asc oldest first, ties by id the same way", async () => {
+  // dates: 1=10-01 2=10-05 3=10-09 4=10-05 5=09-30
+  assert.deepEqual(await ids("desc", "date"), [3, 4, 2, 1, 5]);
+  assert.deepEqual(await ids("asc", "date"), [5, 1, 2, 4, 3]);
+});
+
+const closedSeed = () => ({
+  tickets: [T(1, "2026-10-01", "Closed"), T(2, "2026-10-05", "Open"), T(3, "2026-10-09", "Closed")],
+  ticket_messages: [
+    { id: 1, ticketid: 1, author: "a@x.test", body: "done", createdat: "x" },
+    { id: 2, ticketid: 1, author: "bcns", body: "fixed", createdat: "x" },
+    { id: 3, ticketid: 3, author: "a@x.test", body: "other", createdat: "x" },
+  ],
+});
+const admin = async () => ({ userId: "u", email: "e", role: "admin", personId: null });
+const codeOf = (p) => p.then(() => null, (e) => e.code);
+
+test("deleteTicket: a Closed ticket goes with its messages (messages first), nothing else is touched", async () => {
+  const db = memDb(closedSeed());
+  await deleteTicket(db, 1);
+  assert.deepEqual(db.tables.tickets.map((t) => t.id), [2, 3]);
+  assert.deepEqual(db.tables.ticket_messages.map((m) => m.id), [3]);
+  assert.deepEqual(db.writes.map((w) => [w[0], w[1]]), [["delete", "ticket_messages"], ["delete", "tickets"]]);
+});
+test("deleteTicket: Open / In review is 'state' and a missing id is 'notfound'; neither writes", async () => {
+  const db = memDb({ ...closedSeed(), tickets: [...closedSeed().tickets, T(4, "2026-10-02", "In review")] });
+  assert.equal(await codeOf(deleteTicket(db, 2)), "state");
+  assert.equal(await codeOf(deleteTicket(db, 4)), "state");
+  assert.equal(await codeOf(deleteTicket(db, 99)), "notfound");
+  assert.equal(db.writes.length, 0);
+});
+test("runDeleteTicket: admin only. Staff gets ?error=forbidden before any db call; admin deletes and lands on /tickets", async () => {
+  const db = memDb(closedSeed());
+  const staff = deps(db);
+  await runDeleteTicket(form({ id: "1" }), staff.deps);
+  assert.deepEqual(staff.redirects, ["/tickets?error=forbidden"]);
+  assert.equal(db.calls.length, 0);
+  const a = deps(db, admin);
+  await runDeleteTicket(form({ id: "1" }), a.deps);
+  assert.deepEqual(a.redirects, ["/tickets"]);
+  assert.deepEqual(db.tables.tickets.map((t) => t.id), [2, 3]);
+  await runDeleteTicket(form({ id: "2" }), a.deps); // Open
+  assert.equal(a.redirects.at(-1), "/tickets?error=state");
+  await runDeleteTicket(form({ id: "abc" }), a.deps);
+  assert.equal(a.redirects.at(-1), "/tickets?error=notfound");
+});
+test("runDeleteTicket: a failed message delete leaves the ticket in place", async () => {
+  const db = memDb(closedSeed(), { deleteError: { message: "boom" } });
+  const a = deps(db, admin);
+  await runDeleteTicket(form({ id: "1" }), a.deps);
+  assert.equal(a.redirects.at(-1), "/tickets?error=failed");
+  assert.deepEqual(db.tables.tickets.map((t) => t.id), [1, 2, 3]);
 });
 
 test("moveTicket: ONE conditional update returns the notification fields; the other rows are untouched", async () => {

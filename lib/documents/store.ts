@@ -18,9 +18,19 @@ export type DocRow = {
   type: string | null;
   description: string | null;
   filename: string | null;
+  // The other owners a document can hang off when `caseid` is null (expense, income, inquiry, bill, service authorization).
+  expenseid?: number | null;
+  incomeid?: number | null;
+  inquiryid?: number | null;
+  billid?: number | null;
+  servauthid?: number | null;
 };
 
 const COLS = "id, caseid, dateadded, type, description, filename";
+const OWNER_COLS = `${COLS}, expenseid, incomeid, inquiryid, billid, servauthid`;
+
+/** A case-less row is still a real document when it is attached to some other record. */
+const hasOtherOwner = (r: DocRow): boolean => [r.expenseid, r.incomeid, r.inquiryid, r.billid, r.servauthid].some((v) => v != null);
 
 /** Upload cap. A module constant, not an env var: lib/env.ts is the only process.env reader. */
 export const MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
@@ -107,10 +117,18 @@ export async function listAllDocuments(db: Db, session: Pick<Session, "role"> | 
  */
 export async function loadDocument(db: Db, session: Pick<Session, "role"> | null, docId: number, scope?: number | null): Promise<DocRow> {
   if (!Number.isSafeInteger(docId) || docId <= 0) throw new DocumentError("notfound");
-  const { data, error } = await db.from("tblscanneddocument").select(COLS).eq("id", docId).maybeSingle();
+  const { data, error } = await db.from("tblscanneddocument").select(OWNER_COLS).eq("id", docId).maybeSingle();
   if (error) throw new Error(`tblscanneddocument read: ${error.message}`);
   if (!data) throw new DocumentError("notfound");
-  assertDocumentAccess(session, (data as DocRow).caseid, scope);
+  const row = data as DocRow;
+  // Documents attached to an expense/income/inquiry/bill have no case: any signed-in role may open them
+  // (same model as cases), but a case scope can only ever match a case, so it refuses them.
+  if (row.caseid == null && hasOtherOwner(row)) {
+    if (!session) throw new DocumentError("auth");
+    if (scope != null) throw new DocumentError("notfound");
+  } else {
+    assertDocumentAccess(session, row.caseid, scope);
+  }
   if (!(data as DocRow).filename) throw new DocumentError("notfound");
   return data as DocRow;
 }

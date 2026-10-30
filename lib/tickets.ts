@@ -1,4 +1,4 @@
-// Tickets: change requests logged by staff. Nothing here deletes; edits are status, response messages, and the description until Closed.
+// Tickets: change requests logged by staff. Edits are status, response messages, and the description until Closed; only an admin deletes, and only a Closed ticket.
 import type { Db } from "@/lib/time/entries";
 import type { Session } from "@/lib/auth/session";
 
@@ -7,9 +7,10 @@ export type TicketStatus = "Open" | "In review" | "Closed";
 export type TicketMessage = { id: number; ticketid: number; author: string; body: string; createdat: string };
 export type Ticket = { id: number; ticketdate: string; description: string; status: TicketStatus; createdat: string; messages: TicketMessage[] };
 export type Dir = "asc" | "desc";
+export type Sort = { by: "status" | "date"; dir: Dir };
 
 export class TicketError extends Error {
-  constructor(public code: "date" | "description" | "response" | "notfound" | "state") {
+  constructor(public code: "date" | "description" | "response" | "notfound" | "state" | "forbidden") {
     super(code);
     this.name = "TicketError";
   }
@@ -21,28 +22,33 @@ const MESSAGES: Record<string, string> = {
   response: "Response is too long (up to 2000 characters).",
   notfound: "That ticket no longer exists.",
   state: "That ticket was already changed; check its status and try again.",
+  forbidden: "Only an admin can delete a ticket.",
 };
 export const ticketErrorMessage = (code: string) => MESSAGES[code] ?? "Save failed; nothing was changed.";
 
-/** `?sort=status&dir=asc|desc` whitelist; anything else is the default (same order as status asc). */
-export function parseSort(sort: string, dir: string): Dir | null {
-  return sort === "status" && (dir === "asc" || dir === "desc") ? dir : null;
+/** `?sort=status|date&dir=asc|desc` whitelist; anything else is the default (same order as status asc). */
+export function parseSort(sort: string, dir: string): Sort | null {
+  return (sort === "status" || sort === "date") && (dir === "asc" || dir === "desc") ? { by: sort, dir } : null;
 }
 
 const PAGE = 1000;
 const RANK: Record<TicketStatus, number> = { "In review": 0, Open: 1, Closed: 2 };
 
-/** In review first, then Open, then Closed (dir=desc reverses that), then newest ticketdate, then newest id. Each ticket carries its messages, oldest first. */
+/**
+ * Default / sort=status: In review first, then Open, then Closed (dir=desc reverses that), then newest ticketdate, then newest id.
+ * sort=date: ticketdate (asc oldest first, desc newest first), ties by id the same way; status is ignored.
+ * Each ticket carries its messages, oldest first.
+ */
 // ponytail: sorted in JS over the whole table — move to SQL paging when tickets reach the thousands.
-export async function listTickets(db: Db, dir: Dir | null): Promise<Ticket[]> {
+export async function listTickets(db: Db, sort: Sort | null): Promise<Ticket[]> {
   // The two reads don't depend on each other (messages are not filtered by ticket id), so they run side by side.
   const [{ data, error }, byTicket] = await Promise.all([db.from("tickets").select("id, ticketdate, description, status, createdat"), loadMessages(db)]);
   if (error) throw error;
   const rows = (data ?? []) as Omit<Ticket, "messages">[];
-  const flip = dir === "desc" ? -1 : 1;
-  return rows
-    .map((r) => ({ ...r, messages: (byTicket.get(r.id) ?? []).sort((a, b) => a.createdat.localeCompare(b.createdat) || a.id - b.id) }))
-    .sort((a, b) => flip * (RANK[a.status] - RANK[b.status]) || b.ticketdate.localeCompare(a.ticketdate) || b.id - a.id);
+  const flip = sort?.dir === "desc" ? -1 : 1;
+  const withMessages = rows.map((r) => ({ ...r, messages: (byTicket.get(r.id) ?? []).sort((a, b) => a.createdat.localeCompare(b.createdat) || a.id - b.id) }));
+  if (sort?.by === "date") return withMessages.sort((a, b) => flip * (a.ticketdate.localeCompare(b.ticketdate) || a.id - b.id));
+  return withMessages.sort((a, b) => flip * (RANK[a.status] - RANK[b.status]) || b.ticketdate.localeCompare(a.ticketdate) || b.id - a.id);
 }
 
 /** Every message grouped by ticket. Closed rows show their history too, so all are loaded; paged by id because PostgREST caps a response at 1000 rows
@@ -108,6 +114,21 @@ export async function editTicket(db: Db, id: number, description: string): Promi
   const text = checkDescription(description);
   if ((await loadTicket(db, id)).status === "Closed") throw new TicketError("state");
   const { data, error } = await db.from("tickets").update({ description: text }).eq("id", id).in("status", ["Open", "In review"]).select("id");
+  if (error) throw error;
+  if (!data?.length) throw new TicketError("state");
+}
+
+/**
+ * Admin-only hard delete of a CLOSED ticket (HQ's `tickets` job marks the ticket's HQ task done when it sees the source Closed, so deleting
+ * only closed tickets keeps the task from being orphaned). `ticket_messages.ticketid` is on delete restrict (0014), so the messages go first.
+ * ponytail: two writes, no transaction: a reopen between them loses that ticket's messages, and a close-then-delete inside HQ's 15-minute pull
+ * leaves its task open. Add a security-definer delete function (one migration) if either ever happens.
+ */
+export async function deleteTicket(db: Db, id: number): Promise<void> {
+  if ((await loadTicket(db, id)).status !== "Closed") throw new TicketError("state"); // notfound if the id is gone
+  const msgs = await db.from("ticket_messages").delete().eq("ticketid", id);
+  if (msgs.error) throw msgs.error;
+  const { data, error } = await db.from("tickets").delete().eq("id", id).eq("status", "Closed").select("id");
   if (error) throw error;
   if (!data?.length) throw new TicketError("state");
 }
@@ -237,3 +258,9 @@ export const runCloseTicket = move("Closed", ["Open", "In review"], "closed", "c
 export const runReopenTicket = move("Open", ["In review", "Closed"], "reopened", "reopenTicket");
 export const runEditTicket = (formData: FormData, deps: TicketDeps) =>
   run((db, f) => editTicket(db, idOf(f), str(f, "description")), "editTicket", formData, deps);
+
+export const runDeleteTicket = (formData: FormData, deps: TicketDeps) =>
+  run(async (db, f, session) => {
+    if (session.role !== "admin") throw new TicketError("forbidden");
+    await deleteTicket(db, idOf(f));
+  }, "deleteTicket", formData, deps);
