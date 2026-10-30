@@ -54,7 +54,7 @@ function DeleteControl({ remove }: { remove: Server }) {
   );
 }
 
-export function RowActions({ id, close, reopen, remove }: { id: number; close: Server; reopen: Server; remove?: Server }) {
+export function RowActions({ id, close, reopen, review, remove }: { id: number; close: Server; reopen: Server; review: Server; remove?: Server }) {
   const { status, shown, show } = useStatus();
   // The clicked button unmounts on the flip, so while the flip is unconfirmed the control that took its place says "Saving…" (disabled via useFormStatus).
   const saving = shown !== status;
@@ -64,6 +64,7 @@ export function RowActions({ id, close, reopen, remove }: { id: number; close: S
       <label className="sr-only" htmlFor={`resp-${id}`}>Response (optional)</label>
       <textarea id={`resp-${id}`} name="response" maxLength={2000} rows={1} placeholder="Response (optional)" className="w-48 rounded border px-2 py-1" />
       <span className="flex gap-1">
+        {shown === "Open" && !saving && <SubmitButton label="Reply" formAction={flipThen(show, "In review", review)} className="rounded border border-slate-300 px-3 py-1" />}
         {shown !== "Closed" && <SubmitButton label={saving ? "Saving…" : "Close"} formAction={flipThen(show, "Closed", close)} className="rounded border border-slate-300 px-3 py-1" />}
         {shown !== "Open" && <SubmitButton label={saving ? "Saving…" : "Reopen"} formAction={flipThen(show, "Open", reopen)} className="rounded border border-slate-300 px-3 py-1" />}
       </span>

@@ -10,7 +10,7 @@ export type Dir = "asc" | "desc";
 export type Sort = { by: "status" | "date"; dir: Dir };
 
 export class TicketError extends Error {
-  constructor(public code: "date" | "description" | "response" | "notfound" | "state" | "forbidden") {
+  constructor(public code: "date" | "description" | "response" | "notfound" | "state" | "forbidden" | "reply") {
     super(code);
     this.name = "TicketError";
   }
@@ -23,6 +23,7 @@ const MESSAGES: Record<string, string> = {
   notfound: "That ticket no longer exists.",
   state: "That ticket was already changed; check its status and try again.",
   forbidden: "Only an admin can delete a ticket.",
+  reply: "Write a reply first.",
 };
 export const ticketErrorMessage = (code: string) => MESSAGES[code] ?? "Save failed; nothing was changed.";
 
@@ -140,10 +141,10 @@ export async function addMessage(db: Db, ticketid: number, author: string, body:
   return data[0].id as number;
 }
 
-export type TicketMail = { id: number; kind: "new" | "closed" | "reopened"; date: string; description: string; response?: string };
+export type TicketMail = { id: number; kind: "new" | "closed" | "reopened" | "reviewed"; date: string; description: string; response?: string };
 export type TicketMailConfig = { apiKey?: string; apiUrl: string; from?: string; to?: string; replyDomain?: string };
 
-const SUBJECT_PREFIX = { new: "New ticket", closed: "Ticket closed", reopened: "Ticket reopened" } as const;
+const SUBJECT_PREFIX = { new: "New ticket", closed: "Ticket closed", reopened: "Ticket reopened", reviewed: "Ticket in review" } as const;
 
 /**
  * One plain-text notification through the Resend REST API (same call shape as lib/bill-docs/send.ts). No recipient,
@@ -173,7 +174,7 @@ export type TicketDeps = {
   db: () => Db;
   revalidatePath: (p: string) => void;
   redirect: (url: string) => void;
-  /** Called once after a successful add, close, or reopen; failures are logged and ignored. Omitted -> no notification. */
+  /** Called once after a successful add, close, reopen, or reply; failures are logged and ignored. Omitted -> no notification. */
   notify?: (t: TicketMail) => Promise<void>;
 };
 
@@ -218,15 +219,16 @@ export const runAddTicket = (formData: FormData, deps: TicketDeps) =>
   }, "addTicket", formData, deps);
 
 /**
- * Close (from Open or In review) / reopen (from In review or Closed), with an optional response stored as a message by the
+ * Close (from Open or In review) / reopen (from In review or Closed) / reply (Open -> In review, response required), with an optional response stored as a message by the
  * signed-in user and included in the email. Without a response the whole move is one conditional update. With one, the ticket is read
  * first (a stale tab's click is refused before anything is written, so no message and no audit rows), the message is written, and it is
  * deleted again if the update still loses a race, so a move that didn't happen leaves no response behind and none is ever lost.
  */
-const move = (to: TicketStatus, from: TicketStatus[], kind: "closed" | "reopened", where: string) => (formData: FormData, deps: TicketDeps) =>
+const move = (to: TicketStatus, from: TicketStatus[], kind: "closed" | "reopened" | "reviewed", where: string, required = false) => (formData: FormData, deps: TicketDeps) =>
   run(async (db, f, session) => {
     const id = idOf(f);
     const response = str(f, "response").trim();
+    if (required && !response) throw new TicketError("reply");
     if (response.length > 2000) throw new TicketError("response");
     let messageId: number | null = null;
     if (response) {
@@ -256,6 +258,7 @@ const move = (to: TicketStatus, from: TicketStatus[], kind: "closed" | "reopened
 
 export const runCloseTicket = move("Closed", ["Open", "In review"], "closed", "closeTicket");
 export const runReopenTicket = move("Open", ["In review", "Closed"], "reopened", "reopenTicket");
+export const runReviewTicket = move("In review", ["Open"], "reviewed", "reviewTicket", true);
 export const runEditTicket = (formData: FormData, deps: TicketDeps) =>
   run((db, f) => editTicket(db, idOf(f), str(f, "description")), "editTicket", formData, deps);
 
