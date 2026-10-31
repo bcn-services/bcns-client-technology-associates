@@ -352,8 +352,8 @@ else
     chmod 600 /root/.ta-nas.cred" || die "Could not write /root/.ta-nas.cred."
   unset NAS_USER NAS_PASS
 fi
-ask NAS_SHARE "SMB share [default //192.168.254.25/TECH_ASSOC_DOCUMENTS]:"
-NAS_SHARE=${NAS_SHARE:-//192.168.254.25/TECH_ASSOC_DOCUMENTS}
+ask NAS_SHARE "SMB share [default //192.168.254.25/TA_DATABASE_ta.bcn-services]:"
+NAS_SHARE=${NAS_SHARE:-//192.168.254.25/TA_DATABASE_ta.bcn-services}
 write_env NAS_SHARE "$NAS_SHARE"
 NAS_VERS=""
 for v in 3.0 2.1 2.0; do
