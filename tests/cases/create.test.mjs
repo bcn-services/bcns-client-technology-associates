@@ -93,6 +93,13 @@ test("returnTo: accepts /cases/new with or without a query", () => {
   assert.equal(safeReturnTo("/cases/new"), "/cases/new");
   assert.equal(safeReturnTo("/cases/new?x=1"), "/cases/new?x=1");
 });
+test("returnTo: accepts /attorneys/new (Add Firm returns to the attorney form), nested query kept", () => {
+  assert.equal(safeReturnTo("/attorneys/new"), "/attorneys/new");
+  const nested = "/attorneys/new?returnTo=%2Fcases%2Fnew%3Fclient%3D9";
+  assert.equal(safeReturnTo(nested), nested);
+  assert.equal(returnWith(nested, "firm", 12), "/attorneys/new?returnTo=%2Fcases%2Fnew%3Fclient%3D9&firm=12");
+  assert.equal(safeReturnTo("/attorneys/new/../x"), null);
+});
 for (const bad of ["https://evil.com/cases/new", "//evil.com/cases/new", "/\\evil.com", "/cases/newx", "/cases/new/../x", "/attorneys", "/cases/new\r\nX: y", "cases/new", "", null, ["/cases/new"]]) {
   test(`returnTo: rejects ${JSON.stringify(bad)}`, () => assert.equal(safeReturnTo(bad), null));
 }

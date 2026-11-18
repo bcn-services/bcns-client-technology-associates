@@ -6,7 +6,7 @@
  * are not in FIELDS, so they can never be parsed or written.
  */
 import { labelLines, type LabelAttorney, type LabelFirm } from "./search";
-import { fetchAll } from "../contacts/contacts";
+import { fetchAll, firmLabel } from "../contacts/contacts";
 
 /** Structural slice of the Supabase client this module uses. */
 export interface Db {
@@ -256,24 +256,31 @@ const ci = (a: Option, b: Option) => a.label.toLowerCase().localeCompare(b.label
 
 /** Dropdown contents, read live. */
 export async function loadCaseOptions(db: Db) {
-  // ponytail: every attorney / client / inquiry is loaded per render — fine at thousands; move to a typeahead if it gets slow.
-  const [status, branch, priority, waitingfor, attys, clients, inquiries] = await Promise.all([
+  // ponytail: every attorney (labelled with firm + address) / firm / client / inquiry is loaded per render — fine at thousands; move to a typeahead if it gets slow.
+  const [status, branch, priority, waitingfor, attys, firms, clients, inquiries] = await Promise.all([
     fetchAll(db, "tblcasestatus", "casestatus", "casestatus"),
     fetchAll(db, "tblbranches", "branch", "branch"),
     fetchAll(db, "tblcasepriority", "priority", "priority"),
     fetchAll(db, "tblcasewaitingfor", "waitingfor", "waitingfor"),
-    fetchAll(db, "tblattorney", "attyid, attyfirstname, attymiddlename, attylastname, attysuffix", "attyid"),
+    fetchAll(db, "tblattorney", "attyid, attyfirstname, attymiddlename, attylastname, attysuffix, attyfirmid", "attyid"),
+    fetchAll(db, "tblfirm", "frmid, frmname, frmaddress1, frmaddress2, frmcity, frmstate", "frmid"),
     fetchAll(db, "tblclient", "clientid, clienttitle, clientfirstname, clientlastname", "clientid"),
     fetchAll(db, "tblinquiry", "id, inqdate, inqsubject", "id"),
   ]);
   const list = (rows: Row[], col: string) => rows.map((r) => String(r[col]));
+  const firmById = new Map(firms.map((f) => [f.frmid, f]));
+  // Attorney picker shows the firm and its address so same-named firms at several locations can be told apart (ticket 11).
+  const attyLabel = (a: Row) => {
+    const firm = firmById.get(a.attyfirmid);
+    return [rolodexName(a) || `#${a.attyid}`, firm && firmLabel(firm)].filter(Boolean).join(" — ");
+  };
   return {
     status: list(status, "casestatus"),
     branch: list(branch, "branch"),
     priority: list(priority, "priority"),
     waitingfor: list(waitingfor, "waitingfor"),
     pointman: POINT_MEN,
-    attorney: attys.map((a) => ({ value: String(a.attyid), label: rolodexName(a) || `#${a.attyid}` })).sort(ci),
+    attorney: attys.map((a) => ({ value: String(a.attyid), label: attyLabel(a) })).sort(ci),
     client: clients.map((c) => ({ value: String(c.clientid), label: join(", ", c.clientlastname, c.clientfirstname) || `#${c.clientid}` })).sort(ci),
     // Newest first, as the legacy inquiry combo.
     inquiry: inquiries

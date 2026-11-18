@@ -241,3 +241,15 @@ test("casestatharddeadline: checkbox parses, saves only when toggled, and does n
   const nul = { ...MIGRATED, casestatharddeadline: null };
   assert.deepEqual(await saveCase(dbWith(), 1900, formFor(nul), NOW), {}, "null reads as unchecked, no write");
 });
+
+test("loadCaseOptions: attorney label carries the firm and its address (same-named firms differ); orphan firm is plain", async () => {
+  const db = fakeDb({
+    tblcasestatus: [], tblbranches: [], tblcasepriority: [], tblcasewaitingfor: [], tblclient: [], tblinquiry: [],
+    tblattorney: [ATTY, { ...ATTY, attyid: 2, attyfirstname: "Al", attyfirmid: 2 }, { ...ATTY, attyid: 3, attyfirstname: "Bo", attyfirmid: 99 }],
+    tblfirm: [FIRM, { ...FIRM, frmid: 2, frmaddress1: "9 Elm Ave", frmcity: "Stratford" }],
+  });
+  const labels = Object.fromEntries((await loadCaseOptions(db)).attorney.map((o) => [o.value, o.label]));
+  assert.equal(labels[1], "Example, Pat Q, Jr. — Example & Partners LLP — 1 Main St, Hartford, CT");
+  assert.equal(labels[2], "Example, Al Q, Jr. — Example & Partners LLP — 9 Elm Ave, Stratford, CT");
+  assert.equal(labels[3], "Example, Bo Q, Jr.");
+});

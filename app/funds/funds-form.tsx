@@ -1,5 +1,4 @@
-import { fundsErrorMessage, type FundsValues } from "@/lib/funds/save";
-import { ClearedBox } from "./cleared-box";
+import { FUNDS_TYPES, fundsErrorMessage, type FundsValues } from "@/lib/funds/save";
 
 const input = "rounded border border-slate-300 px-2 py-1";
 
@@ -33,6 +32,10 @@ export function FundsForm({ values, error, action, submitLabel, bill }: {
       <FieldError code={error} field={name} />
     </label>
   );
+  // Branch, bank account and the clearing fields are off the form (ticket 9) but still round-trip: an edit must not blank them.
+  const keep = (["branch", "bankaccount", "cleared", "datecleared", "clearingnotes"] as const).map((k) => (
+    <input key={k} type="hidden" name={k} defaultValue={values[k]} />
+  ));
   return (
     <form action={action} className="max-w-3xl space-y-3">
       {bill && <input type="hidden" name="bill" value={bill} />}
@@ -43,9 +46,8 @@ export function FundsForm({ values, error, action, submitLabel, bill }: {
         {text("date", "Date", { type: "date", required: true })}
         {text("payee", "Payee")}
         {text("source", "Source")}
-        {text("type", "Type")}
-        {text("branch", "Branch")}
-        {text("bankaccount", "Bank account")}
+        {text("type", "Type", { list: "f-type-options", autoComplete: "off" })}
+        <datalist id="f-type-options">{FUNDS_TYPES.map((t) => <option key={t} value={t} />)}</datalist>
       </div>
       <label htmlFor="f-description" className="grid gap-1 text-sm">
         Description
@@ -55,12 +57,7 @@ export function FundsForm({ values, error, action, submitLabel, bill }: {
         Comment
         <textarea id="f-comment" name="comment" rows={2} defaultValue={values.comment} className={input} />
       </label>
-      <fieldset className="grid gap-3 rounded border border-slate-200 p-3 sm:grid-cols-3">
-        <legend className="px-1 text-sm text-slate-700">Bank clearing</legend>
-        <ClearedBox defaultChecked={values.cleared === "on" || values.cleared === "true"} />
-        {text("datecleared", "Date cleared", { type: "date" })}
-        {text("clearingnotes", "Clearing notes")}
-      </fieldset>
+      {keep}
       <button type="submit" className="rounded border border-slate-300 bg-slate-800 px-3 py-1 text-sm text-white hover:bg-slate-700">
         {submitLabel}
       </button>

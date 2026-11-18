@@ -5,7 +5,25 @@
 import type { Session } from "../auth/session";
 import type { Db } from "../time/entries";
 import { firmToday } from "../cases/presets";
+import { rolodexName } from "../cases/record";
 import { parseMoney } from "./money";
+
+/** Type presets offered in the combo box; the field stays free text. */
+export const FUNDS_TYPES: readonly string[] = ["Initial advance", "Subsequent advance", "Bill full payment", "Bill partial payment", "Other (see notes)"];
+
+/** New-funds defaults from the case: Source = its attorney (rolodex name), Description = its title. Blank when missing. */
+export async function caseFundsDefaults(db: Db, caseid: number): Promise<{ source: string; description: string }> {
+  const { data: kase, error } = await db.from("tblcase").select("casetitle, caseatty").eq("caseid", caseid).maybeSingle();
+  if (error) throw new Error(`tblcase read: ${error.message}`);
+  if (!kase) return { source: "", description: "" };
+  let source = "";
+  if (kase.caseatty != null) {
+    const { data: atty, error: e2 } = await db.from("tblattorney").select("attyfirstname, attymiddlename, attylastname, attysuffix").eq("attyid", kase.caseatty).maybeSingle();
+    if (e2) throw new Error(`tblattorney read: ${e2.message}`);
+    source = rolodexName(atty);
+  }
+  return { source, description: kase.casetitle == null ? "" : String(kase.casetitle) };
+}
 
 export class FundsError extends Error {
   constructor(readonly code: string) {

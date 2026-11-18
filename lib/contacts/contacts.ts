@@ -62,6 +62,11 @@ export const SPECS: Record<Kind, Spec> = {
   },
 };
 
+/** Firm dropdown text: "Name — 1 Main St, Hartford, CT". Same-named firms with several locations differ by address. */
+export const firmLabel = (f: Row): string => {
+  const addr = [f.frmaddress1, f.frmaddress2, f.frmcity, f.frmstate].map((x) => String(x ?? "").trim()).filter(Boolean).join(", ");
+  return addr ? `${String(f.frmname)} — ${addr}` : String(f.frmname);
+};
 export const eqi = (a: unknown, b: unknown) => String(a ?? "").toLowerCase() === String(b ?? "").toLowerCase();
 const blankToNull = (v: unknown) => (v === "" || v === undefined ? null : v);
 
@@ -165,7 +170,7 @@ export async function formOptions(db: Db, kind: Kind) {
   }
   if (kind === "attorney") {
     // Legacy row source ~sq_cfrmEditAtty~sq_cAttyFirmID: FrmID, FrmName ORDER BY FrmName.
-    const firms = await fetchAll(db, "tblfirm", "frmid, frmname", "frmid");
+    const firms = await fetchAll(db, "tblfirm", "frmid, frmname, frmaddress1, frmaddress2, frmcity, frmstate", "frmid");
     firms.sort((a, b) => String(a.frmname).toLowerCase().localeCompare(String(b.frmname).toLowerCase()));
     return { states: [], activeValues: [], firms };
   }

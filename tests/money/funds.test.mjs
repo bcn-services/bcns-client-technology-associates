@@ -2,7 +2,11 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { parseMoney } from "../../lib/funds/money.ts";
-import { runCreateFunds, runUpdateFunds } from "../../lib/funds/save.ts";
+import { runCreateFunds, runUpdateFunds, caseFundsDefaults, FUNDS_TYPES, FUNDS_FIELDS } from "../../lib/funds/save.ts";
+import { renderToStaticMarkup } from "react-dom/server";
+import React, { createElement } from "react";
+globalThis.React = React; // tsx compiles app JSX with the classic runtime
+import { FundsForm } from "../../app/funds/funds-form.tsx";
 
 /** Fake PostgREST builder: records every call; the terminal result comes from `result(calls)`. */
 function fakeDb(result) {
@@ -140,4 +144,20 @@ test("update: writes one filtered update → /funds/5?saved=1; zero rows → not
   const d2 = deps(gone);
   await runUpdateFunds(5, form(), d2);
   assert.match(d2.redirected, /^\/funds\/5\?error=notfound/);
+});
+
+test("ticket 9: Type presets, Source/Description from the case, hidden fields still round-trip", async () => {
+  assert.deepEqual(FUNDS_TYPES, ["Initial advance", "Subsequent advance", "Bill full payment", "Bill partial payment", "Other (see notes)"]);
+  const rows = { tblcase: { casetitle: "Sample v. Example", caseatty: 5 }, tblattorney: { attyfirstname: "Pat", attylastname: "Example" } };
+  const db = fakeDb((calls) => ({ data: rows[lastFrom(calls)] ?? null, error: null }));
+  assert.deepEqual(await caseFundsDefaults(db, 990901), { source: "Example, Pat", description: "Sample v. Example" });
+  assert.deepEqual(await caseFundsDefaults(fakeDb(() => ({ data: null, error: null })), 1), { source: "", description: "" });
+  const values = Object.fromEntries(FUNDS_FIELDS.map((k) => [k, ""]));
+  const html = renderToStaticMarkup(createElement(FundsForm, { values: { ...values, branch: "Stratford", bankaccount: "1234", cleared: "on", datecleared: "2026-01-02" }, action: () => {}, submitLabel: "Save" }));
+  assert.match(html, /<datalist id="f-type-options">(<option value="[^"]+"><\/option>|<option value="[^"]+"\/>){5}<\/datalist>/);
+  assert.match(html, /name="type"[^>]*list="f-type-options"|list="f-type-options"[^>]*name="type"/);
+  for (const [k, v] of [["branch", "Stratford"], ["bankaccount", "1234"], ["cleared", "on"], ["datecleared", "2026-01-02"]]) {
+    assert.match(html, new RegExp(`type="hidden"[^>]*name="${k}"[^>]*value="${v}"|name="${k}"[^>]*type="hidden"[^>]*value="${v}"|type="hidden"[^>]*value="${v}"[^>]*name="${k}"`));
+  }
+  assert.doesNotMatch(html, /Bank account|Bank clearing|>Branch</);
 });
