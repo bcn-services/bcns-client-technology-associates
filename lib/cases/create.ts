@@ -65,12 +65,13 @@ export async function createCase(db: Db, form: FormData): Promise<CreateResult> 
 
 /**
  * A `returnTo` the contact create screens may redirect to: a same-origin relative path
- * that is /cases/new, optionally with a query. Anything else → null (ignored).
+ * that is /cases/new or /attorneys/new ("Add firm" returns to the attorney form), optionally with a query.
+ * Anything else → null (ignored).
  */
 export function safeReturnTo(raw: unknown): string | null {
   if (typeof raw !== "string" || raw.length > 2000) return null;
   if (/[\\\u0000-\u001f\u007f]/.test(raw)) return null;
-  return /^\/cases\/new(?:\?.*)?$/.test(raw) ? raw : null;
+  return /^\/(?:cases|attorneys)\/new(?:\?.*)?$/.test(raw) ? raw : null;
 }
 
 /** returnTo with `key=value` set (replacing an earlier one), other query kept. */

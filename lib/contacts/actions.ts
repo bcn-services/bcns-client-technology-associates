@@ -12,8 +12,8 @@ export async function saveContact(kind: Kind, id: number | null, formData: FormD
   await requireSession();
   const spec = SPECS[kind];
   if (!spec) throw new Error("unknown contact kind");
-  // From /cases/new "Add attorney/client": after create, go back there with the new row selected.
-  const returnTo = id === null && (kind === "attorney" || kind === "client") ? safeReturnTo(formData.get("returnTo")) : null;
+  // From /cases/new "Add attorney/client" or /attorneys/new "Add firm": after create, go back there with the new row selected.
+  const returnTo = id === null ? safeReturnTo(formData.get("returnTo")) : null;
   const back = `${spec.path}/${id ?? "new"}`;
   let target: string;
   try {

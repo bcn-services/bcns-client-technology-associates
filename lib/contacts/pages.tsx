@@ -5,7 +5,7 @@ import { requireSession } from "@/lib/auth/session";
 import { createServerClient } from "@/lib/db/client";
 import { safeReturnTo } from "@/lib/cases/create";
 import { saveContact } from "./actions";
-import { SPECS, eqi, fetchAll, formOptions, loadAttorneyWithFirm, loadContact, type Db, type Field, type Kind, type Row } from "./contacts";
+import { SPECS, eqi, fetchAll, firmLabel, formOptions, loadAttorneyWithFirm, loadContact, type Db, type Field, type Kind, type Row } from "./contacts";
 
 const input = "rounded border border-slate-300 px-2 py-1";
 const byName = (...keys: string[]) => (a: Row, b: Row) => {
@@ -25,8 +25,8 @@ function listOptions(list: string[], current: unknown): string[] {
   return cur && !out.includes(cur) ? [cur, ...out] : out;
 }
 
-function FieldInput({ f, row, options }: { f: Field; row: Row | null; options: Options }) {
-  const value = row?.[f.col];
+function FieldInput({ f, row, options, pick, addHref }: { f: Field; row: Row | null; options: Options; pick?: string; addHref?: string }) {
+  const value = row?.[f.col] ?? (f.type === "firm" ? pick : undefined);
   const str = value == null ? "" : String(value);
   const id = `f-${f.col}`;
   if (f.type === "checkbox") {
@@ -50,7 +50,7 @@ function FieldInput({ f, row, options }: { f: Field; row: Row | null; options: O
     control = (
       <select id={id} name={f.col} defaultValue={str} required className={input}>
         <option value="" />
-        {options.firms.map((o) => <option key={String(o.frmid)} value={String(o.frmid)}>{String(o.frmname)}</option>)}
+        {options.firms.map((o) => <option key={String(o.frmid)} value={String(o.frmid)}>{firmLabel(o)}</option>)}
       </select>
     );
   } else if (f.type === "active") {
@@ -62,15 +62,17 @@ function FieldInput({ f, row, options }: { f: Field; row: Row | null; options: O
       </select>
     );
   } else control = <input id={id} name={f.col} defaultValue={str} required={f.required} className={input} />;
-  return (
+  const field = (
     <label htmlFor={id} className="grid gap-1 text-sm">
       {f.label}
       {control}
     </label>
   );
+  // The link sits outside the <label> so its text isn't part of the field's accessible name.
+  return addHref ? <div className="grid gap-1">{field}<Link href={addHref} className="text-sm underline">Add Firm</Link></div> : field;
 }
 
-export async function ContactEditPage({ kind, idParam, flash }: { kind: Kind; idParam: string; flash: { saved?: string; error?: string; returnTo?: string } }) {
+export async function ContactEditPage({ kind, idParam, flash }: { kind: Kind; idParam: string; flash: { saved?: string; error?: string; returnTo?: string; firm?: string } }) {
   await requireSession();
   const spec = SPECS[kind];
   const id = idParam === "new" ? null : Number(idParam);
@@ -84,6 +86,11 @@ export async function ContactEditPage({ kind, idParam, flash }: { kind: Kind; id
   const row = loaded?.atty ?? null;
   const firm = loaded?.firm ?? null;
   const cancelTo = id === null ? safeReturnTo(flash.returnTo) : null;
+  // "Add Firm" (new attorney only): the firm form returns here with ?firm=<new id> selected; a cases/new returnTo rides along.
+  const addFirmHref = kind === "attorney" && id === null
+    ? `/firms/new?returnTo=${encodeURIComponent(cancelTo ? `/attorneys/new?returnTo=${encodeURIComponent(cancelTo)}` : "/attorneys/new")}`
+    : undefined;
+  const pickFirm = /^\d{1,9}$/.test(flash.firm ?? "") ? flash.firm : undefined;
 
   return (
     <main className="mx-auto max-w-3xl space-y-4 px-4 py-6">
@@ -99,7 +106,7 @@ export async function ContactEditPage({ kind, idParam, flash }: { kind: Kind; id
       <form action={saveContact.bind(null, kind, id)} className="grid gap-3 sm:grid-cols-2">
         {id === null && flash.returnTo && <input type="hidden" name="returnTo" value={flash.returnTo} />}
         {row && <input type="hidden" name="__orig" value={JSON.stringify(row)} />}
-        {spec.fields.map((f) => <FieldInput key={f.col} f={f} row={row} options={options} />)}
+        {spec.fields.map((f) => <FieldInput key={f.col} f={f} row={row} options={options} pick={pickFirm} addHref={f.type === "firm" ? addFirmHref : undefined} />)}
         <div className="flex items-center gap-4 sm:col-span-2">
           <button type="submit" className="rounded border border-slate-300 px-3 py-1 hover:bg-slate-100">Save</button>
           {cancelTo && <Link href={cancelTo} className="text-sm text-slate-600 underline">Cancel</Link>}
