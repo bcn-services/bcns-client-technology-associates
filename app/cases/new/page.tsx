@@ -16,9 +16,9 @@ const input = "rounded border border-slate-300 px-2 py-1";
 function Pick({ id, name, label, opts, value, required, extra }: { id: string; name: string; label: string; opts: Option[] | string[]; value: string; required?: boolean; extra?: ReactNode }) {
   const list = opts.map((o) => (typeof o === "string" ? { value: o, label: o } : o));
   return (
-    <div className="grid gap-1 text-sm">
+    <div className="grid min-w-0 gap-1 text-sm">
       <label htmlFor={id}>{label}</label>
-      <select id={id} name={name} defaultValue={value} required={required} className={input}>
+      <select id={id} name={name} defaultValue={value} required={required} className={`${input} w-full min-w-0`}>
         <option value="" />
         {list.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
       </select>
