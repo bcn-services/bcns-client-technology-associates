@@ -20,7 +20,7 @@ function Pick({ id, name, label, opts, value, required, extra }: { id: string; n
       <label htmlFor={id}>{label}</label>
       <select id={id} name={name} defaultValue={value} required={required} className={`${input} w-full min-w-0`}>
         <option value="" />
-        {list.map((o) => <option key={o.value} value={o.value} title={o.label}>{o.label}</option>)}
+        {list.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
       </select>
       {extra}
     </div>

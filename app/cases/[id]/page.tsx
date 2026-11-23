@@ -68,7 +68,7 @@ function Input({ f, row, o, labelledBy }: { f: Field; row: Row; o: CaseOptions; 
         ? idOptions(o[f.control as "attorney" | "client" | "inquiry"], v)
         : textOptions(o[f.control as "status" | "branch" | "priority" | "waitingfor" | "pointman"], v);
       return (
-        <select {...common} defaultValue={v} required={f.required} aria-labelledby={labelledBy}>
+        <select {...common} className={`${input} w-full min-w-0`} defaultValue={v} required={f.required} aria-labelledby={labelledBy}>
           <option value="" />
           {opts.map((op) => <option key={op.value} value={op.value}>{op.label}</option>)}
         </select>
@@ -148,14 +148,14 @@ export default async function CaseRecordPage({ params, searchParams }: { params:
 
       <LockedForm key={first(searchParams.t) ?? "initial"} action={saveCaseAction.bind(null, id)}>
         <div className="grid gap-4 md:grid-cols-3">
-          <section className="space-y-1 rounded border border-slate-200 p-3">
+          <section className="min-w-0 space-y-1 rounded border border-slate-200 p-3">
             <h2 className="font-semibold">Firm</h2>
             <div className="text-sm font-medium">{String(firm?.frmname ?? "")}</div>
             <address className="whitespace-pre-line text-sm not-italic">{firmAddress(firm).join("\n")}</address>
             <Detail label="Phone" value={firm?.frmphone} />
             <Detail label="Fax" value={firm?.frmfax} />
           </section>
-          <section className="space-y-1 rounded border border-slate-200 p-3">
+          <section className="min-w-0 space-y-1 rounded border border-slate-200 p-3">
             <h2 id="attorney-h" className="font-semibold">Attorney</h2>
             <Control f={field("caseatty")} row={kase} o={o} labelledBy="attorney-h" />
             <div className="text-sm font-medium">{attorneyName(atty)}</div>
@@ -163,7 +163,7 @@ export default async function CaseRecordPage({ params, searchParams }: { params:
             <Detail label="Phone" value={atty?.attyphone} />
             <Detail label="Cell" value={atty?.attycellphone} />
           </section>
-          <section className="space-y-1 rounded border border-slate-200 p-3">
+          <section className="min-w-0 space-y-1 rounded border border-slate-200 p-3">
             <h2 id="client-h" className="font-semibold">Client</h2>
             <Control f={field("caseclient")} row={kase} o={o} labelledBy="client-h" />
             <div className="text-sm font-medium">{clientName(client)}</div>
