@@ -26,7 +26,7 @@ export const HOW_HEARD = [
 ];
 export const SUBJECT_SUGGESTIONS = ["Low Speed", "Golf Cart", "Motor Vehicle", "Ladder", "Products", "Slip, Trip and Fall"];
 export const DEFAULT_HOW_HEARD = "Unknown";
-export const DEFAULT_ENGINEER = "Dr. Ojalvo";
+export const DEFAULT_ENGINEER = "Kris";
 
 /** Options for a value-list select: the list, plus the current value when it isn't in it (a migrated row keeps it). */
 export const withCurrent = (list: string[], cur: string | null | undefined) =>
