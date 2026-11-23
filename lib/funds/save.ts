@@ -31,7 +31,10 @@ export async function runCaseFundsDefaults(caseText: string, deps: { session: ()
   const blank = { source: "", description: "" };
   const t = caseText.trim();
   if (!/^\d{1,9}$/.test(t) || Number(t) === 0) return blank;
-  return caseFundsDefaults(deps.db(), Number(t)).catch(() => blank);
+  return caseFundsDefaults(deps.db(), Number(t)).catch((e) => {
+    console.error(`funds case defaults, case ${t}:`, e);
+    return blank;
+  });
 }
 
 export class FundsError extends Error {
