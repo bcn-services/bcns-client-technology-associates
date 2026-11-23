@@ -2,7 +2,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { parseMoney } from "../../lib/funds/money.ts";
-import { runCreateFunds, runUpdateFunds, caseFundsDefaults, FUNDS_TYPES, FUNDS_FIELDS } from "../../lib/funds/save.ts";
+import { runCreateFunds, runUpdateFunds, caseFundsDefaults, runCaseFundsDefaults, FUNDS_TYPES, FUNDS_FIELDS } from "../../lib/funds/save.ts";
 import { renderToStaticMarkup } from "react-dom/server";
 import React, { createElement } from "react";
 globalThis.React = React; // tsx compiles app JSX with the classic runtime
@@ -144,6 +144,23 @@ test("update: writes one filtered update → /funds/5?saved=1; zero rows → not
   const d2 = deps(gone);
   await runUpdateFunds(5, form(), d2);
   assert.match(d2.redirected, /^\/funds\/5\?error=notfound/);
+});
+
+test("ticket 9 reopen: typed case number returns Source/Description defaults; bad/unknown/failed read gives blanks", async () => {
+  const blank = { source: "", description: "" };
+  const rows = { tblcase: { casetitle: "Sample v. Example", caseatty: 5 }, tblattorney: { attyfirstname: "Pat", attylastname: "Example" } };
+  const db = fakeDb((calls) => ({ data: rows[lastFrom(calls)] ?? null, error: null }));
+  let signedIn = 0;
+  const deps = (d) => ({ session: async () => { signedIn++; }, db: () => d });
+  assert.deepEqual(await runCaseFundsDefaults(" 990901 ", deps(db)), { source: "Example, Pat", description: "Sample v. Example" });
+  assert.equal(signedIn, 1);
+  assert.deepEqual(await runCaseFundsDefaults("990902", deps(fakeDb(() => ({ data: null, error: null })))), blank); // unknown case
+  const n = db.calls.length;
+  for (const bad of ["", "abc", "0", "12x", "1234567890"]) assert.deepEqual(await runCaseFundsDefaults(bad, deps(db)), blank);
+  assert.equal(db.calls.length, n); // invalid input never reaches the DB
+  assert.deepEqual(await runCaseFundsDefaults("1", deps(fakeDb(() => ({ data: null, error: { message: "boom" } })))), blank); // read failure
+  await assert.rejects(runCaseFundsDefaults("1", { session: async () => { throw new Error("unauthorized"); }, db: () => db })); // auth gate
+  assert.equal(writes(db).length, 0);
 });
 
 test("ticket 9: Type presets, Source/Description from the case, hidden fields still round-trip", async () => {

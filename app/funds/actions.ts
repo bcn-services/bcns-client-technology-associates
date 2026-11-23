@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { requireSession } from "@/lib/auth/session";
 import { createServerClient } from "@/lib/db/client";
 import type { Db } from "@/lib/time/entries";
-import { runCreateFunds, runUpdateFunds } from "@/lib/funds/save";
+import { runCaseFundsDefaults, runCreateFunds, runUpdateFunds } from "@/lib/funds/save";
 import { runPayBill } from "@/lib/funds/pay";
 import { runReverseFunds } from "@/lib/funds/reverse";
 
@@ -16,6 +16,10 @@ const deps = () => ({
   revalidatePath,
   redirect,
 });
+
+export async function caseFundsDefaultsAction(caseText: string) {
+  return runCaseFundsDefaults(caseText, deps());
+}
 
 export async function createFundsAction(formData: FormData): Promise<void> {
   await runCreateFunds(formData, deps());
