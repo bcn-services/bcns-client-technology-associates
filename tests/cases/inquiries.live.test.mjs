@@ -140,7 +140,7 @@ test("HTTP: create lands on /inquiries/<id> with 'Inquiry created'; every sent f
     assert.equal(await page.getByLabel(/caller name/i).inputValue(), `Jane ${M}`);
     const { data: created } = await db.from("tblinquiry").select("*").eq("id", id).single();
     assert.equal(created.inqhowheardaboutus, "Unknown");
-    assert.equal(created.inqengineer, "Dr. Ojalvo");
+    assert.equal(created.inqengineer, "Kris");
 
     const branch = await page.locator('select[name="sentbranch"] option:not([value=""])').first().getAttribute("value").catch(() => null);
     const names = { sentother1name: `o1 ${M}`, sentother2name: `o2 ${M}`, sentinfo1: "i1", sentinfo2: "i2", sentinfo3: "i3" };
