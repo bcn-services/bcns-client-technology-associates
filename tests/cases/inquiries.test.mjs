@@ -156,7 +156,7 @@ test("quickSearch: id/date scan feeds id.in into one or() with the text filter, 
 test("value lists: engineer and how-heard exact legacy values and defaults; client role stores 'Other (see notes)'", () => {
   assert.deepEqual(ENGINEERS, ["Dr. Ojalvo", "Kris", "Lowell", "Oren", "Dr. Coppolino"]);
   assert.deepEqual(HOW_HEARD, ["Legal Pages", "Unknown", "ALM Experts", "Bar Journal, CT", "Bar Journal, FL", "Bar Journal, NY", "ExpertPages", "Forensis Group", "Google", "Internet, unspecified", "JurisPro", "Previous Case", "TA website", "Yahoo", "SEAK"]);
-  assert.equal(DEFAULT_ENGINEER, "Dr. Ojalvo");
+  assert.equal(DEFAULT_ENGINEER, "Kris");
   assert.equal(DEFAULT_HOW_HEARD, "Unknown");
   assert.deepEqual(CLIENT_ROLES, ["Plaintiff", "Defendant", "Third Party", "Unknown", "Other (see notes)"]);
   assert.deepEqual(SUBJECT_SUGGESTIONS, ["Low Speed", "Golf Cart", "Motor Vehicle", "Ladder", "Products", "Slip, Trip and Fall"]);

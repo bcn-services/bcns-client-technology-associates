@@ -105,6 +105,8 @@ export function InquiryForm({ action, values: v, options }: {
         <textarea name="inqdescription" rows={4} defaultValue={v.inqdescription ?? ""} className={input} />
       </label>
 
+      {/* Hidden on New Inquiry only (ticket 13). Edit must keep it: absent checkboxes parse as false. */}
+      {v.id != null && (
       <fieldset className="space-y-3 rounded border border-slate-200 p-3">
         <legend className="px-1 text-sm font-medium">Sent</legend>
         <div className="grid gap-2 sm:grid-cols-3">
@@ -129,6 +131,7 @@ export function InquiryForm({ action, values: v, options }: {
           <Pick name="sentbranch" label="Branch for info" v={v} options={branches} />
         </div>
       </fieldset>
+      )}
 
       {state?.error && <p role="alert" className="text-sm text-red-700">{state.error}</p>}
       <Submit />
