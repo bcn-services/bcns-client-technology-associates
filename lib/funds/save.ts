@@ -25,6 +25,15 @@ export async function caseFundsDefaults(db: Db, caseid: number): Promise<{ sourc
   return { source, description: kase.casetitle == null ? "" : String(kase.casetitle) };
 }
 
+/** Action body for the Case field's blur: defaults for a typed case number. Signed-in only; bad/unknown case or a read failure gives blanks, never an error. */
+export async function runCaseFundsDefaults(caseText: string, deps: { session: () => Promise<unknown>; db: () => Db }): Promise<{ source: string; description: string }> {
+  await deps.session();
+  const blank = { source: "", description: "" };
+  const t = caseText.trim();
+  if (!/^\d{1,9}$/.test(t) || Number(t) === 0) return blank;
+  return caseFundsDefaults(deps.db(), Number(t)).catch(() => blank);
+}
+
 export class FundsError extends Error {
   constructor(readonly code: string) {
     super(code);

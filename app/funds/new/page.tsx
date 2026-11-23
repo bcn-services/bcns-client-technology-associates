@@ -29,7 +29,7 @@ export default async function NewFundsPage({ searchParams }: { searchParams: Par
       <h1 className="text-xl font-semibold">Record funds</h1>
       {/* Key on a host element: a key on a server component (FundsForm) is dropped from the RSC payload. */}
       <div key={crypto.randomUUID()}>
-        <FundsForm values={values} error={error || undefined} action={createFundsAction} submitLabel="Record funds" bill={bill} />
+        <FundsForm values={values} error={error || undefined} action={createFundsAction} submitLabel="Record funds" bill={bill} prefill />
       </div>
     </main>
   );

@@ -1,3 +1,4 @@
+import { CaseInput } from "./case-input";
 import { FUNDS_TYPES, fundsErrorMessage, type FundsValues } from "@/lib/funds/save";
 
 const input = "rounded border border-slate-300 px-2 py-1";
@@ -16,14 +17,24 @@ function FieldError({ code, field }: { code?: string; field: string }) {
  * (search params ignored), so an action redirect back to the same page reuses the uncontrolled inputs. A key on
  * this server component itself is dropped from the RSC payload and does nothing.
  */
-export function FundsForm({ values, error, action, submitLabel, bill }: {
+export function FundsForm({ values, error, action, submitLabel, bill, prefill }: {
   values: FundsValues;
   error?: string;
   action: (formData: FormData) => void | Promise<void>;
   submitLabel: string;
   /** /funds/new only: the bill to preselect on the saved funds page; carried, never written to the funds row. */
   bill?: string;
+  /** /funds/new only: typing a case number fills an empty Source/Description. */
+  prefill?: boolean;
 }) {
+  const caseField = (
+    <label htmlFor="f-case" className="grid gap-1 text-sm">
+      Case
+      <CaseInput id="f-case" name="case" defaultValue={values.case} aria-invalid={error === "case" || undefined}
+        aria-describedby={error === "case" ? "f-case-error" : undefined} className={input} inputMode="numeric" required fillOnBlur={prefill} />
+      <FieldError code={error} field="case" />
+    </label>
+  );
   const text = (name: keyof FundsValues, label: string, extra: React.InputHTMLAttributes<HTMLInputElement> = {}) => (
     <label htmlFor={`f-${name}`} className="grid gap-1 text-sm">
       {label}
@@ -41,7 +52,7 @@ export function FundsForm({ values, error, action, submitLabel, bill }: {
       {bill && <input type="hidden" name="bill" value={bill} />}
       {error && !FIELD_CODES.has(error) && <p role="alert" className="text-sm text-red-700">{fundsErrorMessage(error)}</p>}
       <div className="grid gap-3 sm:grid-cols-3">
-        {text("case", "Case", { inputMode: "numeric", required: true })}
+        {caseField}
         {text("amount", "Amount", { inputMode: "decimal", required: true, placeholder: "450.00" })}
         {text("date", "Date", { type: "date", required: true })}
         {text("payee", "Payee")}
