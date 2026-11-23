@@ -48,7 +48,7 @@ function FieldInput({ f, row, options, pick, addHref }: { f: Field; row: Row | n
     );
   } else if (f.type === "firm") {
     control = (
-      <select id={id} name={f.col} defaultValue={str} required className={input}>
+      <select id={id} name={f.col} defaultValue={str} required className={`${input} w-full min-w-0`}>
         <option value="" />
         {options.firms.map((o) => <option key={String(o.frmid)} value={String(o.frmid)}>{firmLabel(o)}</option>)}
       </select>
@@ -63,7 +63,7 @@ function FieldInput({ f, row, options, pick, addHref }: { f: Field; row: Row | n
     );
   } else control = <input id={id} name={f.col} defaultValue={str} required={f.required} className={input} />;
   const field = (
-    <label htmlFor={id} className="grid gap-1 text-sm">
+    <label htmlFor={id} className="grid min-w-0 gap-1 text-sm">
       {f.label}
       {control}
     </label>
