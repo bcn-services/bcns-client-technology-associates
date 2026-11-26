@@ -2,6 +2,11 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { runSaveExpense, parseMoney } from "../../lib/expenses/save.ts";
+import { renderToStaticMarkup } from "react-dom/server";
+import React, { createElement } from "react";
+globalThis.React = React; // tsx compiles app JSX with the classic runtime
+import { ExpenseForm } from "../../app/expenses/expense-form.tsx";
+import { EXPENSE_FIELDS } from "../../lib/expenses/save.ts";
 import { listActiveTypes } from "../../lib/expenses/types.ts";
 
 /** Fake PostgREST builder (tests/cases/create.test.mjs shape); each statement's result comes from `route(stmt)`. */
@@ -119,4 +124,24 @@ test("parseMoney: fixed 2-decimal strings, rejects 3 decimals", () => {
   assert.equal(parseMoney("0.1", "amount"), "0.10");
   assert.throws(() => parseMoney("1.005", "amount"), { code: "amount" });
   assert.throws(() => parseMoney("", "amount"), { code: "amount" });
+});
+
+test("ticket 14: a save with only the 8 New Expense fields validates; hidden ones take their defaults", async () => {
+  const db = fakeDb(route);
+  const f = new FormData();
+  for (const [k, v] of Object.entries({ case: "90001", date: "2026-09-14", dscr: "Postage", checknum: "1001", type: "5", amount: "45", reason: "Mailing", notcounted: "10" })) f.set(k, v);
+  const urls = [];
+  await runSaveExpense(null, f, { session: async () => ({ userId: "u", email: "s@x", role: "staff", personId: 1 }), db: () => db, revalidatePath: () => {}, redirect: (u) => urls.push(u) });
+  assert.equal(urls.at(-1), "/expenses/7?saved=1");
+  const p = op(writes(db, "insert")[0], "insert")[1];
+  assert.deepEqual([p.expbranch, p.expbillid, p.expinit, p.expclearedbank, p.expdatecleared, p.expbankaccount, p.exp_scanned_check_number, p.expclearingnotes], ["Stratford", null, null, false, null, null, null, null]);
+  assert.equal(p.exp_notcountedinprofit, "10.00");
+});
+
+test("ticket 14: New Expense shows the 8 fields in the ticket's order; edit keeps all 16", () => {
+  const values = Object.fromEntries(EXPENSE_FIELDS.map((k) => [k, ""]));
+  const props = { action: async () => {}, values, types: [], people: [], error: "" };
+  const names = (html) => [...html.matchAll(/<(?:input|select|textarea)[^>]*\bname="(\w+)"/g)].map((m) => m[1]);
+  assert.deepEqual(names(renderToStaticMarkup(createElement(ExpenseForm, { ...props, compact: true }))), ["case", "date", "dscr", "checknum", "type", "amount", "reason", "notcounted"]);
+  assert.equal(names(renderToStaticMarkup(createElement(ExpenseForm, props))).length, 16);
 });

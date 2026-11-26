@@ -95,5 +95,5 @@ test("'Add funds' opens /funds/new with case 990901 prefilled", { skip }, async 
 test("'Add expense' opens /expenses/new with case 990901 prefilled", { skip }, async () => {
   await (await region("Expenses")).getByRole("link", { name: "Add expense" }).click();
   await page.waitForURL(/\/expenses\/new\?case=990901$/);
-  assert.equal(await page.getByLabel("Case (blank = firm-wide)").inputValue(), String(CASE));
+  assert.equal(await page.getByLabel("Case").inputValue(), String(CASE));
 });

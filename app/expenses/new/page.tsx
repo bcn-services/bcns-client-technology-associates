@@ -26,7 +26,7 @@ export default async function NewExpensePage({ searchParams }: { searchParams: P
   return (
     <main className="mx-auto max-w-4xl space-y-4 px-4 py-6">
       <h1 className="text-xl font-semibold">New expense</h1>
-      <ExpenseForm action={createExpense} values={values} types={types} people={people} error={error} />
+      <ExpenseForm action={createExpense} values={values} types={types} people={people} error={error} compact />
     </main>
   );
 }

@@ -24,7 +24,7 @@ export function FundsForm({ values, error, action, submitLabel, bill, prefill }:
   submitLabel: string;
   /** /funds/new only: the bill to preselect on the saved funds page; carried, never written to the funds row. */
   bill?: string;
-  /** /funds/new only: typing a case number fills an empty Source/Description. */
+  /** /funds/new only: typing a case number fills an empty Attorney/Description. */
   prefill?: boolean;
 }) {
   const caseField = (
@@ -56,7 +56,7 @@ export function FundsForm({ values, error, action, submitLabel, bill, prefill }:
         {text("amount", "Amount", { inputMode: "decimal", required: true, placeholder: "450.00" })}
         {text("date", "Date", { type: "date", required: true })}
         {text("payee", "Payee")}
-        {text("source", "Source")}
+        {text("source", "Attorney")}
         {text("type", "Type", { list: "f-type-options", autoComplete: "off" })}
         <datalist id="f-type-options">{FUNDS_TYPES.map((t) => <option key={t} value={t} />)}</datalist>
       </div>

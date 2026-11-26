@@ -1,8 +1,9 @@
 // Unit tests for lib/funds (money parser + create/update action bodies) with a fake PostgREST client.
 import { test } from "node:test";
+import fs from "node:fs";
 import assert from "node:assert/strict";
 import { parseMoney } from "../../lib/funds/money.ts";
-import { runCreateFunds, runUpdateFunds, caseFundsDefaults, runCaseFundsDefaults, FUNDS_TYPES, FUNDS_FIELDS } from "../../lib/funds/save.ts";
+import { runCreateFunds, runUpdateFunds, caseFundsDefaults, runCaseFundsDefaults, FUNDS_TYPES, FUNDS_FIELDS, DEFAULT_FUNDS_TYPE } from "../../lib/funds/save.ts";
 import { renderToStaticMarkup } from "react-dom/server";
 import React, { createElement } from "react";
 globalThis.React = React; // tsx compiles app JSX with the classic runtime
@@ -177,4 +178,16 @@ test("ticket 9: Type presets, Source/Description from the case, hidden fields st
     assert.match(html, new RegExp(`type="hidden"[^>]*name="${k}"[^>]*value="${v}"|name="${k}"[^>]*type="hidden"[^>]*value="${v}"|type="hidden"[^>]*value="${v}"[^>]*name="${k}"`));
   }
   assert.doesNotMatch(html, /Bank account|Bank clearing|>Branch</);
+});
+
+test("ticket 15: field is labelled Attorney (name stays source); fresh /funds/new defaults Type, error echo does not", async () => {
+  const values = Object.fromEntries(FUNDS_FIELDS.map((k) => [k, ""]));
+  const html = renderToStaticMarkup(createElement(FundsForm, { values, action: () => {}, submitLabel: "Save" }));
+  assert.match(html, /Attorney<input[^>]*name="source"/);
+  assert.doesNotMatch(html, />Source</);
+  assert.ok(FUNDS_TYPES.includes(DEFAULT_FUNDS_TYPE)); // exact preset casing, so saved rows match
+  assert.equal(DEFAULT_FUNDS_TYPE, "Bill full payment");
+  // The page applies it only in the fresh-form branch (the error branch echoes the query string untouched).
+  const page = fs.readFileSync(new URL("../../app/funds/new/page.tsx", import.meta.url), "utf8");
+  assert.match(page, /error\s*\?\s*\(Object\.fromEntries\(FUNDS_FIELDS\.map\(\(k\) => \[k, first\(searchParams\[k\]\)\]\)\) as FundsValues\)\s*:[^\n]*type: DEFAULT_FUNDS_TYPE/);
 });

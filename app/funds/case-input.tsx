@@ -4,7 +4,7 @@ import { useRef } from "react";
 import { caseFundsDefaultsAction } from "./actions";
 
 /**
- * Case input for /funds/new: on blur with a case number, fills Source/Description when they are empty or
+ * Case input for /funds/new: on blur with a case number, fills Attorney/Description when they are empty or
  * still hold what this input last filled (so a corrected case number refreshes them). Typed text is never overwritten.
  */
 export function CaseInput({ fillOnBlur, ...props }: React.InputHTMLAttributes<HTMLInputElement> & { fillOnBlur?: boolean }) {
