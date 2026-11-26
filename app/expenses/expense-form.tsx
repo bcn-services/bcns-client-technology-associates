@@ -75,7 +75,7 @@ export function ExpenseForm({ action, values: v, types, keepType, people, error,
     <div className="flex items-center gap-2">
       <input id="cleared" name="cleared" type="checkbox" defaultChecked={v.cleared === "on" || v.cleared === "true"} />
       <label htmlFor="cleared" className="text-sm font-medium">Cleared bank</label>
-        </div>
+    </div>
   );
   const f_datecleared = (
     <F name="datecleared" label="Date cleared"><input id="datecleared" name="datecleared" type="date" defaultValue={v.datecleared} className={input} {...aria("datecleared")} /></F>
