@@ -11,6 +11,9 @@ import { parseMoney } from "./money";
 /** Type presets offered in the combo box; the field stays free text. */
 export const FUNDS_TYPES: readonly string[] = ["Initial advance", "Subsequent advance", "Bill full payment", "Bill partial payment", "Other (see notes)"];
 
+/** Type preselected on a fresh /funds/new (ticket 15). Exact preset casing: saved rows hold this string. */
+export const DEFAULT_FUNDS_TYPE = "Bill full payment";
+
 /** New-funds defaults from the case: Source = its attorney (rolodex name), Description = its title. Blank when missing. */
 export async function caseFundsDefaults(db: Db, caseid: number): Promise<{ source: string; description: string }> {
   const { data: kase, error } = await db.from("tblcase").select("casetitle, caseatty").eq("caseid", caseid).maybeSingle();
